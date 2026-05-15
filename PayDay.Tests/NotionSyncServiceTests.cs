@@ -51,7 +51,7 @@ public class NotionSyncServiceTests
             $$"""[{ "type": "text", "text": { "content": {{JsonSerializer.Serialize(content)}} }, "plain_text": {{JsonSerializer.Serialize(content)}} }]""";
 
         var nameTitle = T(name);
-        var typeText = T(type);
+        var typeSelect = $$"""{ "id": "t1", "name": {{JsonSerializer.Serialize(type)}}, "color": "default" }""";
         var billIdText = T(billId);
         var paymentN = payment.ToString("R", CultureInfo.InvariantCulture);
         var owedN = owed.ToString("R", CultureInfo.InvariantCulture);
@@ -67,14 +67,14 @@ public class NotionSyncServiceTests
           "archived": false,
           "properties": {
             "Name":         { "type": "title",     "title":     {{nameTitle}} },
-            "Type":         { "type": "rich_text", "rich_text": {{typeText}} },
+            "Type":         { "type": "select",    "select":    {{typeSelect}} },
             "Payment":      { "type": "number",    "number": {{paymentN}} },
             "Owed":         { "type": "number",    "number": {{owedN}} },
             "Available":    { "type": "number",    "number": 0 },
             "Credit Limit": { "type": "number",    "number": 0 },
             "Due Day":      { "type": "number",    "number": {{dueDayN}} },
             "APR":          { "type": "number",    "number": 0 },
-            "Frequency":    { "type": "rich_text", "rich_text": [] },
+            "Frequency":    { "type": "select",    "select":    null },
             "Auto-Pay":     { "type": "checkbox",  "checkbox": {{autoPayC}} },
             "Active":       { "type": "checkbox",  "checkbox": {{activeC}} },
             "Bill ID":      { "type": "rich_text", "rich_text": {{billIdText}} },
@@ -365,6 +365,49 @@ public class NotionSyncServiceTests
         var req = handler.Requests.Single(r => r.Method == HttpMethod.Post && r.Path == "v1/pages");
         Assert.Contains("snap-ds-id", req.Body);
         Assert.Contains("2026-05-15", req.Body);
+    }
+
+    // ------------------------------------------------------------------
+    // Bill ↔ Notion property mapping
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void BuildBillProperties_TypeAndFrequencyAreSelect()
+    {
+        var bill = new Bill { Id = "1", Name = "Electric", Type = "Bills", Rate = "Monthly", DueDay = 5 };
+        var props = NotionSyncService.BuildBillProperties(bill);
+
+        var json = JsonSerializer.Serialize(props);
+        // Type → select with name
+        Assert.Contains("\"Type\":{\"select\":{\"name\":\"Bills\"}}", json);
+        // Frequency → select with name
+        Assert.Contains("\"Frequency\":{\"select\":{\"name\":\"Monthly\"}}", json);
+        // Bill ID stays rich_text
+        Assert.Contains("\"Bill ID\":{\"rich_text\"", json);
+    }
+
+    [Fact]
+    public void BuildBillProperties_EmptyTypeSendsNullSelect()
+    {
+        var bill = new Bill { Id = "1", Name = "x", Type = "", Rate = "" };
+        var json = JsonSerializer.Serialize(NotionSyncService.BuildBillProperties(bill));
+        Assert.Contains("\"Type\":{\"select\":null}", json);
+        Assert.Contains("\"Frequency\":{\"select\":null}", json);
+    }
+
+    [Fact]
+    public async Task SyncBills_PullsTypeAndFrequencyFromSelect()
+    {
+        var (db, creds) = SetupFakes();
+        var handler = new RecordingHttpHandler();
+        handler.OnPost($"v1/data_sources/{BillsDsId}/query", _ => RecordingHttpHandler.Ok(QueryResponse(
+            PageJson("page-x", "42", "Hulu", "2026-05-15T10:00:00.000Z", type: "Subscriptions", payment: 9, dueDay: 7))));
+        using var svc = Build(db, creds, handler);
+
+        await svc.SyncBillsAsync();
+
+        var pulled = Assert.Single(db.Bills);
+        Assert.Equal("Subscriptions", pulled.Type); // came from select.name, not rich_text
     }
 
     // ------------------------------------------------------------------
