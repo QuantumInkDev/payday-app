@@ -11,31 +11,31 @@
 **Phase 2.1 — Define SQLite schema in `Services/DatabaseService.cs`** (see `planning/PAYDAY_WINUI3_PLAN.md` §2.1).
 
 Next-session checklist:
-1. Open a fresh Claude Code session in this repo so the `winui-dev` agent + skills load.
-2. (One-time) Run `/winui-setup` if you haven't enabled Developer Mode yet — needed to launch packaged MSIX apps for debugging.
-3. Add NuGet packages from plan §1.3 (`Microsoft.Data.Sqlite`, `CommunityToolkit.Mvvm`, `CommunityToolkit.WinUI.Controls.DataTable`, `LiveChartsCore.SkiaSharpView.WinUI`, `System.Net.Http.Json`).
-4. Create `PayDay/Services/DatabaseService.cs`, implement table creation per plan §2.1, then the seed-data routine per §2.3.
+1. Add NuGet packages from plan §1.3 (`Microsoft.Data.Sqlite`, `CommunityToolkit.Mvvm`, `CommunityToolkit.WinUI.Controls.DataTable`, `LiveChartsCore.SkiaSharpView.WinUI`, `System.Net.Http.Json`).
+2. Create `PayDay/Services/DatabaseService.cs`, implement table creation per plan §2.1, then the seed-data routine per §2.3.
 
 ---
 
-## Last session — 2026-05-15 (bootstrap)
+## Session — 2026-05-15 (bootstrap complete)
 
-Done:
-- Installed .NET SDK 9.0.314, Windows App Dev CLI 0.3.1, WinUI C# templates (`Microsoft.WindowsAppSDK.WinUI.CSharp.Templates` 0.0.5-alpha).
-- Installed Claude Code plugin `winui@win-dev-skills` v0.3.0 (provides the `winui-dev` agent and 8 skills).
+Done in bootstrap commit (`39d7f9e`):
+- Installed .NET SDK 9.0.314, Windows App Dev CLI 0.3.1, WinUI C# templates 0.0.5-alpha.
+- Installed Claude Code plugin `winui@win-dev-skills` v0.3.0 (`winui-dev` agent + 8 skills).
 - Created session-management files per CLAUDE.md.
 - Initialized git repo, linked to `QuantumInkDev/payday-app`, added `.gitignore`.
-- Scaffolded `PayDay/` with `dotnet new winui-navview`.
-- Verified `dotnet build` exits 0.
-- First commit pushed to `origin/main`.
+- Scaffolded `PayDay/` with `dotnet new winui-navview` — `net9.0-windows10.0.26100.0`, WindowsAppSDK 2.0.1.
 
-Not done (and why):
-- `winapp run` smoke-test: needs a manual click-through. Run it before starting Phase 2 to confirm the empty shell launches cleanly.
-- Developer Mode: not yet enabled. Run `/winui-setup` in a fresh session to handle this (the skill is idempotent and only prompts for UAC when needed).
-- NuGet packages from plan §1.3: deferred to Phase 2 start — adding them now would be churn before they're actually used.
+Done in this session (uncommitted env changes — no source code touched):
+- Enabled Developer Mode via `/winui-setup` (UAC accepted; registry DWORD set to 1).
+- Re-installed WinUI templates to latest (already at 0.0.5-alpha).
+- Installed **`Microsoft.WindowsAppRuntime.2.0`** via winget — this was the missing piece. The 2.0.1 NuGet SDK in the scaffold requires the matching system-level runtime framework, which `winui-setup` does not check for. Without it, `winapp run` fails with `0x80073CF3 Package failed updates, dependency or conflict validation`.
+- ✅ Smoke test passed: incremental build (2.4s), package registered, app launched as PID 67444.
+
+NuGet packages from plan §1.3: still deferred to Phase 2 start.
 
 ---
 
 ## Known issues / workarounds
 
 - **XAML compiler diagnostics are sometimes empty** under `dotnet build` (known WinUI 3 toolchain issue). The `winui-dev-workflow` skill ships a `BuildAndRun.ps1` helper that prefers MSBuild when available. Install Visual Studio with the WinUI workload for the best signal: `winget install Microsoft.VisualStudio.Community --override "--add Microsoft.VisualStudio.Workload.Universal"`.
+- **`winui-setup` does not check for the Windows App Runtime framework package.** If `winapp run` fails with `0x80073CF3` after a fresh setup, install the matching runtime: `winget install Microsoft.WindowsAppRuntime.2.0` (or the version line that matches the SDK NuGet in `PayDay.csproj`).

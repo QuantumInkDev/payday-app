@@ -17,7 +17,7 @@
 - [x] Write `.gitignore`
 - [x] `dotnet new winui-navview -n PayDay`
 - [x] `dotnet build` exits 0
-- [ ] **Manual:** `winapp run` launches the app cleanly *(do this before starting Phase 2)*
+- [x] Smoke test: `winapp run` launched the packaged app cleanly (PID 67444) on 2026-05-15. Required two extra prereqs not handled by `winui-setup`: (a) Developer Mode enabled via UAC, (b) `Microsoft.WindowsAppRuntime.2.0` installed via winget (the SDK 2.0.1 NuGet alone is insufficient — also need the matching runtime framework package or launch fails with `0x80073CF3`).
 - [x] First commit pushed to `origin/main`
 
 ## Next sprint
