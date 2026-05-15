@@ -57,16 +57,23 @@
 ### Known tradeoff (resolved in chunk 3)
 - **MVVMTK0045 no longer fires.** All `[ObservableProperty]` usages now live in `PayDay.Core` (plain net9.0, no WinRT). The WinUI 3 partial-property generator gap (memory [[winui-mvvm-partial-properties]]) is now irrelevant for our codebase. Suppression removed.
 
-### Sprint exit criteria (chunks 1 + 2 + 3a closed)
-- [x] `dotnet test PayDay.Tests` exits 0 — 34 tests pass (21 Phase 3 + 13 chunk-3 VM tests).
+### Sprint exit criteria (chunks 1 + 2 + 3a + 3b closed)
+- [x] `dotnet test PayDay.Tests` exits 0 — 40 tests pass (21 Phase 3 + 13 chunk-3a VM tests + 6 chunk-3b editor tests).
 - [x] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings, no suppressions.
-- [x] **Manual smoke test done** — user launched the app twice this session, confirmed PayDay + All Bills render, then asked for the nav to switch from left pane to top tabs (now `PaneDisplayMode="Top"`).
+- [x] **Manual smoke tests done** — user confirmed PayDay + All Bills render, asked for top tabs (`PaneDisplayMode="Top"`), confirmed bill editor dialog works (Add + edit).
 - [x] Commit + push.
 
-### Still open for chunk 3
-- [ ] Bill editor `ContentDialog` + wire up "Add New Bill" button.
+### Chunk 3b — Bill editor  ✅ landed
+- [x] `PayDay.Core/ViewModels/BillEditorViewModel.cs` — wraps a Bill, exposes typed form fields, `CanSave` (Name not empty), `ApplyToOriginal()` copies back with clamping (DueDay 1–31) and trimming.
+- [x] `PayDay/Dialogs/BillEditorDialog.xaml(.cs)` — ContentDialog with Name / Type (editable ComboBox, custom types allowed) / Cost / APR / Owed / Available / Limit / DueDay / Rate / YearlyDate / AutoPay / Active / Notes. Static `ShowAsync(XamlRoot, Bill, isAddMode)` returns true on Save (and applies the edits back to the bill) or false on Cancel.
+- [x] `AllBillsPage` — "Add New Bill" button now creates a `Guid.NewGuid()`-id bill and opens the dialog. Row Border `Tapped` opens edit. Guard: tap on the Active ToggleSwitch doesn't bubble into the edit handler (`IsAncestorOrSelf<ToggleSwitch>` check on `OriginalSource`).
+- [x] `PayDay.Tests/BillEditorViewModelTests.cs` — 6 tests covering ctor population, add-mode defaults, CanSave validation, ApplyToOriginal round-trip, DueDay clamp, null-on-blank for Notes/YearlyDate.
+- [x] Smoke-tested live by user.
+
+### Still open
 - [ ] Sortable columns on All Bills (probably wait until the Dashboard ships, since the table style choice should be shared).
+- [ ] Tweaks to the bill editor — user mentioned holding for now.
 
 ## Next sprint
 
-**Phase 4 chunk 3 (remaining)** — bill editor `ContentDialog`, sortable columns, then Dashboard / Payoff Tracker / Insights pages. After that, Phase 5 (Notion sync), Phase 6 (backup), Phase 7 (ship).
+**Phase 4 chunk 4** — Dashboard page (§4.3) with the shared sortable-table style, Payoff Tracker (§4.5), Insights (§4.6), Settings (§4.7). Then any bill-editor tweaks the user wants. After that, Phase 5 (Notion sync), Phase 6 (backup), Phase 7 (ship).
