@@ -8,23 +8,18 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 6 — Auto-backup rotation.** Phase 5 closed 2026-05-15 across five chunks (5a `23f99dc` → 5e `1b60120`). All Notion sync paths confirmed by smoke test: token save, Test, Sync Now (after the 5e select fix), mark-paid → Payments DB, Save Snapshot → Snapshots DB. 121/121 tests pass, build 0 warn / 0 err.
+**Phase 6 chunk 6b — `WindowsBackupStore` + VM wiring.** 6a landed 2026-05-15: `IBackupStore` + `BackupRotationService` in `PayDay.Core`, `InMemoryBackupStore` test fake, 16 new tests. Build 0 warn / 0 err. Tests 137/137 (was 121).
 
-Next: implement auto-rotating backups per `PAYDAY_WINUI3_PLAN.md` §6.2.
+Next: 6b — implement the real backup store and wire it into the VMs.
 
-- On every mark-paid (and probably snapshot save), serialize the full DB via the existing `BackupSerializer.ToJson` and write it to `ApplicationData.Current.LocalFolder/backups/payday-backup-{yyyyMMdd-HHmmss}.json`.
-- Trim the folder to the most recent 10 backups (`OrderByDescending(LastWriteTime).Skip(10)` → delete).
-- On app launch, if the Bills table is empty but `backups/` has files, show a `ContentDialog` prompting restore from the newest.
+- **`PayDay/Services/WindowsBackupStore.cs`** — implements `IBackupStore` against `ApplicationData.Current.LocalFolder`. Creates a `backups/` subfolder on demand (`CreateFolderAsync(..., CreationCollisionOption.OpenIfExists)`). `WriteAsync` → `CreateFileAsync(..., ReplaceExisting)` + `WriteTextAsync`. `ListAsync` → `GetFilesAsync()` projecting to `BackupEntry(file.Name, file.DateCreated.UtcDateTime)` (or `BasicProperties.DateModified` — either works for trim ordering). `ReadAsync` → `ReadTextAsync`. `DeleteAsync` → `DeleteAsync(StorageDeleteOption.PermanentDelete)`, guarded against missing files.
+- **`App.xaml.cs`** — add a process-wide `App.Backups` (`new BackupRotationService(DatabaseService.Instance, new WindowsBackupStore())`).
+- **`PayDayPageViewModel`** — optional `BackupRotationService?` ctor param. After local payment insert (both `MarkPaidAsync` and `MarkAllPaidAsync`), kick off `BackupSafeAsync` fire-and-forget. Public `PendingAutoBackup` Task for tests, same pattern as `PendingNotionPush`. On failure, set `LastBackupStatus` + `LastBackupError` observables (UI can pick up later if we want a banner).
+- **`InsightsPageViewModel`** — same pattern in `SaveSnapshotAsync` after the local insert.
+- **Tests** — add an in-memory backup store assertion path to `AutoSyncTests` (or a new `AutoBackupTests` file) covering: no service / push ok / push fail / mark-all triggers backup once.
+- **PayDayPage.xaml.cs + InsightsPage.xaml.cs** — pass `App.Backups` into the VM ctor.
 
-Implementation seams already in place:
-- `BackupSerializer.ToJson(bills, payments, snapshots, settings)` returns the JSON string (no I/O).
-- `PayDayPageViewModel.MarkPaidAsync` and `MarkAllPaidAsync` already kick off `PendingNotionPush`; add a parallel `PendingAutoBackup` (same fire-and-forget pattern).
-- `App.OnLaunched` runs the empty-DB check after `DatabaseService.Instance.InitializeAsync()`.
-
-Chunk it as:
-- **6a**: `BackupRotationService` (pure logic in `PayDay.Core`, takes `IDatabaseService` + an `IBackupStore` abstraction) + tests.
-- **6b**: `WindowsBackupStore` (writes to `LocalFolder/backups/`, uses `StorageFolder` API) + wire into VMs.
-- **6c**: First-launch restore prompt + smoke test.
+Then chunk 6c: empty-DB → restore-prompt on first launch + smoke test.
 
 After Phase 6: Phase 7 — ship (MSIX packaging, signing, Microsoft Store or sideload distribution per §7).
 

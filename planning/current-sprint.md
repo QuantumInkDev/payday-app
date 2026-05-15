@@ -1,79 +1,45 @@
-# Sprint: Phase 5 — Notion Sync
+# Sprint: Phase 6 — Auto-backup rotation
 
 **Started:** 2026-05-15
-**Scope:** Bidirectional bill sync + push-only payments/snapshots sync against the existing Notion "Money Matters" databases. Integration token stored in Windows Credential Manager (DPAPI). Includes auto-sync on payment.
-**Plan reference:** `PAYDAY_WINUI3_PLAN.md` §5.
-**Prior sprint:** Phase 4 chunks 4a–4d (closed 2026-05-15, commits `a4aa445` → `f0cafb9`).
+**Scope:** Auto-rotating JSON backups to `LocalFolder/backups/`. Writes on every mark-paid + snapshot save; keeps the most recent 10. First-launch restore prompt when the DB is empty but backups exist.
+**Plan reference:** `PAYDAY_WINUI3_PLAN.md` §6.2.
+**Prior sprint:** Phase 5 chunks 5a–5e (closed 2026-05-15, commits `23f99dc` → `1b60120`).
 
 ## Architectural notes
 
-- **Project split (per memory `[[payday-core-split]]`)**: the Windows-only credential store lives in `PayDay/` (P/Invoke to `Advapi32.dll`). Everything else — sync orchestration, JSON request/response shaping — lives in `PayDay.Core/` behind an `HttpMessageHandler` seam, so tests run on plain `net9.0` without the WinAppSDK auto-initializer crashing.
-- **Test seam**: `NotionSyncService` will take `(IDatabaseService, ICredentialStore, HttpMessageHandler)` in its ctor; production wires up the real `HttpClientHandler`, tests inject a recording fake.
-- **First-sync matching**: bills are matched by the `Bill ID` (text) property on the Notion side, falling back to creating a new page if absent. The local `Bill.NotionPageId` column caches the result.
-- **Conflict resolution**: last-write-wins on `local.UpdatedAt` vs Notion's `last_edited_time`.
-- **Last-synced timestamp**: stored under Settings key `LastNotionSync` (already seeded as `null`).
+- **Project split** — pure rotation logic (filename pattern, trim-to-N, ordering) lives in `PayDay.Core` behind a new `IBackupStore` seam. The Windows-only implementation that touches `Windows.Storage` lives in the app project. Same shape as the Notion sync split.
+- **Filename pattern** — `payday-backup-{yyyyMMdd-HHmmss}.json`. Sortable as a string and per-second collisions are vanishingly unlikely from VM-thread writes.
+- **Trim ordering** — `OrderByDescending(LastWriteUtc)`, keep first 10, delete the rest. Non-matching filenames are ignored so a stray file in the folder doesn't get rotated out.
+- **Fire-and-forget** — same `PendingAutoBackup` pattern as `PendingNotionPush`; VM exposes the task for deterministic tests, production never awaits.
 
 ## Chunks
 
-### 5a — Credential store  ✅ landed
-- [x] `PayDay.Core/Services/ICredentialStore.cs` — `Get` / `Set` / `Delete` / `Exists` over a per-user secret store.
-- [x] `PayDay/Services/WindowsCredentialStore.cs` — P/Invoke implementation hitting `CredReadW` / `CredWriteW` / `CredDeleteW` / `CredFree` from `Advapi32.dll`. Target name format: `PayDay:{key}`. `CRED_TYPE_GENERIC` + `CRED_PERSIST_LOCAL_MACHINE`. Secret blob is UTF-16LE bytes.
-- [x] Build clean.
-- **Deferred to 5b**: `InMemoryCredentialStore` in `PayDay.Tests/`. Defer until 5b actually uses it (writing the fake without a consumer is dead code).
+### 6a — BackupRotationService + IBackupStore  ✅ landed
+- [x] `PayDay.Core/Services/IBackupStore.cs` — `WriteAsync` / `ListAsync` / `ReadAsync` / `DeleteAsync` over a generic backup folder. `BackupEntry(FileName, LastWriteUtc)` record.
+- [x] `PayDay.Core/Services/BackupRotationService.cs` — ctor `(IDatabaseService, IBackupStore, Func<DateTime>? utcNow = null)`. Public surface: `CreateAsync` (snapshot + write + trim), `ListAsync`, `LatestAsync`, `ReadAsync`, `TrimAsync`. Constants: `MaxBackups = 10`, `FileNamePrefix = "payday-backup-"`, `FileNameExtension = ".json"`. Static `FormatFileName(DateTime)` helper.
+- [x] Trim is filename-pattern-aware so stray files in the folder are ignored.
+- [x] `PayDay.Tests/InMemoryBackupStore.cs` — test fake with `WriteHistory`, `DeleteHistory`, `Seed(name, content, lastWrite)`, and `NextWriteTimestamp` for deterministic time control.
+- [x] `PayDay.Tests/BackupRotationServiceTests.cs` — 16 new tests covering filename format, snapshot contents, under-10 keeps all, at-11 trims oldest, many-extra trims all, ordering, pattern filtering, latest, read, and tail invariant (25 creates → 10 files).
+- [x] 137/137 tests pass (was 121). Build 0 warn / 0 err on both PayDay.csproj and PayDay.Tests.csproj.
 
-### 5b — NotionSyncService (bills bidirectional + push helpers)  ✅ landed
-- [x] `PayDay.Core/Services/NotionSyncService.cs` — ctor `(IDatabaseService, ICredentialStore, HttpMessageHandler? = null)`. Disposable. Surface: `TestConnectionAsync`, `SyncBillsAsync`, `PushPaymentAsync`, `PushSnapshotAsync`, `GetLastSyncedAsync` / `SetLastSyncedAsync`, `HasToken` / `SaveToken` / `DeleteToken`. Header `Notion-Version: 2025-09-03` (data-sources API). Auth via `Bearer {token}` from credential store.
-- [x] `PayDay.Core/Services/NotionSyncResult.cs` — record with `Created` / `Updated` / `Pulled` / `Archived` / `Errors`.
-- [x] **Bill ↔ Notion property mapping** — title (Name), checkbox (Auto-Pay, Active), number (Payment, Owed, Available, Credit Limit, Due Day, APR), rich_text (Type, Frequency, Bill ID, Yearly Date, Notes). Schema matches plan §5.2.
-- [x] **Bidirectional sync rules** — match on `Bill ID` text property; last-write-wins on `UpdatedAt` (SQLite UTC) vs `last_edited_time` (ISO 8601). New local → create page (parent `data_source_id`). New remote → upsert local. Archive-on-delete deferred (needs a tombstone table, marked with TODO).
-- [x] **Per-page error isolation** — a single page failure adds a string to `Result.Errors` and the sync continues. No early bailout.
-- [x] `PayDay.Tests/InMemoryCredentialStore.cs` + `RecordingHttpHandler.cs` + `NotionSyncServiceTests.cs` — 13 new tests covering TestConnection (no-token / 200 / 401), SyncBills preflight, create / update / pull / Bill-ID match / remote-only pull / last-synced stamp / per-page error isolation, push payment + snapshot, ParseSqliteUtc edge cases.
-- [x] **`InternalsVisibleTo PayDay.Tests`** added to `PayDay.Core.csproj` so internal helpers (`ParseSqliteUtc`, `BuildBillProperties`, `NotionPage`) are visible in tests without widening the public surface.
-- [x] 100/100 tests pass. Build 0 warn / 0 err.
+### 6b — WindowsBackupStore + VM wiring  ⏳ next
+- [ ] `PayDay/Services/WindowsBackupStore.cs` — `IBackupStore` against `ApplicationData.Current.LocalFolder/backups/`. Lazy-create folder, `ReplaceExisting` on write, `PermanentDelete` on delete. Read/write via `FileIO.ReadTextAsync` / `WriteTextAsync`.
+- [ ] `App.xaml.cs` — `App.Backups` singleton (`new BackupRotationService(DatabaseService.Instance, new WindowsBackupStore())`).
+- [ ] `PayDayPageViewModel` — optional `BackupRotationService?` ctor param. After local payment insert in `MarkPaidAsync` / `MarkAllPaidAsync`, kick off `BackupSafeAsync` fire-and-forget. Public `PendingAutoBackup`, `LastBackupStatus`, `LastBackupError`.
+- [ ] `InsightsPageViewModel` — same pattern in `SaveSnapshotAsync`.
+- [ ] `PayDayPage.xaml.cs` + `InsightsPage.xaml.cs` — pass `App.Backups` into the VM ctor.
+- [ ] `PayDay.Tests/AutoBackupTests.cs` — fire-and-forget backup on mark-paid / mark-all / snapshot save; no-service path; backup-failure surfaces but doesn't roll back the local insert.
 
-### 5c — Auto-sync on payment + snapshot  ✅ landed
-- [x] `NotionPushStatus` enum (`NotConfigured` / `Ok` / `Failed`) in `PayDay.Core/Services/NotionSyncResult.cs`.
-- [x] `PayDayPageViewModel` — optional `NotionSyncService?` ctor param. `MarkPaid` / `MarkAllPaid` kick off `PushPaymentSafeAsync` (fire-and-forget). Public `PendingNotionPush` Task surfaces the latest push for deterministic tests. `LastNotionPushStatus` + `LastNotionPushError` observable for UI binding.
-- [x] `InsightsPageViewModel` — same pattern for `SaveSnapshotAsync` → `PushSnapshotSafeAsync`.
-- [x] `App.xaml.cs` — process-wide singletons: `App.Credentials` (WindowsCredentialStore) and `App.Notion` (NotionSyncService). PayDayPage and InsightsPage construct their VMs with `App.Notion`.
-- [x] `PayDay.Tests/AutoSyncTests.cs` — 8 new tests: PayDay (no service / no token / push ok / push fail / mark-all pushes everything) + Insights (no service / push ok / push fail). Push failures verified to NOT roll back the local insert.
-- [x] **NotionPageId write-back on payments/snapshots is deferred.** It's not read by anything yet (push-only flow). If we ever add resume-after-failure, we'll add an `is_synced` column then.
-- [x] 108/108 tests pass. Build 0 warn / 0 err.
+### 6c — First-launch restore prompt  ⏳ later
+- [ ] `App.OnLaunched` — after `DatabaseService.Instance.InitializeAsync()`, check if `Bills` is empty and `App.Backups.LatestAsync()` returns non-null. Show a `ContentDialog` offering to restore from the newest backup.
+- [ ] Restore path reuses `BackupSerializer.FromJson` + `DatabaseService.ReplaceAllDataAsync` (same as the existing manual import path).
+- [ ] Manual smoke test: nuke the DB, relaunch, accept restore, verify rows return.
 
-### 5d — Settings UI  ✅ landed (smoke test pending)
-- [x] `SettingsPage.xaml` — Notion card flesh-out: `PasswordBox` for token, Save / Clear buttons, "Test connection" + "Sync now" buttons (disabled until token set), `ProgressRing` for in-flight ops, status row (Ellipse dot + status label + last-synced label).
-- [x] `Converters/NotionStatusToBrushConverter.cs` — `NotionPushStatus` → green/red/gray status-dot brush.
-- [x] `SettingsPageViewModel` — `NotionSyncService? _notion` ctor param + `NotionTokenSet`, `IsTesting`, `IsSyncing`, `IsNotionBusy`, `NotionStatus`, `NotionStatusLabel`, `LastSyncedLabel`, `NotionAvailable`, `NotionSectionEnabled`. Methods: `SaveTokenAsync`, `ClearTokenAsync`, `TestConnectionAsync`, `SyncNowAsync`. `LoadAsync` extended to read Notion state.
-- [x] `App.NotionAvailable` static — production wires up the real `WindowsCredentialStore` + `NotionSyncService` singleton; SettingsPage now passes it in.
-- [x] `PayDay.Tests/SettingsPageNotionTests.cs` — 10 new tests covering: no notion service, no token, token present, save token, blank save no-op, clear token, test connection success / failure, sync now success / failure.
-- [x] 118/118 tests pass. Build 0 warn / 0 err.
-- [x] **Manual smoke test (user, 2026-05-15)** — token Save + Test connection (green) + Sync Now (bills round-trip after 5e fix) + mark-paid pushes to Notion Payments DB + Save Snapshot pushes to Notion Snapshots DB. All confirmed by user.
+## Sprint exit criteria
 
-### 5e — select-property fix + diagnostic tool  ✅ landed
-- [x] **Discovery**: the Notion Bills DB has `Type` and `Frequency` as **select** properties, not `rich_text`. The plan §5.2 schema was wrong on those two. First Sync Now reported 27 validation errors ("Type is expected to be select").
-- [x] `NotionSyncService.BuildBillProperties` — `Type` and `Frequency` now go through a new `Select(...)` helper that emits `{"select": {"name": value}}` or `{"select": null}` for empty values.
-- [x] `NotionPage.FromElement` — `Type` and `Frequency` are read via a new `ReadSelect(props, name)` that pulls `select.name` from the Notion response.
-- [x] `tools/notion-diagnose.ps1` — reads the token from Credential Manager, lists databases the integration can see, dumps the schema of each seeded data source, and probes the bills `/query` endpoint. Saved permanently so future schema mismatches can be diagnosed in seconds.
-- [x] `NotionSyncServiceTests` — `PageJson` helper updated to emit select shape. Three new tests: BuildBillProperties has `select` for Type + Frequency, empty values become `{"select": null}`, sync round-trip reads `Type` from `select.name`.
-- [x] 121/121 tests pass (was 118).
-
-## Sprint exit criteria — ✅ all met
-
-- [x] `dotnet test PayDay.Tests` exits 0 — **121 tests pass** (was 84 entering sprint; +37 across 5b, 5c, 5d, 5e).
-- [x] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
-- [x] Manual smoke test confirmed by user — full token→test→sync→mark-paid→snapshot loop works.
-- [x] All five chunks committed and pushed (5a `23f99dc`, 5b `4beadf5`, 5c `c5a1ef8`, 5d `341213a`, 5e `1b60120`).
-
-## Phase 5 closed — 2026-05-15
-
-## Next sprint
-
-**Phase 6 — Auto-backup rotation** (`PAYDAY_WINUI3_PLAN.md` §6.2). Manual JSON export/import already shipped in chunk 4d; what's left is automatic rolling backups:
-
-- On every payment action, auto-save a rolling backup to `LocalFolder/backups/`.
-- Keep last 10 auto-backups, rotate oldest.
-- On app launch, check if the DB is empty but backups exist → prompt restore.
-
-Implementation seam: hook into `PayDayPageViewModel.MarkPaidAsync` (after the local insert) and `InsightsPageViewModel.SaveSnapshotAsync` — both already export the full DB JSON via `BackupSerializer.ToJson`. Write to `ApplicationData.Current.LocalFolder/backups/payday-backup-{timestamp}.json`. Trim to 10 files. Sequence-safe (no concurrent writes since the VM dispatches everything on the UI thread).
+- [ ] `dotnet test PayDay.Tests` exits 0 — 121 entering sprint; 6a is +16 already (137).
+- [ ] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
+- [ ] Manual smoke test: mark a payment, confirm a file appears in `LocalFolder/backups/`. Take 11 backups, confirm only 10 survive. Wipe DB → relaunch → accept restore prompt → bills return.
+- [ ] All three chunks committed and pushed.
 
 After Phase 6: Phase 7 — ship (MSIX packaging, certificate, Store/sideload distribution).
