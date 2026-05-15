@@ -8,7 +8,7 @@ using Windows.Storage;
 
 namespace PayDay.Services;
 
-public sealed class DatabaseService
+public sealed class DatabaseService : IDatabaseService
 {
     private const int CurrentSchemaVersion = 1;
     private const string SchemaVersionKey = "SchemaVersion";
@@ -262,6 +262,16 @@ public sealed class DatabaseService
         cmd.CommandText = "DELETE FROM Payments WHERE Id = $id;";
         cmd.Parameters.AddWithValue("$id", id);
         await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    public async Task<int> DeletePaymentsForBillInPeriodAsync(string periodKey, string billId)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Payments WHERE PeriodKey = $k AND BillId = $b;";
+        cmd.Parameters.AddWithValue("$k", periodKey);
+        cmd.Parameters.AddWithValue("$b", billId);
+        return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<Payment>> GetPaymentsByPeriodAsync(string periodKey)
