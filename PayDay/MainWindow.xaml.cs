@@ -43,6 +43,9 @@ public sealed partial class MainWindow : Window
                 case "payday":
                     NavFrame.Navigate(typeof(PayDayPage));
                     break;
+                case "bills":
+                    NavFrame.Navigate(typeof(AllBillsPage));
+                    break;
                 case "about":
                     NavFrame.Navigate(typeof(AboutPage));
                     break;
