@@ -329,16 +329,21 @@ public sealed class NotionSyncService : IDisposable
     // ------------------------------------------------------------------
 
     /// <summary>Builds the Notion property payload for a local <see cref="Bill"/>.</summary>
+    /// <remarks>
+    /// <c>Type</c> and <c>Frequency</c> are <c>select</c> properties on the Notion side
+    /// (verified via <c>tools/notion-diagnose.ps1</c>). Empty values send <c>{"select": null}</c>
+    /// which clears the cell rather than rejecting with a validation error.
+    /// </remarks>
     internal static IReadOnlyDictionary<string, object?> BuildBillProperties(Bill bill) => new Dictionary<string, object?>
     {
         ["Name"] = Title(bill.Name),
-        ["Type"] = RichText(bill.Type),
+        ["Type"] = Select(bill.Type),
         ["Payment"] = Number(bill.Cost),
         ["Owed"] = Number(bill.Owed),
         ["Available"] = Number(bill.Available),
         ["Credit Limit"] = Number(bill.CreditLimit),
         ["Due Day"] = Number(bill.DueDay),
-        ["Frequency"] = RichText(bill.Rate),
+        ["Frequency"] = Select(bill.Rate),
         ["APR"] = Number(bill.APR),
         ["Auto-Pay"] = Checkbox(bill.AutoPay),
         ["Active"] = Checkbox(bill.Active),
@@ -360,6 +365,11 @@ public sealed class NotionSyncService : IDisposable
     private static object Number(double n) => new Dictionary<string, object?> { ["number"] = n };
 
     private static object Checkbox(bool b) => new Dictionary<string, object?> { ["checkbox"] = b };
+
+    /// <summary>Builds a select property payload. Empty/whitespace clears the cell.</summary>
+    private static object Select(string? value) => string.IsNullOrWhiteSpace(value)
+        ? new Dictionary<string, object?> { ["select"] = (object?)null }
+        : new Dictionary<string, object?> { ["select"] = new Dictionary<string, object?> { ["name"] = value } };
 
     private static object Date(string isoDate) => new Dictionary<string, object?>
     {
@@ -431,13 +441,13 @@ public sealed class NotionSyncService : IDisposable
                     : DateTimeOffset.MinValue,
                 Archived = page.TryGetProperty("archived", out var a) && a.ValueKind == JsonValueKind.True,
                 Name = ReadTitle(props, "Name"),
-                Type = ReadRichText(props, "Type"),
+                Type = ReadSelect(props, "Type"),
                 Payment = ReadNumber(props, "Payment"),
                 Owed = ReadNumber(props, "Owed"),
                 Available = ReadNumber(props, "Available"),
                 CreditLimit = ReadNumber(props, "Credit Limit"),
                 DueDay = (int)Math.Round(ReadNumber(props, "Due Day")),
-                Frequency = ReadRichText(props, "Frequency"),
+                Frequency = ReadSelect(props, "Frequency"),
                 APR = ReadNumber(props, "APR"),
                 AutoPay = ReadCheckbox(props, "Auto-Pay"),
                 Active = ReadCheckbox(props, "Active"),
@@ -457,6 +467,13 @@ public sealed class NotionSyncService : IDisposable
         {
             if (!props.TryGetProperty(name, out var p) || !p.TryGetProperty("rich_text", out var arr)) return null;
             return ExtractPlainText(arr);
+        }
+
+        private static string? ReadSelect(JsonElement props, string name)
+        {
+            if (!props.TryGetProperty(name, out var p) || !p.TryGetProperty("select", out var sel)) return null;
+            if (sel.ValueKind != JsonValueKind.Object) return null; // null select = cleared cell
+            return sel.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
         }
 
         private static double ReadNumber(JsonElement props, string name)
