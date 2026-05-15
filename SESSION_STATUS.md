@@ -8,28 +8,28 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 2 — SQLite data layer.** Sprint plan: `planning/current-sprint.md`. Source plan: `planning/PAYDAY_WINUI3_PLAN.md` §1.3, §2.1, §2.2, §2.3.
+**Phase 3 — Business logic.** Pay period engine (`Services/PayPeriodService.cs`), payment tracking helpers, payoff calculator. See `planning/PAYDAY_WINUI3_PLAN.md` §3.
 
-Start with the NuGet package adds in §2.0 of the sprint file, then `PayDay/Services/DatabaseService.cs` (schema → CRUD → seed). Exit criteria are in the sprint file.
+Start by creating `planning/current-sprint.md` (archive Phase 2 → `sprint-02-data-layer.md` first) and porting `getPayPeriods()` from the original HTML app — anchor date is in `Settings.PayAnchor`, period length is 14 days.
 
 ---
 
-## Session — 2026-05-15 (bootstrap complete)
+## Session — 2026-05-15 (Phase 2 closed)
 
-Done in bootstrap commit (`39d7f9e`):
-- Installed .NET SDK 9.0.314, Windows App Dev CLI 0.3.1, WinUI C# templates 0.0.5-alpha.
-- Installed Claude Code plugin `winui@win-dev-skills` v0.3.0 (`winui-dev` agent + 8 skills).
-- Created session-management files per CLAUDE.md.
-- Initialized git repo, linked to `QuantumInkDev/payday-app`, added `.gitignore`.
-- Scaffolded `PayDay/` with `dotnet new winui-navview` — `net9.0-windows10.0.26100.0`, WindowsAppSDK 2.0.1.
+Phase 2 (SQLite data layer) — closed in this session.
 
-Done in this session (uncommitted env changes — no source code touched):
-- Enabled Developer Mode via `/winui-setup` (UAC accepted; registry DWORD set to 1).
-- Re-installed WinUI templates to latest (already at 0.0.5-alpha).
-- Installed **`Microsoft.WindowsAppRuntime.2.0`** via winget — this was the missing piece. The 2.0.1 NuGet SDK in the scaffold requires the matching system-level runtime framework, which `winui-setup` does not check for. Without it, `winapp run` fails with `0x80073CF3 Package failed updates, dependency or conflict validation`.
-- ✅ Smoke test passed: incremental build (2.4s), package registered, app launched as PID 67444.
-
-NuGet packages from plan §1.3: still deferred to Phase 2 start.
+- NuGet adds: `Microsoft.Data.Sqlite 10.0.8`, `CommunityToolkit.Mvvm 8.4.2`, `LiveChartsCore.SkiaSharpView.WinUI 2.0.2`, `System.Net.Http.Json 10.0.8`.
+- `CommunityToolkit.WinUI.Controls.DataTable` from plan §1.3 was **deferred** — not published on NuGet under that ID. Re-evaluate when wiring the Bills page (Phase 4/5).
+- Added `PayDay/Services/DatabaseService.cs` — singleton wrapping `Microsoft.Data.Sqlite`, DB at `ApplicationData.Current.LocalFolder\payday.db`, 4 tables created via `CREATE TABLE IF NOT EXISTS` in a single transaction, foreign keys on, migration scaffold via `SchemaVersion` Settings row.
+- Added `PayDay/Services/SeedData.cs` with the 27 bills + 6 default Settings (including 3 Notion DB IDs from plan §5.1).
+- Models in `PayDay/Models/`: `Bill.cs`, `Payment.cs`, `Snapshot.cs`.
+- `App.OnLaunched` now awaits `DatabaseService.Instance.InitializeAsync()` before activating the window.
+- **Verified end-to-end** via `dotnet run --launch-profile PayDay` and `sqlite3` CLI:
+  - DB created at `C:\Users\Garcia\AppData\Local\Packages\01D3B109-C28A-428F-95A8-2C937B8D7A18_1z32rh13vfry6\LocalState\payday.db`.
+  - `SELECT COUNT(*) FROM Bills` = 27 (Bills=4, Cards=15, Loans=3, People=1, Subscriptions=4).
+  - 7 Settings rows (`PayAnchor`, `EarlyStart`, `LastNotionSync`, 3 Notion DB IDs, `SchemaVersion=1`).
+  - Re-launch leaves count at 27 with 0 duplicate IDs — idempotency confirmed.
+- Installed `sqlite3` CLI via winget (`SQLite.SQLite 3.53.1`) — useful for ad-hoc inspection of the LocalState DB.
 
 ---
 
@@ -37,3 +37,5 @@ NuGet packages from plan §1.3: still deferred to Phase 2 start.
 
 - **XAML compiler diagnostics are sometimes empty** under `dotnet build` (known WinUI 3 toolchain issue). The `winui-dev-workflow` skill ships a `BuildAndRun.ps1` helper that prefers MSBuild when available. Install Visual Studio with the WinUI workload for the best signal: `winget install Microsoft.VisualStudio.Community --override "--add Microsoft.VisualStudio.Workload.Universal"`.
 - **`winui-setup` does not check for the Windows App Runtime framework package.** If `winapp run` fails with `0x80073CF3` after a fresh setup, install the matching runtime: `winget install Microsoft.WindowsAppRuntime.2.0` (or the version line that matches the SDK NuGet in `PayDay.csproj`).
+- **dotnet is not on `PATH` in this shell.** Use `$env:PATH = "C:\Program Files\dotnet;$env:PATH"` at the top of any PowerShell session before invoking `dotnet`.
+- **Inspecting the SQLite DB from outside the app:** the LocalState path is `$env:LOCALAPPDATA\Packages\01D3B109-C28A-428F-95A8-2C937B8D7A18_<publisher-hash>\LocalState\payday.db`. Get the publisher hash via `(Get-AppxPackage | Where Name -eq '01D3B109-C28A-428F-95A8-2C937B8D7A18').PackageFamilyName`.
