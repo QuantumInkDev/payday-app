@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "PayDay (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "PayDay (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
