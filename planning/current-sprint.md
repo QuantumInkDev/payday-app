@@ -47,7 +47,15 @@
 - [x] `App.NotionAvailable` static — production wires up the real `WindowsCredentialStore` + `NotionSyncService` singleton; SettingsPage now passes it in.
 - [x] `PayDay.Tests/SettingsPageNotionTests.cs` — 10 new tests covering: no notion service, no token, token present, save token, blank save no-op, clear token, test connection success / failure, sync now success / failure.
 - [x] 118/118 tests pass. Build 0 warn / 0 err.
-- [ ] **Manual smoke test (user)** — paste a real Notion integration token, hit Test → green, Sync Now → bills round-trip, mark a bill paid on PayDay page → Notion gets a new Payments row within ~2s.
+- [x] **Manual smoke test (user, 2026-05-15)** — paste a real Notion integration token, hit Test → green, Sync Now → bills round-trip (after chunk 5e fix). Payment + snapshot push smoke pending user confirmation.
+
+### 5e — select-property fix + diagnostic tool  ✅ landed
+- [x] **Discovery**: the Notion Bills DB has `Type` and `Frequency` as **select** properties, not `rich_text`. The plan §5.2 schema was wrong on those two. First Sync Now reported 27 validation errors ("Type is expected to be select").
+- [x] `NotionSyncService.BuildBillProperties` — `Type` and `Frequency` now go through a new `Select(...)` helper that emits `{"select": {"name": value}}` or `{"select": null}` for empty values.
+- [x] `NotionPage.FromElement` — `Type` and `Frequency` are read via a new `ReadSelect(props, name)` that pulls `select.name` from the Notion response.
+- [x] `tools/notion-diagnose.ps1` — reads the token from Credential Manager, lists databases the integration can see, dumps the schema of each seeded data source, and probes the bills `/query` endpoint. Saved permanently so future schema mismatches can be diagnosed in seconds.
+- [x] `NotionSyncServiceTests` — `PageJson` helper updated to emit select shape. Three new tests: BuildBillProperties has `select` for Type + Frequency, empty values become `{"select": null}`, sync round-trip reads `Type` from `select.name`.
+- [x] 121/121 tests pass (was 118).
 
 ## Sprint exit criteria
 
