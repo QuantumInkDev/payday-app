@@ -20,11 +20,6 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
     }
 
-    private void TitleBar_PaneToggleRequested(TitleBar sender, object args)
-    {
-        NavView.IsPaneOpen = !NavView.IsPaneOpen;
-    }
-
     private void TitleBar_BackRequested(TitleBar sender, object args)
     {
         NavFrame.GoBack();

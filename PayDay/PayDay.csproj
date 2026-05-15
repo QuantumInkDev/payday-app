@@ -13,15 +13,6 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!--
-      MVVMTK0045: [ObservableProperty] on private fields produces code that isn't
-      AOT-compatible for WinRT marshalling. The toolkit recommends partial properties
-      instead, but that path errors out in WinUI 3 projects today (the generator
-      doesn't emit the implementation half). Suppressed until upstream supports it.
-      Tracked: https://github.com/CommunityToolkit/dotnet/issues — partial property
-      support for WinUI 3 / CsWinRT scenarios.
-    -->
-    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
