@@ -47,7 +47,7 @@
 - [x] `App.NotionAvailable` static — production wires up the real `WindowsCredentialStore` + `NotionSyncService` singleton; SettingsPage now passes it in.
 - [x] `PayDay.Tests/SettingsPageNotionTests.cs` — 10 new tests covering: no notion service, no token, token present, save token, blank save no-op, clear token, test connection success / failure, sync now success / failure.
 - [x] 118/118 tests pass. Build 0 warn / 0 err.
-- [x] **Manual smoke test (user, 2026-05-15)** — paste a real Notion integration token, hit Test → green, Sync Now → bills round-trip (after chunk 5e fix). Payment + snapshot push smoke pending user confirmation.
+- [x] **Manual smoke test (user, 2026-05-15)** — token Save + Test connection (green) + Sync Now (bills round-trip after 5e fix) + mark-paid pushes to Notion Payments DB + Save Snapshot pushes to Notion Snapshots DB. All confirmed by user.
 
 ### 5e — select-property fix + diagnostic tool  ✅ landed
 - [x] **Discovery**: the Notion Bills DB has `Type` and `Frequency` as **select** properties, not `rich_text`. The plan §5.2 schema was wrong on those two. First Sync Now reported 27 validation errors ("Type is expected to be select").
@@ -57,9 +57,23 @@
 - [x] `NotionSyncServiceTests` — `PageJson` helper updated to emit select shape. Three new tests: BuildBillProperties has `select` for Type + Frequency, empty values become `{"select": null}`, sync round-trip reads `Type` from `select.name`.
 - [x] 121/121 tests pass (was 118).
 
-## Sprint exit criteria
+## Sprint exit criteria — ✅ all met
 
-- [ ] `dotnet test PayDay.Tests` exits 0 — all prior 84 tests still pass plus new chunk-5b / 5c VM tests.
-- [ ] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
-- [ ] Manual smoke test confirmed by user.
-- [ ] All four chunks committed and pushed.
+- [x] `dotnet test PayDay.Tests` exits 0 — **121 tests pass** (was 84 entering sprint; +37 across 5b, 5c, 5d, 5e).
+- [x] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
+- [x] Manual smoke test confirmed by user — full token→test→sync→mark-paid→snapshot loop works.
+- [x] All five chunks committed and pushed (5a `23f99dc`, 5b `4beadf5`, 5c `c5a1ef8`, 5d `341213a`, 5e `1b60120`).
+
+## Phase 5 closed — 2026-05-15
+
+## Next sprint
+
+**Phase 6 — Auto-backup rotation** (`PAYDAY_WINUI3_PLAN.md` §6.2). Manual JSON export/import already shipped in chunk 4d; what's left is automatic rolling backups:
+
+- On every payment action, auto-save a rolling backup to `LocalFolder/backups/`.
+- Keep last 10 auto-backups, rotate oldest.
+- On app launch, check if the DB is empty but backups exist → prompt restore.
+
+Implementation seam: hook into `PayDayPageViewModel.MarkPaidAsync` (after the local insert) and `InsightsPageViewModel.SaveSnapshotAsync` — both already export the full DB JSON via `BackupSerializer.ToJson`. Write to `ApplicationData.Current.LocalFolder/backups/payday-backup-{timestamp}.json`. Trim to 10 files. Sequence-safe (no concurrent writes since the VM dispatches everything on the UI thread).
+
+After Phase 6: Phase 7 — ship (MSIX packaging, certificate, Store/sideload distribution).
