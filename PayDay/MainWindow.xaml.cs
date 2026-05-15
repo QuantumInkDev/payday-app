@@ -12,6 +12,8 @@ namespace PayDay;
 
 public sealed partial class MainWindow : Window
 {
+    private bool _restorePromptChecked;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -22,6 +24,53 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
         _ = ApplyPersistedThemeAsync();
+        Activated += MainWindow_Activated;
+    }
+
+    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (_restorePromptChecked) return;
+        _restorePromptChecked = true;
+
+        var prompt = new BackupRestorePrompt(DatabaseService.Instance, App.Backups);
+        var candidate = await prompt.GetCandidateAsync();
+        if (candidate is null) return;
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = RootGrid.XamlRoot,
+            Title = "Restore from backup?",
+            Content =
+                $"PayDay didn't find any bills, but a recent backup exists:\n\n" +
+                $"{candidate.FileName}\nSaved {candidate.LastWriteUtc.ToLocalTime():g}\n\n" +
+                "Restore from this backup, or start fresh?",
+            PrimaryButtonText = "Restore",
+            CloseButtonText = "Start fresh",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        try
+        {
+            await prompt.ApplyAsync(candidate);
+        }
+        catch (System.Exception ex)
+        {
+            var err = new ContentDialog
+            {
+                XamlRoot = RootGrid.XamlRoot,
+                Title = "Restore failed",
+                Content = ex.Message,
+                CloseButtonText = "OK",
+            };
+            await err.ShowAsync();
+            return;
+        }
+
+        // Refresh the currently selected page so the freshly restored data shows up.
+        NavFrame.Navigate(typeof(PayDayPage));
     }
 
     /// <summary>Reads the saved theme from the DB and applies it to <see cref="RootGrid"/>.</summary>
