@@ -8,47 +8,45 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 4 — chunk 2.** Three things, in order:
+**Phase 4 — chunk 3.** Three things, in order:
 
-1. **Manual smoke test of the PayDay page.** It builds 0/0 but has never been launched. Confirm:
-   - NavigationView shows "PayDay / About / Settings" (no more "Home").
-   - PayDay page hero shows a "This Pay Period" label and a real date range (e.g. `May 1 – May 14, 2026` given the May 15 system date and the `2026-03-20` anchor).
-   - Auto-pay `Expander` lists Google One / Spotify / Uber / YouTube Premium (the 4 seeded autopay subs) with a `$41.31` total.
-   - Unpaid list shows manual bills with type pills tinted by category (Cards pink, Bills gold, etc.).
-   - Click "Mark Paid" on one bill → moves to Paid list, totals update. Restart app → still in Paid list.
-   - Click "Undo" → moves back to Unpaid.
-   - Run from project root: `$env:PATH = "C:\Program Files\dotnet;$env:PATH"; dotnet run --project PayDay\PayDay.csproj` (or `winapp run` if a shell with WinAppCLI on PATH).
+1. **Manual smoke test of both shipped pages.** They build 0/0 but have never been launched. Confirm:
+   - NavigationView shows "PayDay / All Bills / About / Settings".
+   - **PayDay page**: hero shows "This Pay Period" + real date range (e.g. `May 1 – May 14, 2026` given the 2026-05-15 system date and `2026-03-20` anchor). Auto-pay Expander lists Google One / Spotify / Uber / YouTube Premium (~$41.31). Click "Mark Paid" → row moves to Paid list, totals update. Restart app → still in Paid list. Undo moves it back.
+   - **All Bills page**: 27 seeded bills appear in groups (Cards → Bills → Loans → Subscriptions → Business → People → Medical → Other). Each row shows auto-pay dot (green for auto, amber for manual), name, cost, owed, due day, rate, active toggle. Flip a toggle → restart app → toggle state persisted.
+   - Launch: `$env:PATH = "C:\Program Files\dotnet;$env:PATH"; dotnet run --project P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj`
 
-2. **All Bills page (plan §4.4).** New `Pages/AllBillsPage.xaml(.cs)` + `ViewModels/AllBillsPageViewModel.cs`. Group by `Type` with `CollectionViewSource`; `ToggleSwitch` for Active that upserts on toggle. Add a NavigationViewItem with Tag `bills` in `MainWindow.xaml` and route it in `MainWindow.xaml.cs`. The Add/Edit dialog is staged for chunk 3.
+2. **VM tests.** Move `PayDayPageViewModel` / `PeriodBillRow` / `AllBillsPageViewModel` / `BillGroup` from `PayDay/ViewModels/` to `PayDay.Core/ViewModels/` so xunit can reference them (the WinUI test-host workaround documented in [[payday-core-split]] is infeasible). Add `CommunityToolkit.Mvvm` to `PayDay.Core.csproj`. Write `PayDay.Tests/PayDayPageViewModelTests.cs` and `AllBillsPageViewModelTests.cs` with a fake `IDatabaseService`. Cases listed in `planning/current-sprint.md` §4.5.
 
-3. **VM tests in `PayDay.Tests/PayDayPageViewModelTests.cs`** using a fake `IDatabaseService`. Cases enumerated in `planning/current-sprint.md` §4.5.
+3. **Bill editor dialog + "Add New Bill" (plan §4.4).** Currently the button is disabled with a tooltip. Add a ContentDialog with fields for Name / Type / Cost / Owed / Available / Limit / DueDay / Rate / APR / AutoPay / Active / YearlyDate / Notes. The Type field needs to support custom types (free-form ComboBox).
 
-Open `planning/current-sprint.md` and check off the chunk-2 items as they land. The sprint plan is up to date — chunk-1 boxes are ticked.
+Open `planning/current-sprint.md` and check off the chunk-3 items as they land. The sprint plan is up to date — chunks 1 + 2 are ticked.
 
 ---
 
-## Session — 2026-05-15 (Phase 4 chunk 1 closed)
+## Session — 2026-05-15 (Phase 4 chunks 1 + 2 closed)
 
-PayDay page + shared converter/brush scaffolding shipped. App builds 0 warn / 0 err; all 21 Phase 3 tests still pass.
+PayDay page + All Bills page both shipped. App builds 0 warn / 0 err; all 21 Phase 3 tests still pass.
 
-### What landed
-- **Navigation rework**: renamed the "Home" NavigationViewItem to "PayDay" (`Tag="payday"`, glyph `&#xE8C7;` Money). Deleted `Pages/HomePage.xaml(.cs)`. Routing in `MainWindow.xaml.cs` now navigates `payday` → `PayDayPage`.
-- **Type pill design system** (plan §4.8):
-  - `PayDay/Styles/TypeBrushes.xaml` — 8 `SolidColorBrush` resources (`TypePillCards` pink, `TypePillBills` gold, `TypePillLoans` purple, `TypePillSubscriptions` red, `TypePillBusiness` blue, `TypePillPeople` green, `TypePillMedical` teal, `TypePillOther` gray).
-  - Merged into `App.xaml` via `ResourceDictionary Source="ms-appx:///Styles/TypeBrushes.xaml"`.
-  - `PayDay/Converters/TypeToBrushConverter.cs` — looks up `Application.Current.Resources[key]` by the type string; falls back to `TypePillOther` for unknown types so custom types still render.
-- **Other converters**:
-  - `PayDay/Converters/CurrencyConverter.cs` — formats `double`/`decimal`/`float` as `"C"` per `CultureInfo.CurrentCulture`.
-  - `PayDay/Converters/BoolToVisibilityConverter.cs` — bool → Visibility with an `Invert` property (`{StaticResource BoolToCollapsed}` is the inverted alias).
-- **`PayDay/ViewModels/PeriodBillRow.cs`** — view-only `ObservableObject` wrapping a `PeriodBill` with editable `AmountPaid`, `IsPaid`, `PaymentId`. Exposes a `DueDateLabel` for the row's "Due May 8" subtitle (or "Due this period" for Bi-Weekly).
-- **`PayDay/ViewModels/PayDayPageViewModel.cs`** — `ObservableObject`. Constructs `PayPeriodService` and `PaymentService` from the injected `IDatabaseService`. `LoadAsync()` reads `GetCurrentPeriodsAsync()`, picks the first (the "This Pay Period"), reads its `Payment` rows, splits bills into `AutoPayBills` / `UnpaidBills` / `PaidBills`. Exposes `TotalDue / TotalPaid / Remaining / ProgressFraction / AutoPayTotal / IsAllPaid / HasCurrentPeriod / IsLoading` as `[ObservableProperty]`s. `MarkPaidCommand` / `UnmarkPaidCommand` / `MarkAllPaidCommand` use `[RelayCommand]` and round-trip to the DB via `PaymentService`.
-- **`PayDay/Pages/PayDayPage.xaml`** — hero card with period label / range / `TotalDue` / `TotalPaid` / `Remaining` / `ProgressBar`, auto-pay `Expander` (header shows running total), `ItemsControl` for unpaid bills (type pill, name, `NumberBox` for amount, "Mark Paid" button bound through `ElementName=PageRoot`), `ItemsControl` for paid bills (faded, "Undo" button), all-paid `InfoBar` success state, footer "Mark All Paid" button.
-- **`PayDay/Pages/PayDayPage.xaml.cs`** — instantiates the VM with `DatabaseService.Instance`, sets `DataContext`, calls `LoadAsync()` on `Loaded`.
+### What landed in chunk 2 (this session)
+- **`PayDay/ViewModels/BillGroup.cs`** — plain wrapper `(string Key, IReadOnlyList<Bill> Bills, int Count)` for the grouped list. No observability; the VM rebuilds the whole collection on refresh.
+- **`PayDay/ViewModels/AllBillsPageViewModel.cs`** — `LoadAsync` reads `DatabaseService.GetAllBillsAsync()`, groups by `Bill.Type` in plan-§4.8 canonical order (Cards → Bills → Loans → Subscriptions → Business → People → Medical → Other; custom types follow alphabetically). Bills inside each group sorted by Name. `SaveBillAsync(Bill)` persists per-bill changes (used today only for the Active toggle). `RefreshCommand` re-runs `LoadAsync`. `TotalBillsLabel` is a computed string ("27 bills across 5 types") that auto-notifies via `[NotifyPropertyChangedFor]`.
+- **`PayDay/Pages/AllBillsPage.xaml`** — title + count, refresh button, disabled "Add New Bill" (chunk-3), column header row (TYPE / NAME / COST / OWED / DUE / RATE / ACTIVE), scrollable nested `ItemsControl`: outer iterates groups, inner iterates bills. Each row has auto-pay dot, type label, name + notes (ellipsized), cost, owed, due day, rate, `ToggleSwitch` for Active. Sortable columns are deferred (chunk 3).
+- **`PayDay/Pages/AllBillsPage.xaml.cs`** — `OnActiveToggled` reads the `Bill` off `ToggleSwitch.DataContext`, mutates `bill.Active = ts.IsOn`, and awaits `ViewModel.SaveBillAsync`. The bound `IsOn` is OneWay so we don't fight the UI; the handler is authoritative.
+- **`PayDay/Converters/AutoPayDotConverter.cs`** — bool → green `#00B894` for auto, amber `#FDCB6E` for manual (plan §4.8 status indicator).
+- **`MainWindow.xaml(.cs)`** — added the "All Bills" NavigationViewItem (Glyph `&#xE8FD;` = grid layout) and routed `bills` → `AllBillsPage`.
+
+### What landed in chunk 1 (earlier in this session, commit `9f5482e`)
+- Nav rework: Home → PayDay, deleted `Pages/HomePage.*`.
+- Type pill design system: `Styles/TypeBrushes.xaml`, `TypeToBrushConverter`, `CurrencyConverter`, `BoolToVisibilityConverter`. Merged into `App.xaml`.
+- `PayDayPageViewModel` + `PeriodBillRow` — wired through `PayPeriodService` + `PaymentService` for hero/auto-pay/unpaid/paid lists with `MarkPaid` / `UnmarkPaid` / `MarkAllPaid` commands.
+- `Pages/PayDayPage.xaml(.cs)` — hero card, auto-pay Expander, unpaid + paid ItemsControls, footer.
+- `MVVMTK0045` suppressed in `PayDay.csproj` — partial-property pattern errors under WinUI 3 (see [[winui-mvvm-partial-properties]]).
 
 ### Notable details
-- **MVVMTK0045 suppressed**: `[ObservableProperty]` on private fields isn't AOT-compatible for WinRT marshalling. The toolkit recommends partial properties. We tried — the generator does not emit implementations for partial properties under WinUI 3 today (CS9248 errors on every property). Suppressed via `<NoWarn>$(NoWarn);MVVMTK0045</NoWarn>` in `PayDay.csproj` with a comment block explaining why. Re-evaluate when targeting AOT-published builds.
-- **`x:Bind` inside `DataTemplate`**: command bindings use `{Binding DataContext.MarkPaidCommand, ElementName=PageRoot}` with `CommandParameter="{x:Bind}"` — the `DataContext` is set on the page so the named element climb works.
-- **Empty-period defense**: if `GetCurrentPeriodsAsync()` returns 0 entries (no anchor + no bills, or a strange clock), the VM clears all collections and `HasCurrentPeriod` is `false`. The XAML hides the section headers and Expander behind that flag.
+- **Active toggle binding pattern**: `IsOn="{x:Bind Active, Mode=OneWay}"` + `Toggled="OnActiveToggled"`. TwoWay binding to plain CLR setters in WinUI 3 has gotchas around INotifyPropertyChanged; the handler-driven model is unambiguous and lets the await chain block on the DB write.
+- **`Bill` is not observable** — the VM re-renders by rebuilding `Groups` on refresh. Sufficient for the current feature set; if we later want inline cost/owed edits, we'll need to wrap each bill in a row VM like `PeriodBillRow`.
+- **Type grouping order** is a static array in the VM (`TypeOrder`). Custom user-defined types fall through to `int.MaxValue` and sort alphabetically after the known ones.
 
 ### How to re-run the tests / build
 ```powershell
@@ -63,11 +61,12 @@ dotnet run --project P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj
 
 ## Known issues / workarounds
 
-- **PayDay page hasn't been launched yet** — it builds, but the chunk-1 close didn't include a manual smoke test. First task next session.
-- **MVVMTK0045 suppressed for `PayDay.csproj`** — see the comment in the csproj. Doesn't affect debug runtime; only AOT-published builds.
+- **Neither page has been launched yet** — they build, but neither chunk got a manual smoke test. First task next session.
+- **MVVMTK0045 suppressed for `PayDay.csproj`** — see the comment in the csproj and memory [[winui-mvvm-partial-properties]]. Doesn't affect debug runtime; only AOT-published builds.
+- **VMs live in the WinUI project** — `PayDayPageViewModel` / `PeriodBillRow` / `AllBillsPageViewModel` / `BillGroup` aren't testable from xunit until they move to `PayDay.Core`. Planned as the second chunk-3 task.
 - **XAML compiler diagnostics are sometimes empty** under `dotnet build` (known WinUI 3 toolchain issue). The `winui-dev-workflow` skill ships a `BuildAndRun.ps1` helper that prefers MSBuild when available. Install Visual Studio with the WinUI workload for the best signal: `winget install Microsoft.VisualStudio.Community --override "--add Microsoft.VisualStudio.Workload.Universal"`.
 - **`winui-setup` does not check for the Windows App Runtime framework package.** If `winapp run` fails with `0x80073CF3` after a fresh setup, install the matching runtime: `winget install Microsoft.WindowsAppRuntime.2.0` (or the version line that matches the SDK NuGet in `PayDay.csproj`).
 - **dotnet is not on `PATH` in this shell.** Use `$env:PATH = "C:\Program Files\dotnet;$env:PATH"` at the top of any PowerShell session before invoking `dotnet`.
 - **Inspecting the SQLite DB from outside the app:** the LocalState path is `$env:LOCALAPPDATA\Packages\01D3B109-C28A-428F-95A8-2C937B8D7A18_<publisher-hash>\LocalState\payday.db`. Get the publisher hash via `(Get-AppxPackage | Where Name -eq '01D3B109-C28A-428F-95A8-2C937B8D7A18').PackageFamilyName`.
-- **Tests cannot reference `PayDay.csproj` directly.** The WindowsAppSDK auto-initializer module init throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process without package identity. Use the `PayDay.Core` project for anything you need to unit-test. (The chunk-2 VM tests need to handle this — the VM type lives in `PayDay`, which means the test would need to either move the VM to `PayDay.Core` or accept that VM tests can't run from xunit. Likely solution: move `PayDayPageViewModel` + `PeriodBillRow` to `PayDay.Core/ViewModels/`, keep only the page code-behind in `PayDay`.)
+- **Tests cannot reference `PayDay.csproj` directly.** The WindowsAppSDK auto-initializer module init throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process without package identity. Use the `PayDay.Core` project for anything you need to unit-test.
 - **`dotnet run --launch-profile PayDay`** warns that the profile doesn't exist but still launches via the WinAppSDK build hook. The warning is cosmetic.
