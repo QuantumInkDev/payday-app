@@ -1,5 +1,9 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using PayDay.Dialogs;
 using PayDay.Models;
 using PayDay.Services;
 using PayDay.ViewModels;
@@ -30,5 +34,47 @@ public sealed partial class AllBillsPage : Page
             bill.Active = ts.IsOn;
             await ViewModel.SaveBillAsync(bill);
         }
+    }
+
+    private async void OnAddBillClick(object sender, RoutedEventArgs e)
+    {
+        var bill = new Bill
+        {
+            Id = Guid.NewGuid().ToString(),
+            Type = "Bills",
+            Rate = "Monthly",
+            DueDay = 1,
+            Active = true,
+        };
+        if (await BillEditorDialog.ShowAsync(this.XamlRoot, bill, isAddMode: true))
+        {
+            await ViewModel.SaveBillAsync(bill);
+            await ViewModel.LoadAsync();
+        }
+    }
+
+    private async void OnBillRowTapped(object sender, TappedRoutedEventArgs e)
+    {
+        // A tap on the Active ToggleSwitch shouldn't also open the editor.
+        if (IsAncestorOrSelf<ToggleSwitch>(e.OriginalSource as DependencyObject)) return;
+
+        if (sender is FrameworkElement fe && fe.DataContext is Bill bill)
+        {
+            if (await BillEditorDialog.ShowAsync(this.XamlRoot, bill, isAddMode: false))
+            {
+                await ViewModel.SaveBillAsync(bill);
+                await ViewModel.LoadAsync();
+            }
+        }
+    }
+
+    private static bool IsAncestorOrSelf<T>(DependencyObject? obj) where T : DependencyObject
+    {
+        while (obj is not null)
+        {
+            if (obj is T) return true;
+            obj = VisualTreeHelper.GetParent(obj);
+        }
+        return false;
     }
 }

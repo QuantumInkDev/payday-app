@@ -45,10 +45,9 @@
                 ToolTipService.ToolTip="Reload from the database" />
             <Button
                 Grid.Column="2"
+                Click="OnAddBillClick"
                 Content="Add New Bill"
-                IsEnabled="False"
-                Style="{ThemeResource AccentButtonStyle}"
-                ToolTipService.ToolTip="Coming next sprint" />
+                Style="{ThemeResource AccentButtonStyle}" />
         </Grid>
 
         <!-- Column header row (visual only — sortable columns are deferred) -->
@@ -153,7 +152,9 @@
                                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                             BorderThickness="1"
-                                            CornerRadius="6">
+                                            CornerRadius="6"
+                                            Tapped="OnBillRowTapped"
+                                            ToolTipService.ToolTip="Click to edit">
                                             <Grid ColumnSpacing="12">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="120" />

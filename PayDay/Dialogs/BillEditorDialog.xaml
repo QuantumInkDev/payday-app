@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="PayDay.Dialogs.BillEditorDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:PayDay.ViewModels"
+    Title="{x:Bind ViewModel.Title}"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
+    PrimaryButtonText="Save"
+    SecondaryButtonText="Cancel"
+    mc:Ignorable="d">
+
+    <ScrollViewer MaxHeight="540" VerticalScrollBarVisibility="Auto">
+        <StackPanel MinWidth="380" Spacing="12">
+
+            <TextBox
+                Header="Name"
+                PlaceholderText="e.g. Electric, Capital One – Savor"
+                Text="{x:Bind ViewModel.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+            <ComboBox
+                Header="Type"
+                HorizontalAlignment="Stretch"
+                IsEditable="True"
+                ItemsSource="{x:Bind vm:BillEditorViewModel.KnownTypes}"
+                Text="{x:Bind ViewModel.Type, Mode=TwoWay}" />
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <NumberBox
+                    Grid.Column="0"
+                    Header="Cost"
+                    Minimum="0"
+                    SpinButtonPlacementMode="Compact"
+                    Value="{x:Bind ViewModel.Cost, Mode=TwoWay}" />
+                <NumberBox
+                    Grid.Column="1"
+                    Header="APR (%)"
+                    Minimum="0"
+                    SpinButtonPlacementMode="Compact"
+                    Value="{x:Bind ViewModel.Apr, Mode=TwoWay}" />
+            </Grid>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <NumberBox
+                    Grid.Column="0"
+                    Header="Owed"
+                    Minimum="0"
+                    SpinButtonPlacementMode="Hidden"
+                    Value="{x:Bind ViewModel.Owed, Mode=TwoWay}" />
+                <NumberBox
+                    Grid.Column="1"
+                    Header="Available"
+                    Minimum="0"
+                    SpinButtonPlacementMode="Hidden"
+                    Value="{x:Bind ViewModel.Available, Mode=TwoWay}" />
+                <NumberBox
+                    Grid.Column="2"
+                    Header="Limit"
+                    Minimum="0"
+                    SpinButtonPlacementMode="Hidden"
+                    Value="{x:Bind ViewModel.CreditLimit, Mode=TwoWay}" />
+            </Grid>
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <NumberBox
+                    Grid.Column="0"
+                    Header="Due Day (1–31)"
+                    Maximum="31"
+                    Minimum="1"
+                    SpinButtonPlacementMode="Compact"
+                    Value="{x:Bind ViewModel.DueDay, Mode=TwoWay}" />
+                <ComboBox
+                    Grid.Column="1"
+                    Header="Rate"
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{x:Bind vm:BillEditorViewModel.Rates}"
+                    SelectedItem="{x:Bind ViewModel.Rate, Mode=TwoWay}" />
+            </Grid>
+
+            <TextBox
+                Header="Yearly Date (MM-DD)"
+                PlaceholderText="12-25  (only used for Yearly rate)"
+                Text="{x:Bind ViewModel.YearlyDate, Mode=TwoWay}" />
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ToggleSwitch
+                    Grid.Column="0"
+                    Header="Auto-Pay"
+                    IsOn="{x:Bind ViewModel.AutoPay, Mode=TwoWay}"
+                    OffContent="Manual"
+                    OnContent="Automatic" />
+                <ToggleSwitch
+                    Grid.Column="1"
+                    Header="Active"
+                    IsOn="{x:Bind ViewModel.Active, Mode=TwoWay}"
+                    OffContent="Hidden from calculations"
+                    OnContent="Included" />
+            </Grid>
+
+            <TextBox
+                Header="Notes"
+                AcceptsReturn="True"
+                MaxHeight="80"
+                PlaceholderText="Optional"
+                Text="{x:Bind ViewModel.Notes, Mode=TwoWay}"
+                TextWrapping="Wrap" />
+
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>
