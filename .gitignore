@@ -1,0 +1,59 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM/
+ARM64/
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+
+# User-specific
+*.user
+*.suo
+*.userprefs
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Signing certificates and keys
+*.pfx
+*.snk
+
+# Visual Studio cache
+.vscode/
+*.VC.db
+*.VC.opendb
+
+# Rider / JetBrains
+.idea/
+
+# OS noise
+Thumbs.db
+.DS_Store
+ehthumbs.db
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Local development data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
