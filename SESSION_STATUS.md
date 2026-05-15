@@ -8,56 +8,59 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 4 — chunk 4.** Remaining Phase 4 pages, in plan order:
+**Phase 5 — Notion sync.** Phase 4 (UI / Views) closed 2026-05-15 across four chunks (4a–4d, commits `a4aa445` → `f0cafb9`). All seven §4.x pages ship, 84/84 tests pass, build 0 warn / 0 err.
 
-1. **Dashboard (plan §4.3)** — Stats grid (total monthly obligations, total owed, credit utilization %, bills due this period) + sortable period overview table (bills assigned to This / Next / Following). Auto-pay separated from manual within each section. The "sortable table" pattern landed here should also retrofit into All Bills.
-2. **Payoff Tracker (plan §4.5)** — bills/loans with `Owed > 0`. Card per item: name, owed, payment, progress bar, estimated payoff months via `PayoffCalculator.EstimatePayoff`. Sorted by payoff timeline.
-3. **Insights (plan §4.6)** — total-owed-over-time line chart (from `Snapshots`), spending-breakdown donut by Type, "Save Snapshot" button.
-4. **Settings (plan §4.7)** — pay anchor configuration, theme toggle, Notion sync (deferred to Phase 5), Export/Import JSON.
+Next: build `Services/NotionSyncService.cs` (plan §5) — bidirectional bill sync, push-only Payments + Snapshots. Three Notion data-source IDs already live in the seeded Settings table (`NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb`). Integration token goes into Windows Credential Manager (DPAPI), **not** the SQLite Settings table. The Settings page already has a Notion section stubbed under a `PHASE 5` tag — flesh that out (token field, "Test connection" button, "Sync now" button, last-synced timestamp).
 
-After those: Phase 5 (Notion sync), Phase 6 (backup), Phase 7 (ship).
+After Phase 5: Phase 6 (auto-backup rotation in `LocalFolder/backups/` per §6.2 — manual JSON export/import already shipped in chunk 4d as part of Settings), then Phase 7 (ship).
 
-Open `planning/current-sprint.md` and tick off chunk-4 items as they land. Chunks 1–3 are closed.
+Open `planning/current-sprint.md` (a fresh sprint file when starting Phase 5). Chunks 1–4 of Phase 4 are closed.
 
 ---
 
-## Session — 2026-05-15 (Phase 4 chunks 1 + 2 + 3a + 3b closed)
+## Session — 2026-05-15 (Phase 4 closed)
 
-Three pages + bill editor dialog shipped + smoke-tested. **40 tests pass**, build 0 warn / 0 err.
+Four chunk-4 pages + Settings backup wiring shipped. 84 tests pass, build clean. All Phase 4 §4.x pages are now live.
 
-### What landed in chunk 3b (this turn)
-- **`PayDay.Core/ViewModels/BillEditorViewModel.cs`** — wraps a Bill, exposes typed `[ObservableProperty]` form fields. `CanSave` is true when Name is non-blank. `ApplyToOriginal()` copies back, clamps DueDay to 1–31, trims strings, nulls out blank Notes/YearlyDate. `KnownTypes` and `Rates` are public static arrays the dialog binds to for the ComboBoxes.
-- **`PayDay/Dialogs/BillEditorDialog.xaml(.cs)`** — `ContentDialog` with Name, Type (editable ComboBox so users can type a custom value), Cost, APR, Owed/Available/Limit row, DueDay (1–31 spinner) + Rate, YearlyDate (MM-DD), AutoPay/Active toggles, Notes. `IsPrimaryButtonEnabled` bound to `ViewModel.CanSave`. Static `BillEditorDialog.ShowAsync(XamlRoot, Bill, isAddMode)` returns `true` on Save (with edits applied to the bill via `ApplyToOriginal`), `false` on Cancel.
-- **`AllBillsPage`** — "Add New Bill" enabled with `Click="OnAddBillClick"`; creates a fresh Bill with `Guid.NewGuid().ToString()` id and opens the editor. Each bill row Border has `Tapped="OnBillRowTapped"` to open the editor for the existing bill. Guard: `IsAncestorOrSelf<ToggleSwitch>` walks the visual tree on `e.OriginalSource` so taps on the Active toggle don't bubble into the editor.
-- **`PayDay.Tests/BillEditorViewModelTests.cs`** — 6 tests: ctor population, add-mode defaults (Type=Bills, Rate=Monthly), CanSave validation (empty + whitespace), ApplyToOriginal round-trip (incl. trimming), DueDay clamp, null-on-blank for Notes/YearlyDate.
+### What landed across chunks 4a–4d
+
+- **4a Dashboard** (`a4aa445`) — 4 headline stats (monthly obligations rate-normalized, total owed, credit utilization %, bills due this period) + 3 period sections (This/Next/Following). Each section separates auto-pay vs manual and has client-side sortable columns (Type/Name/Due/Cost) — same-column click flips asc↔desc, switching columns resets to ascending. Sort indicator (▲/▼) bound via `[NotifyPropertyChangedFor]`.
+- **4b Payoff Tracker** (`1d010fc`) — Card per active bill with `Owed > 0`. Per-item: type pill, name, payment label (with APR if present), owed, optional limit-utilization progress bar (clamped 0..1), payoff estimate label. Sorted by `(bucket, months)` tuple: concrete months first, "never at this rate" next (when payment ≤ monthly interest), uncomputable last.
+- **4c Insights** (`b3f73b4`) — LiveCharts2 CartesianChart for total-owed-over-time (line + fill, accent purple), PieChart donut for type breakdown using pill-matching SkiaSharp colors, color-coded legend. "Save Snapshot" persists current total + JSON-ish per-bill breakdown and re-loads charts. Empty-state overlay when no snapshots yet. Page code-behind builds `ISeries[]` from VM plain data so `PayDay.Core` stays free of LiveCharts/SkiaSharp.
+- **4d Settings** (`f0cafb9`) — Five cards: Pay Period (DatePicker writes via `PayPeriodService.SetPayAnchorAsync`), Appearance (RadioButtons; applies live via `MainWindow.ApplyTheme` and persists to Settings table), **Backup & Restore (functional JSON export + import using FileSavePicker/FileOpenPicker, with confirmation ContentDialog on import)**, Notion sync placeholder with PHASE 5 tag, About card. Theme applied at startup via `MainWindow.ApplyPersistedThemeAsync`.
 
 ### Notable details
-- **`[ObservableProperty] private double _apr;` → property `Apr`** (not `APR`). The CommunityToolkit.Mvvm source generator drops the underscore and Pascal-cases the first letter only — leading acronyms aren't preserved as a unit. Hit it once during chunk-3b build and fixed in `ApplyToOriginal`.
-- **Editable ComboBox for Type** — `IsEditable="True"` + `ItemsSource="{x:Bind vm:BillEditorViewModel.KnownTypes}"` + `Text="{x:Bind ViewModel.Type, Mode=TwoWay}"`. Users get the 8 canonical types as a dropdown but can type any custom string, satisfying plan §4.4 "custom type categories supported".
-- **Tap-vs-toggle disambiguation** — ToggleSwitch consumes pointer events internally but Tapped is a routed event that bubbles. Belt-and-suspenders: visual-tree walk in `OnBillRowTapped` short-circuits if the original source descends from a ToggleSwitch.
 
-### What landed earlier in this session
-- **Chunk 1** (`9f5482e`): PayDay page + type pill design system + nav rework (Home → PayDay).
-- **Chunk 2** (`8b7c777`): All Bills page + AutoPay dot converter.
-- **Chunk 3a** (`5fb1b13`): VMs moved to `PayDay.Core/ViewModels/`, 13 VM tests added, top-tab nav.
+- **`App.MainWindow` static** was required so file pickers can call `WinRT.Interop.WindowNative.GetWindowHandle(window)` + `InitializeWithWindow.Initialize`. Made it a public static property on the `App` class. Without it, picker.PickSaveFileAsync throws on WinUI 3.
+- **`DateTimeOffset(dateTime, TimeSpan.Zero)` gotcha** — if `dateTime.Kind == Local` and the machine's UTC offset isn't zero, the ctor throws `ArgumentException`. `PayPeriodService.GetPayAnchorAsync` parses with `DateTimeStyles.AssumeLocal`, so it returns a `Local`-kind DateTime. Fix: construct with `new DateTimeOffset(y, m, d, 0, 0, 0, TimeSpan.Zero)` to strip the Kind. Hit it once in tests; fixed in `SettingsPageViewModel.LoadAsync`.
+- **`RadioButtons.SelectedIndex` is `int`, not `enum`** — bound to a proxy `SelectedThemeIndex` property on the VM that converts to/from `AppTheme`. `[NotifyPropertyChangedFor(nameof(SelectedThemeIndex))]` on the underlying enum field keeps the index in sync.
+- **`BackupSerializer.FromJson` refuses future-version files** — anything with `formatVersion` > 1 throws with a clear message. Forward-compatibility shim for when Phase 5/6 bumps the format.
+- **`ReplaceAllDataAsync` is transactional** in the real DB — single `BeginTransaction → DELETE * → INSERT * → COMMIT`. If parsing the JSON succeeds but a row insert later fails, the DB rolls back. Tests cover the happy path; the bad-JSON test in `SettingsPageViewModelTests.ImportAsync_BadJson_ThrowsBeforeMutating` confirms parse-time failure leaves the DB untouched.
+- **Live theme switching** — set `RequestedTheme` on the named `RootGrid` element. Application-level theme is immutable at runtime in WinUI 3, but `FrameworkElement.RequestedTheme` propagates to descendants.
+- **Stale `PayDay.exe` blocks rebuilds** — `dotnet run` failed mid-session because PID 68368 from a prior smoke test was still holding `AppX\PayDay.exe`. `Get-Process PayDay | Stop-Process -Force` cleared it. Pattern: always make sure the previous smoke-test instance exited before re-running. Easy to miss because the WinUI host doesn't always close cleanly.
 
 ### How to re-run the tests / build
+
 ```powershell
 $env:PATH = "C:\Program Files\dotnet;$env:PATH"
 dotnet build P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj --nologo
 dotnet test  P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Tests\PayDay.Tests.csproj --nologo
 dotnet run --project P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj
+# If `dotnet run` fails with a file-lock error, kill the stale PayDay process first:
+Get-Process PayDay -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
 ---
 
 ## Known issues / workarounds
 
-- **Bill editor tweaks pending** — user noted "we can make some tweaks later" after the smoke test. No specifics captured; revisit when they raise it.
+- **Sortable columns on All Bills are still deferred** — the sortable-table pattern shipped on the Dashboard's manual subsection should retrofit cleanly. Not blocking; revisit in a polish pass.
+- **Bill editor tweaks pending** — user noted "we can make some tweaks later" after the chunk-3b smoke test. No specifics captured; revisit when they raise it.
 - **MVVMTK0045 is no longer a concern** — all `[ObservableProperty]` usages live in `PayDay.Core` (plain net9.0). The WinUI 3 partial-property generator gap (memory [[winui-mvvm-partial-properties]]) still exists upstream but doesn't affect this codebase.
-- **XAML compiler diagnostics are sometimes empty** under `dotnet build` (known WinUI 3 toolchain issue). The `winui-dev-workflow` skill ships a `BuildAndRun.ps1` helper that prefers MSBuild when available. Install Visual Studio with the WinUI workload for the best signal: `winget install Microsoft.VisualStudio.Community --override "--add Microsoft.VisualStudio.Workload.Universal"`.
-- **`winui-setup` does not check for the Windows App Runtime framework package.** If `winapp run` fails with `0x80073CF3` after a fresh setup, install the matching runtime: `winget install Microsoft.WindowsAppRuntime.2.0` (or the version line that matches the SDK NuGet in `PayDay.csproj`).
-- **dotnet is not on `PATH` in this shell.** Use `$env:PATH = "C:\Program Files\dotnet;$env:PATH"` at the top of any PowerShell session before invoking `dotnet`.
+- **XAML compiler diagnostics are sometimes empty** under `dotnet build` (known WinUI 3 toolchain issue). The `winui-dev-workflow` skill ships a `BuildAndRun.ps1` helper that prefers MSBuild when available.
+- **`winui-setup` does not check for the Windows App Runtime framework package.** If `winapp run` fails with `0x80073CF3` after a fresh setup, install the matching runtime: `winget install Microsoft.WindowsAppRuntime.2.0`.
+- **`dotnet` is not on `PATH` in this shell.** Use `$env:PATH = "C:\Program Files\dotnet;$env:PATH"` at the top of any PowerShell session before invoking `dotnet`.
 - **Inspecting the SQLite DB from outside the app:** the LocalState path is `$env:LOCALAPPDATA\Packages\01D3B109-C28A-428F-95A8-2C937B8D7A18_<publisher-hash>\LocalState\payday.db`. Get the publisher hash via `(Get-AppxPackage | Where Name -eq '01D3B109-C28A-428F-95A8-2C937B8D7A18').PackageFamilyName`.
 - **Tests cannot reference `PayDay.csproj` directly.** The WindowsAppSDK auto-initializer module init throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process without package identity. Use `PayDay.Core` for anything you need to unit-test — that's why the VMs live there.
 - **`dotnet run --launch-profile PayDay`** warns that the profile doesn't exist but still launches via the WinAppSDK build hook. The warning is cosmetic.
+- **Stale `PayDay.exe` after a prior smoke test** can lock `AppX\PayDay.exe`. Kill before re-running: `Get-Process PayDay | Stop-Process -Force`.
