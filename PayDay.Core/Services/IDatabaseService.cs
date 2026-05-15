@@ -15,6 +15,7 @@ public interface IDatabaseService
     Task SetSettingAsync(string key, string? value);
 
     Task<IReadOnlyList<Bill>> GetAllBillsAsync();
+    Task UpsertBillAsync(Bill bill);
 
     Task<long> InsertPaymentAsync(Payment payment);
     Task<IReadOnlyList<Payment>> GetPaymentsByPeriodAsync(string periodKey);
