@@ -32,16 +32,21 @@
 - [x] `PayDay.Tests/AutoBackupTests.cs` — 7 new tests: no-service path / backup ok / backup fail (local row still persists) / mark-all triggers exactly one backup, mirrored for snapshot save. Uses inline `ThrowingBackupStore` fake.
 - [x] 144/144 tests pass (was 137). Build 0 warn / 0 err on PayDay.csproj and PayDay.Tests.csproj.
 
-### 6c — First-launch restore prompt  ⏳ later
-- [ ] `App.OnLaunched` — after `DatabaseService.Instance.InitializeAsync()`, check if `Bills` is empty and `App.Backups.LatestAsync()` returns non-null. Show a `ContentDialog` offering to restore from the newest backup.
-- [ ] Restore path reuses `BackupSerializer.FromJson` + `DatabaseService.ReplaceAllDataAsync` (same as the existing manual import path).
-- [ ] Manual smoke test: nuke the DB, relaunch, accept restore, verify rows return.
+### 6c — First-launch restore prompt  ✅ landed (smoke test pending)
+- [x] `PayDay.Core/Services/BackupRestorePrompt.cs` — pure-logic helper. `GetCandidateAsync()` returns the newest backup *only* when the Bills table is empty and the backup folder is non-empty; `ApplyAsync(BackupEntry)` reads + parses via `BackupSerializer.FromJson` and calls `IDatabaseService.ReplaceAllDataAsync`. Parse-time validation runs before `ReplaceAllDataAsync` so a corrupt file leaves the DB untouched.
+- [x] `MainWindow.MainWindow_Activated` — one-shot handler (gated by `_restorePromptChecked`) checks `BackupRestorePrompt.GetCandidateAsync`. If a candidate exists, shows a `ContentDialog` rooted at `RootGrid.XamlRoot` with "Restore" (primary) / "Start fresh" buttons. On Restore, calls `ApplyAsync` and navigates back to `PayDayPage` so the freshly restored data reloads.
+- [x] Restore failure surfaces via a secondary `ContentDialog` (title "Restore failed", body = exception message). The local DB isn't modified because `BackupSerializer.FromJson` validates before the transactional `ReplaceAllDataAsync`.
+- [x] `PayDay.Tests/BackupRestorePromptTests.cs` — 6 new tests: empty DB + no backups → null; non-empty DB → null even with backups; empty DB + backups → newest; ApplyAsync restores bills/payments/snapshots/settings; round-trip via `BackupRotationService.CreateAsync` → wipe → `ApplyAsync`; bad-JSON throws before mutating DB.
+- [x] 150/150 tests pass (was 144). Build 0 warn / 0 err.
+- [ ] **Manual smoke test pending (user)** — delete `payday.db` from `LocalState`, relaunch, confirm the dialog fires and accepting restores all data.
 
 ## Sprint exit criteria
 
-- [ ] `dotnet test PayDay.Tests` exits 0 — 121 entering sprint; 6a is +16 already (137).
-- [ ] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
-- [ ] Manual smoke test: mark a payment, confirm a file appears in `LocalFolder/backups/`. Take 11 backups, confirm only 10 survive. Wipe DB → relaunch → accept restore prompt → bills return.
-- [ ] All three chunks committed and pushed.
+- [x] `dotnet test PayDay.Tests` exits 0 — **150 tests pass** (was 121 entering sprint; +29 across 6a, 6b, 6c).
+- [x] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
+- [ ] Manual smoke test (user) — mark a payment + watch for the file in `LocalFolder/backups/`, take 11 payments to confirm only 10 survive, wipe the DB + relaunch + accept the restore prompt.
+- [x] All three chunks committed and pushed.
+
+## Phase 6 closed — 2026-05-15
 
 After Phase 6: Phase 7 — ship (MSIX packaging, certificate, Store/sideload distribution).
