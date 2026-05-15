@@ -8,13 +8,47 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 5 — Notion sync.** Phase 4 (UI / Views) closed 2026-05-15 across four chunks (4a–4d, commits `a4aa445` → `f0cafb9`). All seven §4.x pages ship, 84/84 tests pass, build 0 warn / 0 err.
+**Phase 5 — Notion sync.** Code complete across four chunks (5a–5d). 118/118 tests pass, build 0 warn / 0 err. **Manual smoke test pending** — see "Smoke test" section below.
 
-Next: build `Services/NotionSyncService.cs` (plan §5) — bidirectional bill sync, push-only Payments + Snapshots. Three Notion data-source IDs already live in the seeded Settings table (`NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb`). Integration token goes into Windows Credential Manager (DPAPI), **not** the SQLite Settings table. The Settings page already has a Notion section stubbed under a `PHASE 5` tag — flesh that out (token field, "Test connection" button, "Sync now" button, last-synced timestamp).
+Once the smoke test passes:
+- Close Phase 5 in `SESSION_STATUS.md` + `planning/current-sprint.md`.
+- Next: Phase 6 — auto-backup rotation in `LocalFolder/backups/` per §6.2 (manual JSON export/import already shipped in 4d).
+- Then Phase 7 — package & ship.
 
-After Phase 5: Phase 6 (auto-backup rotation in `LocalFolder/backups/` per §6.2 — manual JSON export/import already shipped in chunk 4d as part of Settings), then Phase 7 (ship).
+If the smoke test surfaces issues (Notion property-name mismatch, token-saving HRESULTs, etc.), fix in a new chunk and update the sprint file.
 
-Open `planning/current-sprint.md` (a fresh sprint file when starting Phase 5). Chunks 1–4 of Phase 4 are closed.
+## Smoke test — Phase 5
+
+1. `dotnet run --project PayDay\PayDay.csproj` (kill any stale `PayDay.exe` first per [[winui-stale-process-lock]]).
+2. Settings → Notion Sync → paste a Notion integration token → **Save**. Token should disappear from the box; status dot → gray with "Token saved. Run Test connection to verify."
+3. **Test connection** → expect green dot + "Connected — token verified."
+4. **Sync now** → expect green dot + "Synced — created N, updated M, pulled P." `LastNotionSync` setting persisted; the timestamp label updates.
+5. Navigate to PayDay → mark a manual bill paid. Within ~1–2s, refresh the Notion Payments database — a new page should appear with `Bill ID = local Id`, `Period = period key`, `Amount Paid = cost`, `Name = "{Bill name} — {period key}"`.
+6. Navigate to Insights → **Save Snapshot**. The Notion Snapshots database should receive a new page with `Date = today`, `Total Owed = sum`, `Name = "Snapshot YYYY-MM-DD"`.
+7. (Optional) Edit a bill on the Notion side, hit Sync now → verify the local row picks up the change (last-write-wins on `last_edited_time`).
+
+---
+
+## Session — 2026-05-15 (Phase 5 code complete)
+
+Phase 5 (Notion sync) shipped across four chunks. Build 0 warn / 0 err. 118 tests pass (was 84 at start of session).
+
+### What landed across chunks 5a–5d
+
+- **5a Credential store** (`23f99dc`) — `ICredentialStore` in `PayDay.Core`; `WindowsCredentialStore` (Advapi32 P/Invoke, `CRED_TYPE_GENERIC`, target `PayDay:{key}`, UTF-16LE blob) in the app project. No tests yet — abstraction consumed in 5b.
+- **5b NotionSyncService** (`4beadf5`) — bills bidirectional sync via the 2025-09-03 data-sources API (`POST /v1/data_sources/{id}/query`, `POST /v1/pages` with `parent.type=data_source_id`). Last-write-wins on `UpdatedAt` vs `last_edited_time`. Match by `Bill ID` text property. Push helpers for Payments + Snapshots. Notion-Version header `2025-09-03`. `InternalsVisibleTo PayDay.Tests` added to `PayDay.Core.csproj`. `InMemoryCredentialStore` + `RecordingHttpHandler` test fakes. 13 NotionSyncServiceTests.
+- **5c Auto-sync on payment + snapshot** (`c5a1ef8`) — `NotionPushStatus` enum (NotConfigured/Ok/Failed). `PayDayPageViewModel` + `InsightsPageViewModel` each take an optional `NotionSyncService?`; after a local persist they kick off `PushPayment/SnapshotSafeAsync` (fire-and-forget). Public `PendingNotionPush` Task surfaces the latest push for deterministic tests. `App.Credentials` + `App.Notion` are process-wide singletons. 8 AutoSyncTests.
+- **5d Settings UI** (this commit) — Notion card on `SettingsPage.xaml`: PasswordBox + Save/Clear, Test connection + Sync now buttons (disabled until token set), ProgressRing, status row (Ellipse dot + status + last-synced label). `NotionStatusToBrushConverter` for the dot. `SettingsPageViewModel` extended with token + status state and `SaveTokenAsync` / `ClearTokenAsync` / `TestConnectionAsync` / `SyncNowAsync`. 10 SettingsPageNotionTests.
+
+### Notable details
+
+- **`Notion-Version: 2025-09-03`** is required for the data-sources API. The legacy `databases/{id}/query` endpoint won't accept the data-source IDs in our settings table. `parent` payload uses `{ "type": "data_source_id", "data_source_id": "..." }` — **not** `{ "database_id": "..." }`.
+- **`PasswordBox.Password` is NOT a dependency property in WinUI 3** — two-way binding doesn't work. The page handler reads `TokenBox.Password` on click and calls `ViewModel.SaveTokenAsync(...)`.
+- **Fire-and-forget pushes are deterministically testable via `PendingNotionPush`** — the VM assigns the latest started push task to this public property; tests await it after the VM action. Production code never awaits it (real fire-and-forget feel).
+- **Push failure surfaces but doesn't roll back local state.** `PushPaymentSafeAsync` catches everything, sets `LastNotionPushStatus=Failed` + `LastNotionPushError`, and returns normally. Mark-paid stays applied locally.
+- **Archive-on-delete (plan §5.2 last bullet) is deferred** — needs a tombstone table to distinguish "never existed locally" from "deleted locally last session". A TODO sits in `SyncBillsAsync`.
+- **NotionPageId write-back on Payments/Snapshots is deferred** — they're push-only, and nothing reads the column yet. Add an `is_synced` column when we ever build push-resume-after-failure.
+- **`InternalsVisibleTo PayDay.Tests`** on `PayDay.Core.csproj` lets internal helpers (`ParseSqliteUtc`, `BuildBillProperties`, `NotionPage`) stay internal while remaining test-visible.
 
 ---
 

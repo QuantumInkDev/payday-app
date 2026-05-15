@@ -14,11 +14,26 @@ public sealed partial class SettingsPage : Page
 
     public SettingsPage()
     {
-        ViewModel = new SettingsPageViewModel(DatabaseService.Instance);
+        ViewModel = new SettingsPageViewModel(DatabaseService.Instance, App.Notion);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;
     }
+
+    private async void OnSaveTokenClick(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.SaveTokenAsync(TokenBox.Password);
+        TokenBox.Password = string.Empty;
+    }
+
+    private async void OnClearTokenClick(object sender, RoutedEventArgs e)
+        => await ViewModel.ClearTokenAsync();
+
+    private async void OnTestNotionClick(object sender, RoutedEventArgs e)
+        => await ViewModel.TestConnectionAsync();
+
+    private async void OnSyncNowClick(object sender, RoutedEventArgs e)
+        => await ViewModel.SyncNowAsync();
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {

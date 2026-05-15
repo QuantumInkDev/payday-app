@@ -15,9 +15,8 @@ public enum AppTheme
 
 /// <summary>
 /// View model behind <c>SettingsPage</c>. Owns the pay-anchor date, theme
-/// selection, and the JSON export/import seam. Theme + pay anchor persist
-/// to the <c>Settings</c> table; export/import use <see cref="BackupSerializer"/>
-/// and <c>IDatabaseService.ReplaceAllDataAsync</c>.
+/// selection, JSON export/import, and the Notion-sync configuration block
+/// (token save/clear, test connection, manual sync now, last-synced label).
 /// </summary>
 public sealed partial class SettingsPageViewModel : ObservableObject
 {
@@ -25,11 +24,13 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
     private readonly IDatabaseService _db;
     private readonly PayPeriodService _periodService;
+    private readonly NotionSyncService? _notion;
 
-    public SettingsPageViewModel(IDatabaseService db)
+    public SettingsPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
     {
         _db = db;
         _periodService = new PayPeriodService(db);
+        _notion = notion;
     }
 
     [ObservableProperty]
@@ -60,6 +61,41 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
     public bool HasStatus => !string.IsNullOrEmpty(StatusMessage);
 
+    // ------------------------------------------------------------------
+    // Notion sync (5d)
+    // ------------------------------------------------------------------
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NotionSectionEnabled))]
+    private bool _notionTokenSet;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotionBusy))]
+    private bool _isTesting;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotionBusy))]
+    private bool _isSyncing;
+
+    [ObservableProperty]
+    private NotionPushStatus _notionStatus = NotionPushStatus.NotConfigured;
+
+    [ObservableProperty]
+    private string _notionStatusLabel = "Paste an integration token to enable sync.";
+
+    [ObservableProperty]
+    private string _lastSyncedLabel = "Never synced";
+
+    /// <summary>True only if the app actually has a Notion service wired in (production has one; tests can omit).</summary>
+    public bool NotionAvailable => _notion is not null;
+
+    /// <summary>The Notion card's interactive controls (test/sync buttons) only light up once a token is saved.</summary>
+    public bool NotionSectionEnabled => NotionTokenSet;
+
+    public bool IsNotionBusy => IsTesting || IsSyncing;
+
+    // ------------------------------------------------------------------
+
     public async Task LoadAsync()
     {
         IsLoading = true;
@@ -73,10 +109,118 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
             var themeRaw = await _db.GetSettingAsync(ThemeKey).ConfigureAwait(true);
             SelectedTheme = ParseTheme(themeRaw);
+
+            await LoadNotionStateAsync().ConfigureAwait(true);
         }
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task LoadNotionStateAsync()
+    {
+        if (_notion is null)
+        {
+            NotionTokenSet = false;
+            NotionStatus = NotionPushStatus.NotConfigured;
+            NotionStatusLabel = "Notion sync unavailable in this build.";
+            return;
+        }
+        NotionTokenSet = _notion.HasToken();
+        var last = await _notion.GetLastSyncedAsync().ConfigureAwait(true);
+        LastSyncedLabel = last is null
+            ? "Never synced"
+            : $"Last synced {last.Value.ToLocalTime():MMM d, yyyy 'at' h:mm tt}";
+        if (!NotionTokenSet)
+        {
+            NotionStatus = NotionPushStatus.NotConfigured;
+            NotionStatusLabel = "Paste an integration token to enable sync.";
+        }
+        else
+        {
+            NotionStatus = NotionPushStatus.Ok;
+            NotionStatusLabel = last is null
+                ? "Token saved. Run 'Test connection' to verify."
+                : "Connected.";
+        }
+    }
+
+    public Task SaveTokenAsync(string token)
+    {
+        if (_notion is null) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            StatusMessage = "Paste a token first.";
+            return Task.CompletedTask;
+        }
+        _notion.SaveToken(token.Trim());
+        NotionTokenSet = true;
+        NotionStatus = NotionPushStatus.Ok;
+        NotionStatusLabel = "Token saved. Run 'Test connection' to verify.";
+        StatusMessage = "Notion token saved.";
+        return Task.CompletedTask;
+    }
+
+    public Task ClearTokenAsync()
+    {
+        if (_notion is null) return Task.CompletedTask;
+        _notion.DeleteToken();
+        NotionTokenSet = false;
+        NotionStatus = NotionPushStatus.NotConfigured;
+        NotionStatusLabel = "Paste an integration token to enable sync.";
+        StatusMessage = "Notion token cleared.";
+        return Task.CompletedTask;
+    }
+
+    public async Task TestConnectionAsync()
+    {
+        if (_notion is null) return;
+        IsTesting = true;
+        try
+        {
+            var ok = await _notion.TestConnectionAsync().ConfigureAwait(true);
+            NotionStatus = ok ? NotionPushStatus.Ok : NotionPushStatus.Failed;
+            NotionStatusLabel = ok
+                ? "Connected — token verified."
+                : "Connection failed — check the token and try again.";
+            StatusMessage = ok ? "Notion connection OK." : "Notion connection failed.";
+        }
+        finally
+        {
+            IsTesting = false;
+        }
+    }
+
+    public async Task SyncNowAsync()
+    {
+        if (_notion is null) return;
+        IsSyncing = true;
+        try
+        {
+            var result = await _notion.SyncBillsAsync().ConfigureAwait(true);
+            await LoadNotionStateAsync().ConfigureAwait(true); // refresh last-synced label
+            if (result.HasErrors)
+            {
+                NotionStatus = NotionPushStatus.Failed;
+                NotionStatusLabel = $"Sync finished with {result.Errors.Count} error(s). {result.Errors[0]}";
+            }
+            else
+            {
+                NotionStatus = NotionPushStatus.Ok;
+                NotionStatusLabel = $"Synced — created {result.Created}, updated {result.Updated}, pulled {result.Pulled}.";
+            }
+            StatusMessage = NotionStatusLabel;
+        }
+        catch (Exception ex)
+        {
+            NotionStatus = NotionPushStatus.Failed;
+            NotionStatusLabel = $"Sync failed: {ex.Message}";
+            StatusMessage = NotionStatusLabel;
+        }
+        finally
+        {
+            IsSyncing = false;
         }
     }
 

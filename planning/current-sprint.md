@@ -40,15 +40,14 @@
 - [x] **NotionPageId write-back on payments/snapshots is deferred.** It's not read by anything yet (push-only flow). If we ever add resume-after-failure, we'll add an `is_synced` column then.
 - [x] 108/108 tests pass. Build 0 warn / 0 err.
 
-### 5d — Settings UI + smoke test
-- [ ] Replace the PHASE 5 placeholder card on `SettingsPage.xaml` with:
-  - `PasswordBox` for the integration token + Save button.
-  - "Test connection" button + status label (with green/red dot).
-  - "Sync now" button + last-synced timestamp label.
-  - Stub for re-running auto-sync after offline reconnects (deferred to polish).
-- [ ] Settings VM: `NotionTokenSet` bool (true if `ICredentialStore` has the key), `IsTesting` / `IsSyncing` flags, `LastSyncedLabel`, status string.
-- [ ] Manual smoke test: paste a real Notion integration token in, hit Test → green, Sync Now → bills round-trip, mark a bill paid on PayDay page → Notion gets a new Payments row within ~2s.
-- [ ] Update `SESSION_STATUS.md` and close the sprint.
+### 5d — Settings UI  ✅ landed (smoke test pending)
+- [x] `SettingsPage.xaml` — Notion card flesh-out: `PasswordBox` for token, Save / Clear buttons, "Test connection" + "Sync now" buttons (disabled until token set), `ProgressRing` for in-flight ops, status row (Ellipse dot + status label + last-synced label).
+- [x] `Converters/NotionStatusToBrushConverter.cs` — `NotionPushStatus` → green/red/gray status-dot brush.
+- [x] `SettingsPageViewModel` — `NotionSyncService? _notion` ctor param + `NotionTokenSet`, `IsTesting`, `IsSyncing`, `IsNotionBusy`, `NotionStatus`, `NotionStatusLabel`, `LastSyncedLabel`, `NotionAvailable`, `NotionSectionEnabled`. Methods: `SaveTokenAsync`, `ClearTokenAsync`, `TestConnectionAsync`, `SyncNowAsync`. `LoadAsync` extended to read Notion state.
+- [x] `App.NotionAvailable` static — production wires up the real `WindowsCredentialStore` + `NotionSyncService` singleton; SettingsPage now passes it in.
+- [x] `PayDay.Tests/SettingsPageNotionTests.cs` — 10 new tests covering: no notion service, no token, token present, save token, blank save no-op, clear token, test connection success / failure, sync now success / failure.
+- [x] 118/118 tests pass. Build 0 warn / 0 err.
+- [ ] **Manual smoke test (user)** — paste a real Notion integration token, hit Test → green, Sync Now → bills round-trip, mark a bill paid on PayDay page → Notion gets a new Payments row within ~2s.
 
 ## Sprint exit criteria
 
