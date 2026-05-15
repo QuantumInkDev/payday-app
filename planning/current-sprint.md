@@ -31,10 +31,14 @@
 - [x] **`InternalsVisibleTo PayDay.Tests`** added to `PayDay.Core.csproj` so internal helpers (`ParseSqliteUtc`, `BuildBillProperties`, `NotionPage`) are visible in tests without widening the public surface.
 - [x] 100/100 tests pass. Build 0 warn / 0 err.
 
-### 5c — Payments + snapshots push, auto-sync on payment
-- [ ] Extend `NotionSyncService` with `Task PushPaymentAsync(Payment)` and `Task PushSnapshotAsync(Snapshot)`. Each writes its `NotionPageId` back to the local row.
-- [ ] Hook into `PaymentService.MarkPaidAsync` (in `PayDay.Core`) — fire-and-forget Notion push after the local insert succeeds. Skip silently if no credential or if `TestConnection` previously failed (track a `LastSyncStatus` flag).
-- [ ] Tests: push creates page, push stores `NotionPageId`, mark-paid still succeeds locally when Notion push fails.
+### 5c — Auto-sync on payment + snapshot  ✅ landed
+- [x] `NotionPushStatus` enum (`NotConfigured` / `Ok` / `Failed`) in `PayDay.Core/Services/NotionSyncResult.cs`.
+- [x] `PayDayPageViewModel` — optional `NotionSyncService?` ctor param. `MarkPaid` / `MarkAllPaid` kick off `PushPaymentSafeAsync` (fire-and-forget). Public `PendingNotionPush` Task surfaces the latest push for deterministic tests. `LastNotionPushStatus` + `LastNotionPushError` observable for UI binding.
+- [x] `InsightsPageViewModel` — same pattern for `SaveSnapshotAsync` → `PushSnapshotSafeAsync`.
+- [x] `App.xaml.cs` — process-wide singletons: `App.Credentials` (WindowsCredentialStore) and `App.Notion` (NotionSyncService). PayDayPage and InsightsPage construct their VMs with `App.Notion`.
+- [x] `PayDay.Tests/AutoSyncTests.cs` — 8 new tests: PayDay (no service / no token / push ok / push fail / mark-all pushes everything) + Insights (no service / push ok / push fail). Push failures verified to NOT roll back the local insert.
+- [x] **NotionPageId write-back on payments/snapshots is deferred.** It's not read by anything yet (push-only flow). If we ever add resume-after-failure, we'll add an `is_synced` column then.
+- [x] 108/108 tests pass. Build 0 warn / 0 err.
 
 ### 5d — Settings UI + smoke test
 - [ ] Replace the PHASE 5 placeholder card on `SettingsPage.xaml` with:

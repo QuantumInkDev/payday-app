@@ -19,6 +19,12 @@ public partial class App : Application
     /// <summary>The single top-level window. Exposed so file pickers can call WinRT InitializeWithWindow.</summary>
     public static Window? MainWindow { get; private set; }
 
+    /// <summary>Process-wide credential store backed by Windows Credential Manager.</summary>
+    public static ICredentialStore Credentials { get; } = new WindowsCredentialStore();
+
+    /// <summary>Process-wide Notion sync service. Disposed when the app shuts down.</summary>
+    public static NotionSyncService Notion { get; } = new(DatabaseService.Instance, Credentials);
+
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
     /// executed, and as such is the logical equivalent of main() or WinMain().

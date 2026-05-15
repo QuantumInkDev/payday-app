@@ -20,13 +20,28 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     private readonly IDatabaseService _db;
     private readonly PayPeriodService _periodService;
     private readonly PaymentService _paymentService;
+    private readonly NotionSyncService? _notion;
 
-    public PayDayPageViewModel(IDatabaseService db)
+    public PayDayPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
     {
         _db = db;
         _periodService = new PayPeriodService(db);
         _paymentService = new PaymentService(db);
+        _notion = notion;
     }
+
+    [ObservableProperty]
+    private NotionPushStatus _lastNotionPushStatus = NotionPushStatus.NotConfigured;
+
+    [ObservableProperty]
+    private string _lastNotionPushError = string.Empty;
+
+    /// <summary>
+    /// The most recent push (or batch of pushes) kicked off by a mark-paid action.
+    /// Tests await this to wait for fire-and-forget pushes to finish deterministically.
+    /// Null if no pushes have been started yet.
+    /// </summary>
+    public Task? PendingNotionPush { get; private set; }
 
     // ------------------------------------------------------------------
     // Bound state
@@ -179,6 +194,14 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         UnpaidBills.Remove(row);
         PaidBills.Add(row);
         RecalculateTotals();
+        PendingNotionPush = PushPaymentSafeAsync(new Payment
+        {
+            Id = id,
+            BillId = row.Bill.Id,
+            PeriodKey = CurrentPeriodKey,
+            AmountPaid = amount,
+            PaidAt = DateTime.UtcNow.ToString("O"),
+        }, row.Bill.Name);
     }
 
     [RelayCommand]
@@ -198,6 +221,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     private async Task MarkAllPaidAsync()
     {
         if (CurrentPeriodKey is null) return;
+        var pushes = new List<Task>();
         foreach (var row in UnpaidBills.ToList())
         {
             var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Cost;
@@ -207,9 +231,42 @@ public sealed partial class PayDayPageViewModel : ObservableObject
             row.IsPaid = true;
             UnpaidBills.Remove(row);
             PaidBills.Add(row);
+            pushes.Add(PushPaymentSafeAsync(new Payment
+            {
+                Id = id,
+                BillId = row.Bill.Id,
+                PeriodKey = CurrentPeriodKey,
+                AmountPaid = amount,
+                PaidAt = DateTime.UtcNow.ToString("O"),
+            }, row.Bill.Name));
         }
         RecalculateTotals();
+        PendingNotionPush = Task.WhenAll(pushes);
     }
 
     private bool CanMarkAllPaid() => UnpaidBills.Count > 0;
+
+    /// <summary>
+    /// Fire-and-forget Notion push: catches all exceptions and surfaces them via
+    /// <see cref="LastNotionPushStatus"/> / <see cref="LastNotionPushError"/>.
+    /// </summary>
+    private async Task PushPaymentSafeAsync(Payment payment, string billName)
+    {
+        if (_notion is null || !_notion.HasToken())
+        {
+            LastNotionPushStatus = NotionPushStatus.NotConfigured;
+            return;
+        }
+        try
+        {
+            await _notion.PushPaymentAsync(payment, billName).ConfigureAwait(true);
+            LastNotionPushStatus = NotionPushStatus.Ok;
+            LastNotionPushError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LastNotionPushStatus = NotionPushStatus.Failed;
+            LastNotionPushError = ex.Message;
+        }
+    }
 }

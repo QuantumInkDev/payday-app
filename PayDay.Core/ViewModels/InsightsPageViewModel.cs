@@ -19,8 +19,21 @@ namespace PayDay.ViewModels;
 public sealed partial class InsightsPageViewModel : ObservableObject
 {
     private readonly IDatabaseService _db;
+    private readonly NotionSyncService? _notion;
 
-    public InsightsPageViewModel(IDatabaseService db) => _db = db;
+    public InsightsPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
+    {
+        _db = db;
+        _notion = notion;
+    }
+
+    [ObservableProperty]
+    private NotionPushStatus _lastNotionPushStatus = NotionPushStatus.NotConfigured;
+
+    [ObservableProperty]
+    private string _lastNotionPushError = string.Empty;
+
+    public Task? PendingNotionPush { get; private set; }
 
     [ObservableProperty]
     private bool _isLoading;
@@ -103,8 +116,31 @@ public sealed partial class InsightsPageViewModel : ObservableObject
             Details = SerializeDetails(active),
         };
         var id = await _db.InsertSnapshotAsync(snapshot).ConfigureAwait(true);
+        snapshot.Id = id;
         await LoadAsync().ConfigureAwait(true);
+        PendingNotionPush = PushSnapshotSafeAsync(snapshot);
         return id;
+    }
+
+    /// <summary>Fire-and-forget Notion push for the newly saved snapshot.</summary>
+    private async Task PushSnapshotSafeAsync(Snapshot snapshot)
+    {
+        if (_notion is null || !_notion.HasToken())
+        {
+            LastNotionPushStatus = NotionPushStatus.NotConfigured;
+            return;
+        }
+        try
+        {
+            await _notion.PushSnapshotAsync(snapshot).ConfigureAwait(true);
+            LastNotionPushStatus = NotionPushStatus.Ok;
+            LastNotionPushError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LastNotionPushStatus = NotionPushStatus.Failed;
+            LastNotionPushError = ex.Message;
+        }
     }
 
     private static DateTime ParseDate(string raw)
