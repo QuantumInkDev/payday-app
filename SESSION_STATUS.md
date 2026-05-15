@@ -8,11 +8,9 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 2.1 — Define SQLite schema in `Services/DatabaseService.cs`** (see `planning/PAYDAY_WINUI3_PLAN.md` §2.1).
+**Phase 2 — SQLite data layer.** Sprint plan: `planning/current-sprint.md`. Source plan: `planning/PAYDAY_WINUI3_PLAN.md` §1.3, §2.1, §2.2, §2.3.
 
-Next-session checklist:
-1. Add NuGet packages from plan §1.3 (`Microsoft.Data.Sqlite`, `CommunityToolkit.Mvvm`, `CommunityToolkit.WinUI.Controls.DataTable`, `LiveChartsCore.SkiaSharpView.WinUI`, `System.Net.Http.Json`).
-2. Create `PayDay/Services/DatabaseService.cs`, implement table creation per plan §2.1, then the seed-data routine per §2.3.
+Start with the NuGet package adds in §2.0 of the sprint file, then `PayDay/Services/DatabaseService.cs` (schema → CRUD → seed). Exit criteria are in the sprint file.
 
 ---
 
