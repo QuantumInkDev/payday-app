@@ -8,37 +8,39 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 5 — Notion sync.** Code complete across four chunks (5a–5d). 118/118 tests pass, build 0 warn / 0 err. **Manual smoke test pending** — see "Smoke test" section below.
+**Phase 6 — Auto-backup rotation.** Phase 5 closed 2026-05-15 across five chunks (5a `23f99dc` → 5e `1b60120`). All Notion sync paths confirmed by smoke test: token save, Test, Sync Now (after the 5e select fix), mark-paid → Payments DB, Save Snapshot → Snapshots DB. 121/121 tests pass, build 0 warn / 0 err.
 
-Once the smoke test passes:
-- Close Phase 5 in `SESSION_STATUS.md` + `planning/current-sprint.md`.
-- Next: Phase 6 — auto-backup rotation in `LocalFolder/backups/` per §6.2 (manual JSON export/import already shipped in 4d).
-- Then Phase 7 — package & ship.
+Next: implement auto-rotating backups per `PAYDAY_WINUI3_PLAN.md` §6.2.
 
-If the smoke test surfaces issues (Notion property-name mismatch, token-saving HRESULTs, etc.), fix in a new chunk and update the sprint file.
+- On every mark-paid (and probably snapshot save), serialize the full DB via the existing `BackupSerializer.ToJson` and write it to `ApplicationData.Current.LocalFolder/backups/payday-backup-{yyyyMMdd-HHmmss}.json`.
+- Trim the folder to the most recent 10 backups (`OrderByDescending(LastWriteTime).Skip(10)` → delete).
+- On app launch, if the Bills table is empty but `backups/` has files, show a `ContentDialog` prompting restore from the newest.
 
-## Smoke test — Phase 5
+Implementation seams already in place:
+- `BackupSerializer.ToJson(bills, payments, snapshots, settings)` returns the JSON string (no I/O).
+- `PayDayPageViewModel.MarkPaidAsync` and `MarkAllPaidAsync` already kick off `PendingNotionPush`; add a parallel `PendingAutoBackup` (same fire-and-forget pattern).
+- `App.OnLaunched` runs the empty-DB check after `DatabaseService.Instance.InitializeAsync()`.
 
-1. `dotnet run --project PayDay\PayDay.csproj` (kill any stale `PayDay.exe` first per [[winui-stale-process-lock]]).
-2. Settings → Notion Sync → paste a Notion integration token → **Save**. Token should disappear from the box; status dot → gray with "Token saved. Run Test connection to verify."
-3. **Test connection** → expect green dot + "Connected — token verified."
-4. **Sync now** → expect green dot + "Synced — created N, updated M, pulled P." `LastNotionSync` setting persisted; the timestamp label updates.
-5. Navigate to PayDay → mark a manual bill paid. Within ~1–2s, refresh the Notion Payments database — a new page should appear with `Bill ID = local Id`, `Period = period key`, `Amount Paid = cost`, `Name = "{Bill name} — {period key}"`.
-6. Navigate to Insights → **Save Snapshot**. The Notion Snapshots database should receive a new page with `Date = today`, `Total Owed = sum`, `Name = "Snapshot YYYY-MM-DD"`.
-7. (Optional) Edit a bill on the Notion side, hit Sync now → verify the local row picks up the change (last-write-wins on `last_edited_time`).
+Chunk it as:
+- **6a**: `BackupRotationService` (pure logic in `PayDay.Core`, takes `IDatabaseService` + an `IBackupStore` abstraction) + tests.
+- **6b**: `WindowsBackupStore` (writes to `LocalFolder/backups/`, uses `StorageFolder` API) + wire into VMs.
+- **6c**: First-launch restore prompt + smoke test.
+
+After Phase 6: Phase 7 — ship (MSIX packaging, signing, Microsoft Store or sideload distribution per §7).
 
 ---
 
-## Session — 2026-05-15 (Phase 5 code complete)
+## Session — 2026-05-15 (Phase 5 closed)
 
-Phase 5 (Notion sync) shipped across four chunks. Build 0 warn / 0 err. 118 tests pass (was 84 at start of session).
+Phase 5 (Notion sync) shipped across five chunks (5a–5e). Build 0 warn / 0 err. 121 tests pass (was 84 at start of session). End-to-end smoke test passed: token save → Test → Sync Now → mark-paid pushes to Payments DB → Save Snapshot pushes to Snapshots DB.
 
-### What landed across chunks 5a–5d
+### What landed across chunks 5a–5e
 
 - **5a Credential store** (`23f99dc`) — `ICredentialStore` in `PayDay.Core`; `WindowsCredentialStore` (Advapi32 P/Invoke, `CRED_TYPE_GENERIC`, target `PayDay:{key}`, UTF-16LE blob) in the app project. No tests yet — abstraction consumed in 5b.
 - **5b NotionSyncService** (`4beadf5`) — bills bidirectional sync via the 2025-09-03 data-sources API (`POST /v1/data_sources/{id}/query`, `POST /v1/pages` with `parent.type=data_source_id`). Last-write-wins on `UpdatedAt` vs `last_edited_time`. Match by `Bill ID` text property. Push helpers for Payments + Snapshots. Notion-Version header `2025-09-03`. `InternalsVisibleTo PayDay.Tests` added to `PayDay.Core.csproj`. `InMemoryCredentialStore` + `RecordingHttpHandler` test fakes. 13 NotionSyncServiceTests.
 - **5c Auto-sync on payment + snapshot** (`c5a1ef8`) — `NotionPushStatus` enum (NotConfigured/Ok/Failed). `PayDayPageViewModel` + `InsightsPageViewModel` each take an optional `NotionSyncService?`; after a local persist they kick off `PushPayment/SnapshotSafeAsync` (fire-and-forget). Public `PendingNotionPush` Task surfaces the latest push for deterministic tests. `App.Credentials` + `App.Notion` are process-wide singletons. 8 AutoSyncTests.
-- **5d Settings UI** (this commit) — Notion card on `SettingsPage.xaml`: PasswordBox + Save/Clear, Test connection + Sync now buttons (disabled until token set), ProgressRing, status row (Ellipse dot + status + last-synced label). `NotionStatusToBrushConverter` for the dot. `SettingsPageViewModel` extended with token + status state and `SaveTokenAsync` / `ClearTokenAsync` / `TestConnectionAsync` / `SyncNowAsync`. 10 SettingsPageNotionTests.
+- **5d Settings UI** (`341213a`) — Notion card on `SettingsPage.xaml`: PasswordBox + Save/Clear, Test connection + Sync now buttons (disabled until token set), ProgressRing, status row (Ellipse dot + status + last-synced label). `NotionStatusToBrushConverter` for the dot. `SettingsPageViewModel` extended with token + status state and `SaveTokenAsync` / `ClearTokenAsync` / `TestConnectionAsync` / `SyncNowAsync`. 10 SettingsPageNotionTests.
+- **5e Select-property fix + diagnostic tool** (`1b60120`) — first real Sync Now returned 27 "Type is expected to be select" validation errors. Plan §5.2 schema was wrong: `Type` and `Frequency` on the Bills DB are `select`, not `rich_text`. Fixed `BuildBillProperties` (new `Select(...)` helper) + `NotionPage.FromElement` (new `ReadSelect`). Empty values send `{"select": null}` to clear. Added `tools/notion-diagnose.ps1` — P/Invokes `CredReadW` to read the token from Credential Manager, then dumps every seeded data-source's schema including select-option lists. 3 new tests.
 
 ### Notable details
 
