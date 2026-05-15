@@ -38,8 +38,12 @@
 - [x] `Converters/AutoPayDotConverter.cs` — bool → green (#00B894) for auto, amber (#FDCB6E) for manual.
 - [x] `MainWindow.xaml(.cs)` — added the `bills` NavigationViewItem (Glyph `&#xE8FD;` = grid layout) and routed it to `AllBillsPage`.
 
-### 4.5 — Tests — still deferred to chunk 3
-- [ ] `PayDay.Tests/PayDayPageViewModelTests.cs` (and now also `AllBillsPageViewModelTests.cs`) against a fake `IDatabaseService`. Both VMs currently live in the WinUI project — to test them from xunit they need to move to `PayDay.Core/ViewModels/` (or the test project needs the package-identity workaround, which we've documented as infeasible).
+### 4.5 — Tests  ✅ landed (chunk 3)
+- [x] Moved `PayDayPageViewModel`, `PeriodBillRow`, `AllBillsPageViewModel`, `BillGroup` from `PayDay/ViewModels/` to `PayDay.Core/ViewModels/`. Added `CommunityToolkit.Mvvm` to `PayDay.Core.csproj`. `AllBillsPageViewModel` ctor switched to `IDatabaseService`. Added `UpsertBillAsync` to `IDatabaseService`. Dropped the now-dead `<NoWarn>MVVMTK0045</NoWarn>` from `PayDay.csproj`.
+- [x] `PayDay.Tests/FakeDatabaseService.cs` — in-memory `IDatabaseService` with public `Bills` / `Payments` / `Settings` for direct test inspection.
+- [x] `PayDay.Tests/PayDayPageViewModelTests.cs` — 7 tests: empty DB; one manual unpaid bill; `MarkPaidCommand` moves + persists; `UnmarkPaidCommand` restores + deletes; auto-pay bill isolated and doesn't block `IsAllPaid`; `MarkAllPaidCommand` clears the manual list; inactive bill excluded.
+- [x] `PayDay.Tests/AllBillsPageViewModelTests.cs` — 6 tests: canonical group order; bills sorted within group; custom type falls after known types; `SaveBillAsync` upserts; `TotalBillsLabel` pluralizes; `RefreshCommand` re-reads.
+- [x] **34 tests pass** total (21 Phase 3 + 13 chunk-3 VM tests).
 
 ### 4.4 — Shared resources  ✅ landed
 - [x] `Styles/TypeBrushes.xaml` — 8 type pill brushes per plan §4.8 (`TypePillCards`, `TypePillBills`, `TypePillLoans`, `TypePillSubscriptions`, `TypePillBusiness`, `TypePillPeople`, `TypePillMedical`, `TypePillOther`). Merged into `App.xaml`.
@@ -50,15 +54,19 @@
 ### 4.5 — Tests — deferred to chunk 2
 - [ ] `PayDay.Tests/PayDayPageViewModelTests.cs` against a fake `IDatabaseService`. Cases listed previously.
 
-### Known tradeoff
-- **MVVMTK0045 suppressed in `PayDay.csproj`.** `[ObservableProperty]` on private fields is not AOT-compatible for WinRT marshalling, and the toolkit recommends partial properties. We tried — the source generator does not emit implementations for partial properties in WinUI 3 projects (CS9248 errors). Suppressed until upstream lands the WinUI/CsWinRT path. Doesn't affect debug runtime, only future AOT publishing.
+### Known tradeoff (resolved in chunk 3)
+- **MVVMTK0045 no longer fires.** All `[ObservableProperty]` usages now live in `PayDay.Core` (plain net9.0, no WinRT). The WinUI 3 partial-property generator gap (memory [[winui-mvvm-partial-properties]]) is now irrelevant for our codebase. Suppression removed.
 
-### Sprint exit criteria (chunks 1 + 2 closed)
-- [x] `dotnet test PayDay.Tests` exits 0 with all 21 tests passing.
-- [x] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings (after MVVMTK0045 suppression).
-- [ ] **Manual smoke test pending** — both pages need a real launch to confirm rendering. Specifically: PayDay shows the three periods with seeded bills assigned + Mark Paid persists; All Bills shows the 27 seeded bills grouped by type + Active toggle persists across restart. (Couldn't run interactively from the remote-control session — first task of chunk 3.)
+### Sprint exit criteria (chunks 1 + 2 + 3a closed)
+- [x] `dotnet test PayDay.Tests` exits 0 — 34 tests pass (21 Phase 3 + 13 chunk-3 VM tests).
+- [x] `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings, no suppressions.
+- [x] **Manual smoke test done** — user launched the app twice this session, confirmed PayDay + All Bills render, then asked for the nav to switch from left pane to top tabs (now `PaneDisplayMode="Top"`).
 - [x] Commit + push.
+
+### Still open for chunk 3
+- [ ] Bill editor `ContentDialog` + wire up "Add New Bill" button.
+- [ ] Sortable columns on All Bills (probably wait until the Dashboard ships, since the table style choice should be shared).
 
 ## Next sprint
 
-**Phase 4 chunk 3** — first smoke-test both shipped pages, then build the bill editor dialog (so "Add New Bill" + edit-bill work end-to-end), then Dashboard / Payoff Tracker / Insights pages. Tests for both VMs are part of chunk 3 — start by moving `PayDayPageViewModel` / `PeriodBillRow` / `AllBillsPageViewModel` / `BillGroup` to `PayDay.Core/ViewModels/` so xunit can reach them. Then Phase 5 (Notion sync), Phase 6 (backup), Phase 7 (ship).
+**Phase 4 chunk 3 (remaining)** — bill editor `ContentDialog`, sortable columns, then Dashboard / Payoff Tracker / Insights pages. After that, Phase 5 (Notion sync), Phase 6 (backup), Phase 7 (ship).

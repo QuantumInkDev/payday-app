@@ -13,7 +13,7 @@ namespace PayDay.ViewModels;
 /// <summary>
 /// View model behind <c>AllBillsPage</c>. Reads every <see cref="Bill"/> from
 /// the DB, groups by <see cref="Bill.Type"/>, and persists per-bill changes
-/// (currently only the Active toggle) through <see cref="DatabaseService"/>.
+/// (currently only the Active toggle) through <see cref="IDatabaseService"/>.
 /// </summary>
 public sealed partial class AllBillsPageViewModel : ObservableObject
 {
@@ -23,7 +23,7 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
         "Cards", "Bills", "Loans", "Subscriptions", "Business", "People", "Medical", "Other"
     };
 
-    private readonly DatabaseService _db;
+    private readonly IDatabaseService _db;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -36,7 +36,7 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
 
     public ObservableCollection<BillGroup> Groups { get; } = new();
 
-    public AllBillsPageViewModel(DatabaseService db)
+    public AllBillsPageViewModel(IDatabaseService db)
     {
         _db = db;
     }
