@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayDay — Financial Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3348;
+  --text: #e4e6f0;
+  --text-muted: #8b8fa3;
+  --accent: #6c5ce7;
+  --accent-light: #a29bfe;
+  --green: #00b894;
+  --green-bg: rgba(0,184,148,0.12);
+  --yellow: #fdcb6e;
+  --yellow-bg: rgba(253,203,110,0.12);
+  --red: #e17055;
+  --red-bg: rgba(225,112,85,0.12);
+  --blue: #74b9ff;
+  --blue-bg: rgba(116,185,255,0.12);
+  --pink: #fd79a8;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+.app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+.header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 28px; font-weight: 700; }
+.header h1 span { color: var(--accent-light); }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.nav { display: flex; gap: 4px; margin-bottom: 24px; background: var(--surface); padding: 4px; border-radius: 10px; overflow-x: auto; }
+.nav button { padding: 10px 16px; border: none; background: transparent; color: var(--text-muted); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; white-space: nowrap; }
+.nav button.active { background: var(--accent); color: white; }
+.nav button:hover:not(.active) { color: var(--text); background: var(--surface2); }
+.nav button.payday-tab { color: var(--green); font-weight: 700; }
+.nav button.payday-tab.active { background: var(--green); color: #000; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.card-title { font-size: 16px; font-weight: 600; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.stat-value { font-size: 28px; font-weight: 700; }
+.stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.stat-green { color: var(--green); }
+.stat-red { color: var(--red); }
+.stat-yellow { color: var(--yellow); }
+.stat-blue { color: var(--blue); }
+
+.period-section { margin-bottom: 32px; }
+.period-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 10px; margin-bottom: 12px; }
+.period-current { background: var(--green-bg); border: 1px solid rgba(0,184,148,0.3); }
+.period-next { background: var(--yellow-bg); border: 1px solid rgba(253,203,110,0.3); }
+.period-future { background: var(--blue-bg); border: 1px solid rgba(116,185,255,0.3); }
+.period-label { font-weight: 600; font-size: 15px; }
+.period-total { font-weight: 700; font-size: 18px; }
+
+.bill-table { width: 100%; border-collapse: collapse; }
+.bill-table th { text-align: left; padding: 10px 12px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+.bill-table th.sortable { cursor: pointer; user-select: none; transition: color 0.15s; }
+.bill-table th.sortable:hover { color: var(--text); }
+.bill-table th.sortable .sort-arrow { margin-left: 4px; font-size: 10px; opacity: 0.4; }
+.bill-table th.sortable.active .sort-arrow { opacity: 1; color: var(--blue); }
+.bill-table td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.bill-table tr:last-child td { border-bottom: none; }
+.bill-table tr:hover { background: var(--surface2); }
+
+.tag { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.tag-cards { background: var(--pink); color: #000; }
+.tag-bills { background: #b2945b; color: #000; }
+.tag-loans { background: var(--accent); color: white; }
+.tag-subscriptions { background: var(--red); color: white; }
+.tag-business { background: var(--blue); color: #000; }
+.tag-people { background: var(--green); color: #000; }
+.tag-medical { background: #55efc4; color: #000; }
+.tag-other { background: var(--text-muted); color: #000; }
+.tag-custom { color: #000; }
+
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.status-autopay { background: var(--green); }
+.status-manual { background: var(--yellow); }
+
+.btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent-light); }
+.btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-danger { background: var(--red); color: white; }
+.btn-success { background: var(--green); color: white; }
+.btn-success:hover { background: #00d2a4; }
+.btn-payday { background: linear-gradient(135deg, var(--green), #00d2a4); color: #000; font-weight: 700; font-size: 14px; padding: 10px 20px; }
+.btn-payday:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,184,148,0.4); }
+
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.form-group input, .form-group select { padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; outline: none; }
+.form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 600px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+.modal h2 { margin-bottom: 20px; font-size: 20px; }
+
+.quick-update-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border); }
+.quick-update-item:last-child { border-bottom: none; }
+.quick-update-name { flex: 1; font-weight: 500; min-width: 140px; }
+.quick-update-input { width: 100px; padding: 6px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; text-align: right; }
+.quick-update-input:focus { border-color: var(--accent); outline: none; }
+
+.payoff-bar { height: 6px; background: var(--surface2); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+.payoff-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+/* Payday Mode styles */
+.payday-hero { text-align: center; padding: 32px 20px; background: linear-gradient(135deg, rgba(0,184,148,0.15), rgba(108,92,231,0.1)); border: 1px solid rgba(0,184,148,0.3); border-radius: 16px; margin-bottom: 24px; }
+.payday-hero h2 { font-size: 24px; margin-bottom: 8px; }
+.payday-hero .period-dates { color: var(--text-muted); font-size: 14px; }
+.payday-hero .big-total { font-size: 42px; font-weight: 800; color: var(--green); margin: 16px 0 4px; }
+.payday-hero .remaining { color: var(--yellow); font-size: 16px; font-weight: 600; }
+
+.pay-item { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; transition: all 0.3s; }
+.pay-item.paid { opacity: 0.4; border-color: var(--green); background: rgba(0,184,148,0.05); }
+.pay-item-info { flex: 1; }
+.pay-item-name { font-weight: 600; font-size: 15px; }
+.pay-item-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.pay-item-amount { font-size: 18px; font-weight: 700; min-width: 100px; text-align: right; }
+.pay-item-actions { display: flex; gap: 8px; align-items: center; }
+.pay-input { width: 100px; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; text-align: right; }
+.pay-input:focus { border-color: var(--green); outline: none; }
+
+.summary-card { background: linear-gradient(135deg, rgba(0,184,148,0.1), rgba(108,92,231,0.05)); border: 1px solid rgba(0,184,148,0.3); border-radius: 16px; padding: 32px; text-align: center; margin-bottom: 24px; }
+.summary-card h2 { font-size: 28px; margin-bottom: 24px; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; text-align: left; margin: 24px 0; }
+.summary-item { padding: 16px; background: var(--surface); border-radius: 10px; }
+.summary-item-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+.summary-item-value { font-size: 22px; font-weight: 700; }
+
+.paid-list-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.paid-list-item:last-child { border-bottom: none; }
+
+/* Backup dropdown */
+.dropdown { position: relative; }
+.dropdown-menu { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; min-width: 180px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.dropdown-item { display: block; width: 100%; padding: 10px 14px; border: none; background: none; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; border-radius: 6px; }
+.dropdown-item:hover { background: var(--surface2); }
+.dropdown-item input[type="file"] { display: none; }
+
+.chart-container { position: relative; height: 300px; margin-top: 16px; }
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: var(--green); color: #000; border-radius: 10px; font-weight: 600; font-size: 14px; z-index: 200; animation: slideIn 0.3s ease; }
+@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes confetti { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(-200px) rotate(720deg); opacity: 0; } }
+.confetti-particle { position: fixed; pointer-events: none; z-index: 300; animation: confetti 1.5s ease-out forwards; }
+
+@media (max-width: 768px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-grid { grid-template-columns: 1fr; }
+  .header { flex-direction: column; gap: 12px; align-items: flex-start; }
+  .bill-table { font-size: 12px; }
+  .bill-table th, .bill-table td { padding: 8px 6px; }
+  .pay-item { flex-wrap: wrap; }
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ==================== DATA & HELPERS ====================
+const INITIAL_BILLS = [
+  // === BILLS (4) ===
+  { id: '13', name: 'Electric', type: 'Bills', cost: 400, owed: 0, available: 0, creditLimit: 0, dueDay: 8, rate: 'Monthly', apr: 0, autoPay: false, notes: 'Variable - estimate' },
+  { id: '12', name: 'Phone', type: 'Bills', cost: 151, owed: 0, available: 0, creditLimit: 0, dueDay: 24, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '10', name: 'Storage', type: 'Bills', cost: 368.23, owed: 0, available: 0, creditLimit: 0, dueDay: 5, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '11', name: 'Storage Clari', type: 'Bills', cost: 90.63, owed: 0, available: 0, creditLimit: 0, dueDay: 20, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  // === CARDS (15) ===
+  { id: '1', name: 'Amazon', type: 'Cards', cost: 87, owed: 1545.06, available: 954, creditLimit: 2500, dueDay: 1, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '19', name: 'Apple', type: 'Cards', cost: 61, owed: 1647.50, available: 352.50, creditLimit: 2000, dueDay: 31, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '21', name: 'Burlington', type: 'Cards', cost: 49, owed: 0, available: 1030, creditLimit: 1030, dueDay: 7, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '16', name: 'Capital One – Platinum', type: 'Cards', cost: 25, owed: 0, available: 400, creditLimit: 400, dueDay: 15, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '7', name: 'Capital One – QuickSilver', type: 'Cards', cost: 45, owed: 0, available: 1300, creditLimit: 1300, dueDay: 10, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '6', name: 'Capital One – Savor', type: 'Cards', cost: 25, owed: 0, available: 1300, creditLimit: 1300, dueDay: 8, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '4', name: 'Citibank – BestBuy', type: 'Cards', cost: 180, owed: 6000, available: 100, creditLimit: 6100, dueDay: 8, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '5', name: 'Citibank – Home Depot', type: 'Cards', cost: 30.66, owed: 0, available: 750, creditLimit: 750, dueDay: 16, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '3', name: 'Citibank – Simplicity', type: 'Cards', cost: 20, owed: 1767.27, available: 750, creditLimit: 2500, dueDay: 23, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '17', name: 'Credit One – Amex', type: 'Cards', cost: 42, owed: 0, available: 1250, creditLimit: 1250, dueDay: 9, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '18', name: 'Credit One – Amex 2', type: 'Cards', cost: 61, owed: 0, available: 800, creditLimit: 800, dueDay: 20, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '20', name: 'Discovery Card', type: 'Cards', cost: 63, owed: 0, available: 2000, creditLimit: 2000, dueDay: 6, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '9', name: 'PayPal', type: 'Cards', cost: 64, owed: 2752.06, available: 415, creditLimit: 3200, dueDay: 14, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  { id: '8', name: 'Raymour', type: 'Cards', cost: 92, owed: 500, available: 3500, creditLimit: 4000, dueDay: 8, rate: 'Monthly', apr: 0, autoPay: false, notes: 'Furniture financing' },
+  { id: '2', name: 'Target', type: 'Cards', cost: 30, owed: 0, available: 400, creditLimit: 400, dueDay: 2, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  // === LOANS (3) ===
+  { id: '14', name: '401K Loan #2', type: 'Loans', cost: 112.93, owed: 0, available: 0, creditLimit: 0, dueDay: 15, rate: 'Bi-Weekly', apr: 0, autoPay: true, notes: 'Auto-deducted from paycheck' },
+  { id: '26', name: '401K Loan #1', type: 'Loans', cost: 0, owed: 0, available: 0, creditLimit: 0, dueDay: 15, rate: 'Bi-Weekly', apr: 0, autoPay: true, notes: 'Auto-deducted from paycheck' },
+  { id: '27', name: 'Prosper', type: 'Loans', cost: 0, owed: 0, available: 0, creditLimit: 0, dueDay: 1, rate: 'Monthly', apr: 0, autoPay: false, notes: '' },
+  // === PEOPLE (1) ===
+  { id: '25', name: 'Mom', type: 'People', cost: 0, owed: 0, available: 0, creditLimit: 0, dueDay: 1, rate: 'Bi-Weekly', apr: 0, autoPay: false, notes: '' },
+  // === SUBSCRIPTIONS (4) ===
+  { id: '23', name: 'Google One', type: 'Subscriptions', cost: 9.99, owed: 0, available: 0, creditLimit: 0, dueDay: 12, rate: 'Monthly', apr: 0, autoPay: true, notes: '' },
+  { id: '15', name: 'Spotify', type: 'Subscriptions', cost: 10.65, owed: 0, available: 0, creditLimit: 0, dueDay: 8, rate: 'Monthly', apr: 0, autoPay: true, notes: '' },
+  { id: '24', name: 'Uber', type: 'Subscriptions', cost: 10, owed: 0, available: 0, creditLimit: 0, dueDay: 22, rate: 'Monthly', apr: 0, autoPay: true, notes: '' },
+  { id: '22', name: 'YouTube Premium', type: 'Subscriptions', cost: 10.67, owed: 0, available: 0, creditLimit: 0, dueDay: 27, rate: 'Monthly', apr: 0, autoPay: true, notes: '' },
+];
+
+const DEFAULT_TYPES = ['Cards', 'Bills', 'Loans', 'Subscriptions', 'Business', 'People', 'Medical', 'Other'];
+const RATES = ['Monthly', 'Bi-Weekly', 'Yearly', 'Once'];
+const PAY_ANCHOR = new Date(2026, 2, 20);
+
+// Notion sync config — database IDs for Claude-powered sync
+const NOTION_CONFIG = {
+  billsDb: 'f5fe82ee-9224-4566-9ff9-22d7ce4510e8',
+  paymentsDb: 'a953d84c-5b80-4c6c-baf4-ac5cd40b70ec',
+  snapshotsDb: '612d5c43-fb3c-428a-8e85-a16234ee28b7',
+};
+
+function getPayPeriods(anchor, count = 8) {
+  const periods = [];
+  const msPerDay = 86400000;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let current = new Date(anchor); current.setHours(0,0,0,0);
+  while (current > today) current = new Date(current.getTime() - 14 * msPerDay);
+  while (current.getTime() + 14 * msPerDay <= today.getTime()) current = new Date(current.getTime() + 14 * msPerDay);
+  let start = new Date(current.getTime() - 14 * msPerDay);
+  for (let i = 0; i < count; i++) {
+    const periodStart = new Date(start.getTime() + i * 14 * msPerDay);
+    const periodEnd = new Date(periodStart.getTime() + 13 * msPerDay);
+    const isCurrent = today >= periodStart && today <= periodEnd;
+    periods.push({ start: periodStart, end: periodEnd, payday: periodStart, isCurrent, label: null, key: periodStart.toISOString().slice(0,10) });
+  }
+  const ci = periods.findIndex(p => p.isCurrent);
+  if (ci >= 0) {
+    periods[ci].label = 'This Pay Period';
+    if (ci + 1 < periods.length) periods[ci + 1].label = 'Next Pay Period';
+    if (ci + 2 < periods.length) periods[ci + 2].label = 'Following Period';
+  }
+  return periods.filter(p => p.label);
+}
+
+function getBillDueDate(dueDay, periodStart, periodEnd) {
+  const m0 = new Date(periodStart.getFullYear(), periodStart.getMonth() - 1, dueDay);
+  const m1 = new Date(periodStart.getFullYear(), periodStart.getMonth(), dueDay);
+  const m2 = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, dueDay);
+  for (const d of [m0, m1, m2]) { if (d >= periodStart && d <= periodEnd) return d; }
+  return null;
+}
+
+function assignBillsToPeriods(bills, periods) {
+  return periods.map(period => {
+    const assigned = bills.filter(bill => {
+      if (bill.rate === 'Bi-Weekly') return true;
+      if (bill.rate === 'Monthly') return getBillDueDate(bill.dueDay, period.start, period.end) !== null;
+      if (bill.rate === 'Yearly') {
+        // yearlyDate is "MM-DD" string; check if it falls in this period's year
+        if (!bill.yearlyDate) return false;
+        const [mm, dd] = bill.yearlyDate.split('-').map(Number);
+        // Check current year and next year in case period spans Dec-Jan
+        for (const yr of [period.start.getFullYear(), period.start.getFullYear() + 1]) {
+          const due = new Date(yr, mm - 1, dd);
+          if (due >= period.start && due <= period.end) return true;
+        }
+        return false;
+      }
+      if (bill.rate === 'Once') return false;
+      return false;
+    }).map(bill => {
+      let dueDate = null;
+      if (bill.rate === 'Bi-Weekly') dueDate = period.start;
+      else if (bill.rate === 'Monthly') dueDate = getBillDueDate(bill.dueDay, period.start, period.end);
+      else if (bill.rate === 'Yearly' && bill.yearlyDate) {
+        const [mm, dd] = bill.yearlyDate.split('-').map(Number);
+        for (const yr of [period.start.getFullYear(), period.start.getFullYear() + 1]) {
+          const d = new Date(yr, mm - 1, dd);
+          if (d >= period.start && d <= period.end) { dueDate = d; break; }
+        }
+      }
+      return { ...bill, dueDate };
+    }).sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
+    return { ...period, bills: assigned, total: assigned.reduce((s, b) => s + b.cost, 0) };
+  });
+}
+
+function formatDate(d) { return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'; }
+function formatMoney(n) { return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+const KNOWN_TAG_TYPES = ['cards','bills','loans','subscriptions','business','people','medical','other'];
+const CUSTOM_COLORS = ['#a29bfe','#fd79a8','#00cec9','#e17055','#00b894','#fdcb6e','#6c5ce7','#fab1a0','#81ecec','#dfe6e9'];
+function hashStr(s) { let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return Math.abs(h); }
+function getTypeClass(type) {
+  const lower = type.toLowerCase();
+  if (KNOWN_TAG_TYPES.includes(lower)) return 'tag-' + lower;
+  return 'tag-custom';
+}
+function getCustomColor(type) {
+  if (KNOWN_TAG_TYPES.includes(type.toLowerCase())) return null;
+  return CUSTOM_COLORS[hashStr(type) % CUSTOM_COLORS.length];
+}
+function TypeTag({ type, style: extraStyle }) {
+  const bg = getCustomColor(type);
+  const style = bg ? { background: bg, ...(extraStyle || {}) } : extraStyle || undefined;
+  return <span className={`tag ${getTypeClass(type)}`} style={style}>{type}</span>;
+}
+function estimatePayoff(owed, payment, apr = 0) {
+  if (!owed || owed <= 0 || !payment || payment <= 0) return null;
+  if (apr <= 0) return Math.ceil(owed / payment);
+  const r = apr / 12 / 100;
+  if (payment <= owed * r) return Infinity;
+  return Math.ceil(-Math.log(1 - (owed * r) / payment) / Math.log(1 + r));
+}
+function periodKey(period) { return period.key || period.start.toISOString().slice(0,10); }
+function ordinal(n) { const s = ['th','st','nd','rd']; return n + (s[(n%100-20)%10]||s[n%100]||s[0]); }
+
+// ==================== APP ====================
+function App() {
+  const [bills, setBills] = useState(() => {
+    try {
+      const s = localStorage.getItem('payday_bills');
+      if (!s) return INITIAL_BILLS;
+      const saved = JSON.parse(s);
+      // Merge: keep saved data for existing bills, add any new INITIAL_BILLS entries missing from saved
+      const savedIds = new Set(saved.map(b => b.id));
+      const newBills = INITIAL_BILLS.filter(b => !savedIds.has(b.id));
+      if (newBills.length > 0) return [...saved, ...newBills];
+      return saved;
+    } catch { return INITIAL_BILLS; }
+  });
+  const [history, setHistory] = useState(() => { try { const s = localStorage.getItem('payday_history'); return s ? JSON.parse(s) : []; } catch { return []; } });
+  const [payments, setPayments] = useState(() => { try { const s = localStorage.getItem('payday_payments'); return s ? JSON.parse(s) : {}; } catch { return {}; } });
+  const [tab, setTab] = useState('payday');
+  const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(null);
+  const [showQuickUpdate, setShowQuickUpdate] = useState(false);
+  const [showBackupMenu, setShowBackupMenu] = useState(false);
+  const [showNotionSync, setShowNotionSync] = useState(false);
+  const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('payday_last_synced') || null);
+  const [toast, setToast] = useState(null);
+  const fileInputRef = useRef(null);
+  const notionImportRef = useRef(null);
+
+  useEffect(() => { localStorage.setItem('payday_bills', JSON.stringify(bills)); }, [bills]);
+  useEffect(() => { localStorage.setItem('payday_history', JSON.stringify(history)); }, [history]);
+  useEffect(() => { localStorage.setItem('payday_payments', JSON.stringify(payments)); }, [payments]);
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  const activeBills = useMemo(() => bills.filter(b => b.active !== false), [bills]);
+  const allTypes = useMemo(() => {
+    const custom = bills.map(b => b.type).filter(t => t && !DEFAULT_TYPES.includes(t));
+    return [...DEFAULT_TYPES, ...Array.from(new Set(custom))];
+  }, [bills]);
+  const periods = useMemo(() => assignBillsToPeriods(activeBills.filter(b => b.rate !== 'Once'), getPayPeriods(PAY_ANCHOR, 8)), [activeBills]);
+  const totalOwed = activeBills.reduce((s, b) => s + (b.owed || 0), 0);
+  const totalMonthly = activeBills.filter(b => b.rate === 'Monthly').reduce((s, b) => s + b.cost, 0);
+  const totalBiWeekly = activeBills.filter(b => b.rate === 'Bi-Weekly').reduce((s, b) => s + b.cost, 0);
+  const currentPeriod = periods.find(p => p.isCurrent);
+  const nextPeriod = periods.find(p => p.label === 'Next Pay Period');
+
+  const updateBill = (id, updates) => setBills(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+  const addBill = (bill) => { setBills(prev => [...prev, { ...bill, id: Date.now().toString() }]); setShowAdd(false); showToast('Bill added!'); };
+  const deleteBill = (id) => { setBills(prev => prev.filter(b => b.id !== id)); setShowEdit(null); showToast('Bill removed'); };
+
+  const markPaid = (periodK, billId, amount) => {
+    setPayments(prev => ({ ...prev, [periodK]: { ...(prev[periodK] || {}), [billId]: { amount, paidAt: new Date().toISOString() } } }));
+  };
+  const unmarkPaid = (periodK, billId) => {
+    setPayments(prev => { const copy = { ...prev }; if (copy[periodK]) { delete copy[periodK][billId]; } return copy; });
+  };
+
+  const saveSnapshot = () => {
+    setHistory(prev => [...prev, { date: new Date().toISOString(), totalOwed, bills: bills.map(b => ({ name: b.name, owed: b.owed, cost: b.cost })) }]);
+    showToast('Snapshot saved!');
+  };
+
+  // Backup
+  const [backupJson, setBackupJson] = useState(null);
+  const backupTextRef = useRef(null);
+
+  const downloadBackup = () => {
+    const data = { version: 2, exportedAt: new Date().toISOString(), bills, history, payments };
+    const json = JSON.stringify(data, null, 2);
+
+    // Try blob download first
+    try {
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `payday-backup-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 5000);
+    } catch(e) {}
+
+    // Always also show inline modal as reliable fallback
+    setBackupJson(json);
+    setShowBackupMenu(false);
+  };
+
+  const copyBackup = () => {
+    if (backupTextRef.current) {
+      backupTextRef.current.select();
+      document.execCommand('copy');
+      showToast('Copied to clipboard!');
+    }
+  };
+
+  const restoreBackup = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.bills) setBills(data.bills);
+        if (data.history) setHistory(data.history);
+        if (data.payments) setPayments(data.payments);
+        showToast('Backup restored!');
+      } catch { showToast('Invalid backup file'); }
+    };
+    reader.readAsText(file);
+    setShowBackupMenu(false);
+    e.target.value = '';
+  };
+
+  // Notion sync — export payload for Claude to push
+  const notionSyncTextRef = useRef(null);
+  const exportNotionPayload = () => {
+    const payload = {
+      _type: 'payday_notion_sync',
+      config: NOTION_CONFIG,
+      timestamp: new Date().toISOString(),
+      bills, history, payments
+    };
+    return JSON.stringify(payload);
+  };
+
+  const importNotionData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data._type === 'payday_notion_pull' && data.bills) {
+          setBills(data.bills);
+          if (data.payments) setPayments(data.payments);
+          if (data.history) setHistory(data.history);
+          const ts = new Date().toISOString();
+          setLastSynced(ts);
+          localStorage.setItem('payday_last_synced', ts);
+          showToast('Synced from Notion!');
+        } else {
+          showToast('Invalid sync file');
+        }
+      } catch { showToast('Invalid sync file'); }
+    };
+    reader.readAsText(file);
+    setShowNotionSync(false);
+    e.target.value = '';
+  };
+
+  const markSynced = () => {
+    const ts = new Date().toISOString();
+    setLastSynced(ts);
+    localStorage.setItem('payday_last_synced', ts);
+  };
+
+  return (
+    <div className="app">
+      <div className="header">
+        <h1>💰 Pay<span>Day</span></h1>
+        <div className="header-actions">
+          <div className="dropdown">
+            <button className="btn btn-ghost" onClick={() => setShowBackupMenu(!showBackupMenu)}>💾 Backup</button>
+            {showBackupMenu && (
+              <div className="dropdown-menu">
+                <button className="dropdown-item" onClick={downloadBackup}>⬇️ Download Backup</button>
+                <button className="dropdown-item" onClick={() => fileInputRef.current?.click()}>⬆️ Restore from File</button>
+                <input ref={fileInputRef} type="file" accept=".json" onChange={restoreBackup} style={{display:'none'}} />
+              </div>
+            )}
+          </div>
+          <button className="btn btn-ghost" onClick={() => setShowNotionSync(true)} style={{position:'relative'}}>
+            🔄 Notion
+            {lastSynced && <span style={{position:'absolute',top:-2,right:-2,width:8,height:8,borderRadius:'50%',background:'var(--green)'}}></span>}
+          </button>
+          <button className="btn btn-ghost" onClick={saveSnapshot}>📸 Snapshot</button>
+          <button className="btn btn-ghost" onClick={() => setShowQuickUpdate(true)}>⚡ Quick Update</button>
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Bill</button>
+        </div>
+      </div>
+
+      {/* Close dropdown on outside click */}
+      {showBackupMenu && <div style={{position:'fixed',inset:0,zIndex:49}} onClick={() => setShowBackupMenu(false)}></div>}
+
+      <div className="nav">
+        <button className={`payday-tab ${tab === 'payday' ? 'active' : ''}`} onClick={() => setTab('payday')}>💸 Payday</button>
+        {['dashboard', 'all-bills', 'payoff', 'insights'].map(t => (
+          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
+            {t === 'dashboard' ? '📊 Overview' : t === 'all-bills' ? '📋 All Bills' : t === 'payoff' ? '🎯 Payoff' : '📈 Insights'}
+          </button>
+        ))}
+        <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>📜 History</button>
+      </div>
+
+      {tab === 'payday' && <PaydayMode periods={periods} payments={payments} markPaid={markPaid} unmarkPaid={unmarkPaid} onEdit={setShowEdit} />}
+      {tab === 'dashboard' && <Dashboard periods={periods} currentPeriod={currentPeriod} nextPeriod={nextPeriod} totalOwed={totalOwed} totalMonthly={totalMonthly} totalBiWeekly={totalBiWeekly} bills={activeBills} onEdit={setShowEdit} />}
+      {tab === 'all-bills' && <AllBills bills={bills} onEdit={setShowEdit} types={allTypes} />}
+      {tab === 'payoff' && <PayoffView bills={activeBills} />}
+      {tab === 'insights' && <Insights bills={activeBills} history={history} totalOwed={totalOwed} totalMonthly={totalMonthly} types={allTypes} />}
+      {tab === 'history' && <PaymentHistory payments={payments} bills={bills} periods={periods} />}
+
+      {showAdd && <BillModal key="add-new" onSave={addBill} onClose={() => setShowAdd(false)} types={allTypes} />}
+      {showEdit && <BillModal key={`edit-${showEdit.id}`} bill={showEdit} types={allTypes} onSave={(updatedBill) => {
+        const id = updatedBill.id || showEdit.id;
+        setBills(prev => prev.map(b => b.id === id ? { ...b, ...updatedBill } : b));
+        setShowEdit(null);
+        showToast('Updated!');
+      }} onClose={() => setShowEdit(null)} onDelete={() => deleteBill(showEdit.id)} />}
+      {showQuickUpdate && <QuickUpdate bills={bills} onUpdate={updateBill} onClose={() => { setShowQuickUpdate(false); showToast('All updates saved!'); }} />}
+      {backupJson && (
+        <div className="modal-overlay" onClick={() => setBackupJson(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:600}}>
+            <div className="modal-header">
+              <h3>💾 Backup Data</h3>
+              <button className="btn btn-ghost" onClick={() => setBackupJson(null)}>✕</button>
+            </div>
+            <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:12}}>
+              Select all the text below (Ctrl+A inside the box), copy it (Ctrl+C), then paste into a new file and save as <strong>.json</strong>
+            </p>
+            <textarea ref={backupTextRef} readOnly value={backupJson} onClick={e => e.target.select()} style={{width:'100%',height:300,fontFamily:'monospace',fontSize:11,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:8,padding:12,resize:'vertical'}} />
+            <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+              <button className="btn btn-primary" onClick={copyBackup}>📋 Copy to Clipboard</button>
+              <button className="btn btn-ghost" onClick={() => setBackupJson(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showNotionSync && (
+        <div className="modal-overlay" onClick={() => setShowNotionSync(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:550}}>
+            <div className="modal-header">
+              <h3>🔄 Notion Sync</h3>
+              <button className="btn btn-ghost" onClick={() => setShowNotionSync(false)}>✕</button>
+            </div>
+            <div style={{fontSize:13,color:'var(--text-muted)',marginBottom:16}}>
+              Your data syncs with <strong>Notion</strong> via Claude. Just say <em>"sync my payday"</em> in chat and Claude will push/pull changes.
+            </div>
+            <div style={{display:'flex',gap:12,marginBottom:16}}>
+              <div className="stat-card" style={{flex:1,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'var(--text-muted)',textTransform:'uppercase'}}>Last Synced</div>
+                <div style={{fontSize:14,fontWeight:600,marginTop:4}}>{lastSynced ? new Date(lastSynced).toLocaleString() : 'Never'}</div>
+              </div>
+              <div className="stat-card" style={{flex:1,textAlign:'center'}}>
+                <div style={{fontSize:11,color:'var(--text-muted)',textTransform:'uppercase'}}>Bills</div>
+                <div style={{fontSize:14,fontWeight:600,marginTop:4}}>{bills.length} tracked</div>
+              </div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <button className="btn btn-primary" onClick={() => {
+                const payload = exportNotionPayload();
+                try { navigator.clipboard.writeText(payload).then(() => showToast('Sync payload copied!')).catch(() => {}); } catch(e) {}
+                setShowNotionSync(false);
+                setBackupJson(payload);
+              }}>📤 Copy Sync Payload (for Claude)</button>
+              <button className="btn btn-ghost" onClick={() => notionImportRef.current?.click()}>📥 Import from Notion</button>
+              <input ref={notionImportRef} type="file" accept=".json" onChange={importNotionData} style={{display:'none'}} />
+            </div>
+            <div style={{marginTop:16,padding:12,background:'var(--surface2)',borderRadius:8,fontSize:12,color:'var(--text-muted)'}}>
+              <strong>How it works:</strong> Your PayDay app data is backed up to three Notion databases under <em>Money Matters</em>: Bills, Payments, and Snapshots. Claude reads your app state and updates Notion (or vice versa) whenever you ask.
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+// ==================== PAYDAY MODE ====================
+function PaydayMode({ periods, payments, markPaid, unmarkPaid, onEdit }) {
+  const realCurrent = periods.find(p => p.isCurrent);
+  const realNext = periods.find(p => p.label === 'Next Pay Period');
+  const [earlyStart, setEarlyStart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('payday_earlyStart') || 'false'); } catch { return false; }
+  });
+  useEffect(() => { localStorage.setItem('payday_earlyStart', JSON.stringify(earlyStart)); }, [earlyStart]);
+
+  const currentPeriod = earlyStart && realNext ? realNext : realCurrent;
+  const nextPeriod = earlyStart ? periods.find(p => p.label === 'Following Period') : realNext;
+  if (!currentPeriod) return <div className="card" style={{textAlign:'center',padding:40}}>No active pay period found.</div>;
+
+  const pk = periodKey(currentPeriod);
+  const periodPayments = payments[pk] || {};
+  // Split: subscriptions excluded, auto-pay items separated from manual
+  const nonSubs = currentPeriod.bills.filter(b => b.type !== 'Subscriptions');
+  const manualBills = nonSubs.filter(b => !b.autoPay);
+  const autoBills = nonSubs.filter(b => b.autoPay);
+  const unpaid = manualBills.filter(b => !periodPayments[b.id]);
+  const paid = manualBills.filter(b => periodPayments[b.id]);
+  const totalManualDue = manualBills.reduce((s, b) => s + b.cost, 0);
+  const totalAutoDue = autoBills.reduce((s, b) => s + b.cost, 0);
+  const totalPaid = paid.reduce((s, b) => s + (periodPayments[b.id]?.amount || b.cost), 0);
+  const remaining = totalManualDue - totalPaid;
+  const allDone = unpaid.length === 0 && manualBills.length > 0;
+  const [showAutoDetail, setShowAutoDetail] = useState(false);
+
+  return (
+    <>
+      {allDone ? (
+        <PeriodSummary period={currentPeriod} periodPayments={periodPayments} nextPeriod={nextPeriod} payments={payments} onStartNext={() => setEarlyStart(true)} />
+      ) : (
+        <>
+          {earlyStart && (
+            <div className="card" style={{background:'var(--blue)',color:'#000',padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,borderRadius:10}}>
+              <span style={{fontWeight:600}}>🚀 Early start — paying next period's bills now</span>
+              <button className="btn btn-ghost btn-sm" style={{color:'#000',border:'1px solid rgba(0,0,0,0.3)'}} onClick={() => setEarlyStart(false)}>← Back to Current</button>
+            </div>
+          )}
+          <div className="payday-hero">
+            <h2>💸 {earlyStart ? 'Early Start' : 'Payday'} — {formatDate(currentPeriod.start)} to {formatDate(currentPeriod.end)}</h2>
+            <div className="period-dates">Paycheck: {formatDate(currentPeriod.payday)}</div>
+            <div className="big-total">{formatMoney(totalManualDue)}</div>
+            <div style={{color: 'var(--text-muted)', fontSize: 14}}>to pay manually this period</div>
+            {totalPaid > 0 && (
+              <div className="remaining" style={{marginTop: 12}}>
+                {formatMoney(remaining)} remaining · {paid.length}/{manualBills.length} paid
+              </div>
+            )}
+            <div style={{marginTop: 12}}>
+              <div style={{width:'100%',maxWidth:400,margin:'0 auto',height:8,background:'var(--surface2)',borderRadius:4,overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${manualBills.length > 0 ? (paid.length/manualBills.length*100) : 0}%`,background:'var(--green)',borderRadius:4,transition:'width 0.5s'}}></div>
+              </div>
+            </div>
+          </div>
+
+          {autoBills.length > 0 && (
+            <div className="card" style={{marginBottom: 20}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}} onClick={() => setShowAutoDetail(!showAutoDetail)}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:'var(--green)',textTransform:'uppercase'}}>⚡ Auto-Pay This Period</div>
+                  <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{autoBills.length} items · auto-deducted, no action needed</div>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:12}}>
+                  <span style={{fontWeight:700,fontSize:16}}>{formatMoney(totalAutoDue)}</span>
+                  <span style={{fontSize:12,color:'var(--text-muted)'}}>{showAutoDetail ? '▲' : '▼'}</span>
+                </div>
+              </div>
+              {showAutoDetail && (
+                <div style={{marginTop:12,borderTop:'1px solid var(--border)',paddingTop:12}}>
+                  {[...autoBills].sort((a,b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)).map(b => (
+                    <div key={b.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',fontSize:14}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{color:'var(--green)',fontSize:12}}>⚡</span>
+                        <span>{b.name}</span>
+                        <TypeTag type={b.type} />
+                      </div>
+                      <span style={{fontWeight:600}}>{formatMoney(b.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {unpaid.length > 0 && (
+            <div style={{marginBottom: 24}}>
+              <div style={{fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 12, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <span>Unpaid ({unpaid.length})</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => { unpaid.forEach(b => markPaid(pk, b.id, b.cost)); }} style={{fontSize:11,textTransform:'none'}}>✓ Mark All Paid</button>
+              </div>
+              {[...unpaid].sort((a,b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)).map(bill => (
+                <PayItem key={bill.id} bill={bill} periodK={pk} onPay={markPaid} onEdit={onEdit} />
+              ))}
+            </div>
+          )}
+
+          {paid.length > 0 && (
+            <div>
+              <div style={{fontSize: 13, fontWeight: 600, color: 'var(--green)', textTransform: 'uppercase', marginBottom: 12}}>
+                Paid ({paid.length})
+              </div>
+              {[...paid].sort((a,b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)).map(bill => (
+                <div key={bill.id} className="pay-item paid">
+                  <div style={{fontSize: 20}}>✅</div>
+                  <div className="pay-item-info">
+                    <div className="pay-item-name">{bill.name}</div>
+                    <div className="pay-item-meta">Paid {formatMoney(periodPayments[bill.id]?.amount || bill.cost)}</div>
+                  </div>
+                  <button className="btn btn-ghost btn-sm" onClick={() => unmarkPaid(pk, bill.id)}>Undo</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function PayItem({ bill, periodK, onPay, onEdit }) {
+  const [amount, setAmount] = useState(bill.cost);
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="pay-item">
+      <div className="pay-item-info" style={{cursor:'pointer'}} onClick={() => setExpanded(!expanded)}>
+        <div className="pay-item-name">
+          {bill.name}
+          <TypeTag type={bill.type} style={{marginLeft:8,verticalAlign:'middle'}} />
+        </div>
+        <div className="pay-item-meta">
+          Due {bill.dueDate ? formatDate(bill.dueDate) : '—'}
+          {bill.autoPay && <span style={{color:'var(--green)',marginLeft:8}}>Auto-Pay</span>}
+          {bill.owed > 0 && <span style={{color:'var(--red)',marginLeft:8}}>Owes {formatMoney(bill.owed)}</span>}
+        </div>
+      </div>
+      <div className="pay-item-amount">{formatMoney(bill.cost)}</div>
+      <div className="pay-item-actions">
+        {expanded ? (
+          <>
+            <input className="pay-input" type="number" step="0.01" value={amount}
+              onChange={e => setAmount(parseFloat(e.target.value) || 0)}
+              onKeyDown={e => { if (e.key === 'Enter') onPay(periodK, bill.id, amount); }}
+            />
+            <button className="btn btn-success btn-sm" onClick={() => onPay(periodK, bill.id, amount)}>Paid</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => onEdit(bill)}>Edit</button>
+          </>
+        ) : (
+          <button className="btn btn-payday" onClick={() => { setExpanded(true); }} style={{padding:'8px 16px',fontSize:13}}>
+            Pay →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PeriodSummary({ period, periodPayments, nextPeriod, payments, onStartNext }) {
+  const nonSubs = period.bills.filter(b => b.type !== 'Subscriptions');
+  const manualBills = nonSubs.filter(b => !b.autoPay);
+  const autoBills = nonSubs.filter(b => b.autoPay);
+  const manualTotal = manualBills.reduce((s, b) => s + (periodPayments[b.id]?.amount || b.cost), 0);
+  const autoTotal = autoBills.reduce((s, b) => s + b.cost, 0);
+  const grandTotal = manualTotal + autoTotal;
+  const nextPk = nextPeriod ? periodKey(nextPeriod) : null;
+  const nextPayments = nextPk ? (payments[nextPk] || {}) : {};
+  const nextUnpaid = nextPeriod ? nextPeriod.bills.filter(b => !nextPayments[b.id]) : [];
+
+  const renderGroup = (bills, getAmount) => {
+    const sorted = [...bills].sort((a,b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
+    let lastType = '';
+    return sorted.map(b => {
+      const showLabel = b.type !== lastType;
+      lastType = b.type;
+      return (
+        <React.Fragment key={b.id}>
+          {showLabel && <div style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',marginTop:12,marginBottom:4,letterSpacing:'0.05em'}}>{b.type}</div>}
+          <div className="paid-list-item">
+            <span>{b.name}</span>
+            <span style={{fontWeight:600}}>{formatMoney(getAmount(b))}</span>
+          </div>
+        </React.Fragment>
+      );
+    });
+  };
+
+  return (
+    <>
+      <div className="summary-card">
+        <div style={{fontSize: 56, marginBottom: 12}}>🎉</div>
+        <h2>All Bills Paid!</h2>
+        <p style={{color: 'var(--text-muted)', marginBottom: 8}}>
+          {formatDate(period.start)} — {formatDate(period.end)}
+        </p>
+
+        <div className="summary-grid">
+          <div className="summary-item">
+            <div className="summary-item-label">Manual Paid</div>
+            <div className="summary-item-value stat-green">{formatMoney(manualTotal)}</div>
+            <div style={{fontSize:11,color:'var(--text-muted)'}}>{manualBills.length} bills</div>
+          </div>
+          <div className="summary-item">
+            <div className="summary-item-label">Auto-Pay</div>
+            <div className="summary-item-value" style={{color:'var(--blue)'}}>{formatMoney(autoTotal)}</div>
+            <div style={{fontSize:11,color:'var(--text-muted)'}}>{autoBills.length} items</div>
+          </div>
+          <div className="summary-item">
+            <div className="summary-item-label">Period Total</div>
+            <div className="summary-item-value" style={{color:'var(--text)'}}>{formatMoney(grandTotal)}</div>
+          </div>
+        </div>
+
+        <div style={{textAlign:'left',maxWidth:500,margin:'0 auto'}}>
+          {manualBills.length > 0 && (
+            <>
+              <div style={{fontSize:13,fontWeight:600,color:'var(--green)',marginBottom:4,marginTop:16,textTransform:'uppercase',display:'flex',justifyContent:'space-between'}}>
+                <span>💸 Manually Paid</span>
+                <span>{formatMoney(manualTotal)}</span>
+              </div>
+              {renderGroup(manualBills, b => periodPayments[b.id]?.amount || b.cost)}
+            </>
+          )}
+          {autoBills.length > 0 && (
+            <>
+              <div style={{fontSize:13,fontWeight:600,color:'var(--blue)',marginBottom:4,marginTop:20,textTransform:'uppercase',display:'flex',justifyContent:'space-between'}}>
+                <span>⚡ Auto-Pay</span>
+                <span>{formatMoney(autoTotal)}</span>
+              </div>
+              {renderGroup(autoBills, b => b.cost)}
+            </>
+          )}
+        </div>
+      </div>
+
+      {nextPeriod && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">👀 Coming Up — Next Pay Period</div>
+              <div style={{fontSize:13,color:'var(--text-muted)',marginTop:4}}>
+                {formatDate(nextPeriod.start)} — {formatDate(nextPeriod.end)} · {nextUnpaid.length} bills due
+              </div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8}}>
+              <div style={{fontWeight:700,color:'var(--yellow)'}}>{formatMoney(nextPeriod.total)}</div>
+              {onStartNext && <button className="btn btn-primary btn-sm" onClick={onStartNext}>🚀 Start Paying Now</button>}
+            </div>
+          </div>
+          <SortablePeriodTable bills={nextPeriod.bills} compact />
+        </div>
+      )}
+    </>
+  );
+}
+
+// ==================== PAYMENT HISTORY ====================
+function PaymentHistory({ payments, bills, periods }) {
+  const entries = Object.entries(payments).filter(([k, v]) => Object.keys(v).length > 0).sort((a, b) => b[0].localeCompare(a[0]));
+
+  if (entries.length === 0) {
+    return <div className="card" style={{textAlign:'center',padding:40}}>
+      <div style={{fontSize:48,marginBottom:12}}>📜</div>
+      <div style={{fontSize:18,fontWeight:600}}>No payment history yet</div>
+      <div style={{color:'var(--text-muted)',marginTop:8}}>Use Payday mode to record payments as you make them</div>
+    </div>;
+  }
+
+  return entries.map(([pk, paidBills]) => {
+    const period = periods.find(p => periodKey(p) === pk);
+    const total = Object.values(paidBills).reduce((s, p) => s + (p.amount || 0), 0);
+    return (
+      <div key={pk} className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">{period ? `${formatDate(period.start)} — ${formatDate(period.end)}` : pk}</div>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>{Object.keys(paidBills).length} payments</div>
+          </div>
+          <div style={{fontSize:20,fontWeight:700,color:'var(--green)'}}>{formatMoney(total)}</div>
+        </div>
+        {Object.entries(paidBills).map(([billId, info]) => {
+          const bill = bills.find(b => b.id === billId);
+          return (
+            <div key={billId} className="paid-list-item">
+              <span>{bill?.name || billId}</span>
+              <span style={{fontWeight:600}}>{formatMoney(info.amount)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  });
+}
+
+// ==================== SORTABLE PERIOD TABLE ====================
+function SortablePeriodTable({ bills, onEdit, compact }) {
+  const [sortCol, setSortCol] = useState('type');
+  const [sortDir, setSortDir] = useState('asc');
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...bills];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      let cmp = 0;
+      switch (sortCol) {
+        case 'name': cmp = a.name.localeCompare(b.name); break;
+        case 'type': cmp = a.type.localeCompare(b.type) || a.name.localeCompare(b.name); break;
+        case 'due': cmp = (a.dueDate ? a.dueDate.getTime() : 0) - (b.dueDate ? b.dueDate.getTime() : 0); break;
+        case 'amount': cmp = a.cost - b.cost; break;
+        case 'owed': cmp = (a.owed||0) - (b.owed||0); break;
+        case 'autopay': cmp = (a.autoPay?1:0) - (b.autoPay?1:0); break;
+        default: cmp = a.type.localeCompare(b.type) || a.name.localeCompare(b.name);
+      }
+      return cmp * dir;
+    });
+    return arr;
+  }, [bills, sortCol, sortDir]);
+
+  const SortTh = ({ col, label, style }) => (
+    <th className={`sortable ${sortCol === col ? 'active' : ''}`} style={style} onClick={() => handleSort(col)}>
+      {label}<span className="sort-arrow">{sortCol === col ? (sortDir === 'asc' ? '▲' : '▼') : '▲'}</span>
+    </th>
+  );
+
+  if (compact) {
+    return (
+      <table className="bill-table">
+        <thead><tr><SortTh col="name" label="Bill" /><SortTh col="type" label="Type" /><SortTh col="due" label="Due" /><SortTh col="amount" label="Amount" style={{textAlign:'right'}} /></tr></thead>
+        <tbody>{sorted.map(b => (
+          <tr key={b.id}>
+            <td style={{fontWeight:500}}>{b.name}</td>
+            <td><TypeTag type={b.type} /></td>
+            <td>{b.dueDate ? formatDate(b.dueDate) : '—'}</td>
+            <td style={{textAlign:'right',fontWeight:600}}>{formatMoney(b.cost)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    );
+  }
+
+  return (
+    <table className="bill-table">
+      <thead><tr><SortTh col="name" label="Bill" /><SortTh col="type" label="Type" /><SortTh col="due" label="Due" /><SortTh col="amount" label="Amount" style={{textAlign:'right'}} /><SortTh col="owed" label="Owed" style={{textAlign:'right'}} /><SortTh col="autopay" label="Auto-Pay" /><th></th></tr></thead>
+      <tbody>{sorted.map(bill => (
+        <tr key={bill.id}>
+          <td style={{fontWeight:500}}>{bill.name}</td>
+          <td><TypeTag type={bill.type} /></td>
+          <td>{bill.dueDate ? formatDate(bill.dueDate) : '—'}</td>
+          <td style={{textAlign:'right',fontWeight:600}}>{formatMoney(bill.cost)}</td>
+          <td style={{textAlign:'right',color:bill.owed>0?'var(--red)':'var(--text-muted)'}}>{bill.owed>0?formatMoney(bill.owed):'—'}</td>
+          <td><span className={`status-dot ${bill.autoPay?'status-autopay':'status-manual'}`}></span>{bill.autoPay?'Auto':'Manual'}</td>
+          <td><button className="btn btn-ghost btn-sm" onClick={() => onEdit(bill)}>Edit</button></td>
+        </tr>
+      ))}</tbody>
+    </table>
+  );
+}
+
+// ==================== DASHBOARD ====================
+function Dashboard({ periods, currentPeriod, nextPeriod, totalOwed, totalMonthly, totalBiWeekly, bills, onEdit }) {
+  return (
+    <>
+      <div className="stats-grid">
+        <div className="stat-card"><div className="stat-label">This Pay Period</div><div className="stat-value stat-green">{formatMoney(currentPeriod?.total || 0)}</div><div className="stat-sub">{currentPeriod?.bills?.length || 0} bills due</div></div>
+        <div className="stat-card"><div className="stat-label">Next Pay Period</div><div className="stat-value stat-yellow">{formatMoney(nextPeriod?.total || 0)}</div><div className="stat-sub">{nextPeriod?.bills?.length || 0} bills due</div></div>
+        <div className="stat-card"><div className="stat-label">Total Debt</div><div className="stat-value stat-red">{formatMoney(totalOwed)}</div></div>
+        <div className="stat-card"><div className="stat-label">Monthly Obligations</div><div className="stat-value stat-blue">{formatMoney(totalMonthly + totalBiWeekly * 2.17)}</div></div>
+      </div>
+      {periods.map((period, i) => (
+        <div key={i} className="period-section">
+          <div className={`period-header ${period.isCurrent ? 'period-current' : period.label?.includes('Next') ? 'period-next' : 'period-future'}`}>
+            <div><div className="period-label">{period.label}</div><div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:2}}>{formatDate(period.start)} — {formatDate(period.end)}</div></div>
+            <div className="period-total">{formatMoney(period.total)}</div>
+          </div>
+          {period.bills?.length > 0 && (
+            <div className="card" style={{padding:0}}>
+              <SortablePeriodTable bills={period.bills} onEdit={onEdit} />
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ==================== ALL BILLS ====================
+function AllBills({ bills, onEdit, types }) {
+  const [filter, setFilter] = useState('All');
+  const filtered = bills.filter(b => filter === 'All' || b.type === filter);
+
+  // Group by type, sorted alphabetically within each group
+  const grouped = useMemo(() => {
+    const groups = {};
+    filtered.forEach(b => {
+      if (!groups[b.type]) groups[b.type] = [];
+      groups[b.type].push(b);
+    });
+    // Sort bills within each group alphabetically
+    Object.keys(groups).forEach(type => {
+      groups[type].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    // Return groups in type order (default types first, then custom)
+    const allKnown = [...DEFAULT_TYPES, ...Object.keys(groups).filter(t => !DEFAULT_TYPES.includes(t))];
+    const typeOrder = allKnown.filter(t => groups[t]);
+    return typeOrder.map(type => ({ type, bills: groups[type] }));
+  }, [filtered]);
+
+  const allFiltered = grouped.flatMap(g => g.bills);
+
+  return (
+    <>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+        {['All',...types].map(t => <button key={t} className={`btn ${filter===t?'btn-primary':'btn-ghost'} btn-sm`} onClick={() => setFilter(t)}>{t}</button>)}
+      </div>
+      {grouped.map(group => (
+        <div key={group.type} className="card" style={{marginBottom: 16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <TypeTag type={group.type} />
+              <span style={{fontSize:13,color:'var(--text-muted)'}}>{group.bills.length} {group.bills.length === 1 ? 'item' : 'items'}</span>
+            </div>
+            <span style={{fontSize:14,fontWeight:600}}>{formatMoney(group.bills.reduce((s,b) => s + b.cost, 0))}/mo</span>
+          </div>
+          <table className="bill-table">
+            <thead><tr><th>Name</th><th>Due Day</th><th>Rate</th><th style={{textAlign:'right'}}>Payment</th><th style={{textAlign:'right'}}>Owed</th><th style={{textAlign:'right'}}>Available</th><th>Auto-Pay</th><th></th></tr></thead>
+            <tbody>{group.bills.map(bill => (
+              <tr key={bill.id} style={{opacity: bill.active === false ? 0.4 : 1}}>
+                <td style={{fontWeight:500}}>{bill.name}{bill.active === false && <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:6}}>INACTIVE</span>}</td>
+                <td>{bill.rate==='Bi-Weekly'?'Every 2wk':ordinal(bill.dueDay)}</td>
+                <td>{bill.rate}</td>
+                <td style={{textAlign:'right',fontWeight:600}}>{formatMoney(bill.cost)}</td>
+                <td style={{textAlign:'right',color:bill.owed>0?'var(--red)':'var(--text-muted)'}}>{bill.owed>0?formatMoney(bill.owed):'—'}</td>
+                <td style={{textAlign:'right',color:bill.available>0?'var(--green)':'var(--text-muted)'}}>{bill.available>0?formatMoney(bill.available):'—'}</td>
+                <td><span className={`status-dot ${bill.autoPay?'status-autopay':'status-manual'}`}></span>{bill.autoPay?'Auto':'Manual'}</td>
+                <td><button className="btn btn-ghost btn-sm" onClick={() => onEdit(bill)}>Edit</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ))}
+      <div style={{padding:'12px',fontSize:13,color:'var(--text-muted)'}}>
+        {allFiltered.length} bills · Total monthly: {formatMoney(allFiltered.filter(b=>b.rate==='Monthly').reduce((s,b)=>s+b.cost,0))}
+      </div>
+    </>
+  );
+}
+
+// ==================== PAYOFF ====================
+function PayoffView({ bills }) {
+  const debts = bills.filter(b => b.owed > 0 && b.cost > 0).sort((a,b) => (estimatePayoff(a.owed,a.cost,a.apr)||999)-(estimatePayoff(b.owed,b.cost,b.apr)||999));
+  if (debts.length === 0) return <div className="card" style={{textAlign:'center',padding:40}}><div style={{fontSize:48,marginBottom:12}}>🎉</div><div style={{fontSize:18,fontWeight:600}}>No tracked debts!</div><div style={{color:'var(--text-muted)',marginTop:8}}>Update balances to see payoff projections</div></div>;
+  const totalDebt = debts.reduce((s,d)=>s+d.owed,0);
+
+  return (
+    <>
+      <div className="stats-grid">
+        <div className="stat-card"><div className="stat-label">Total Debt</div><div className="stat-value stat-red">{formatMoney(totalDebt)}</div></div>
+        <div className="stat-card"><div className="stat-label">Monthly Toward Debt</div><div className="stat-value stat-green">{formatMoney(debts.reduce((s,d)=>s+d.cost,0))}</div></div>
+        <div className="stat-card"><div className="stat-label">Accounts</div><div className="stat-value stat-blue">{debts.length}</div></div>
+      </div>
+      {debts.map(debt => {
+        const months = estimatePayoff(debt.owed,debt.cost,debt.apr);
+        const pctUsed = debt.creditLimit>0?((debt.owed/debt.creditLimit)*100):0;
+        const payoffDate = months&&months!==Infinity?new Date(Date.now()+months*30*86400000):null;
+        return (
+          <div key={debt.id} className="card">
+            <div className="card-header">
+              <div><div className="card-title">{debt.name}</div><TypeTag type={debt.type} /></div>
+              <div style={{textAlign:'right'}}><div style={{fontSize:24,fontWeight:700,color:'var(--red)'}}>{formatMoney(debt.owed)}</div></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:16,marginBottom:12}}>
+              <div><div style={{fontSize:12,color:'var(--text-muted)'}}>Monthly Payment</div><div style={{fontWeight:600}}>{formatMoney(debt.cost)}</div></div>
+              <div><div style={{fontSize:12,color:'var(--text-muted)'}}>Credit Limit</div><div style={{fontWeight:600}}>{debt.creditLimit>0?formatMoney(debt.creditLimit):'—'}</div></div>
+              <div><div style={{fontSize:12,color:'var(--text-muted)'}}>Est. Payoff</div><div style={{fontWeight:600,color:'var(--green)'}}>{months===Infinity?'∞ (too low)':months?`${months} months`:'—'}</div></div>
+              <div><div style={{fontSize:12,color:'var(--text-muted)'}}>Payoff Date</div><div style={{fontWeight:600}}>{payoffDate?payoffDate.toLocaleDateString('en-US',{month:'short',year:'numeric'}):'—'}</div></div>
+            </div>
+            {debt.creditLimit>0&&(<div><div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--text-muted)',marginBottom:4}}><span>Utilization</span><span>{pctUsed.toFixed(0)}% used</span></div><div className="payoff-bar"><div className="payoff-fill" style={{width:`${Math.min(pctUsed,100)}%`,background:pctUsed>80?'var(--red)':pctUsed>50?'var(--yellow)':'var(--green)'}}></div></div></div>)}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ==================== INSIGHTS ====================
+function Insights({ bills, history, totalOwed, totalMonthly, types }) {
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+  const byType = types.map(t => {const items=bills.filter(b=>b.type===t);return{type:t,count:items.length,total:items.reduce((s,b)=>s+b.cost,0),owed:items.reduce((s,b)=>s+(b.owed||0),0)};}).filter(t=>t.count>0);
+
+  useEffect(() => {
+    if(!chartRef.current||history.length<2)return;
+    if(chartInstance.current)chartInstance.current.destroy();
+    chartInstance.current=new Chart(chartRef.current,{type:'line',data:{labels:history.map(h=>new Date(h.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})),datasets:[{label:'Total Debt',data:history.map(h=>h.totalOwed),borderColor:'#e17055',backgroundColor:'rgba(225,112,85,0.1)',fill:true,tension:0.3,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e4e6f0'}}},scales:{x:{ticks:{color:'#8b8fa3'},grid:{color:'#2e3348'}},y:{ticks:{color:'#8b8fa3',callback:v=>'$'+v.toLocaleString()},grid:{color:'#2e3348'}}}}});
+    return()=>{if(chartInstance.current)chartInstance.current.destroy();};
+  },[history]);
+
+  return (
+    <>
+      <div className="stats-grid">
+        <div className="stat-card"><div className="stat-label">Bills Tracked</div><div className="stat-value">{bills.length}</div></div>
+        <div className="stat-card"><div className="stat-label">Monthly Obligations</div><div className="stat-value stat-blue">{formatMoney(totalMonthly)}</div></div>
+        <div className="stat-card"><div className="stat-label">Snapshots</div><div className="stat-value">{history.length}</div></div>
+      </div>
+      <div className="card">
+        <div className="card-title" style={{marginBottom:16}}>Spending by Category</div>
+        <table className="bill-table">
+          <thead><tr><th>Category</th><th>Count</th><th style={{textAlign:'right'}}>Monthly Cost</th><th style={{textAlign:'right'}}>Total Owed</th></tr></thead>
+          <tbody>
+            {byType.map(t=><tr key={t.type}><td><TypeTag type={t.type} /></td><td>{t.count}</td><td style={{textAlign:'right',fontWeight:600}}>{formatMoney(t.total)}</td><td style={{textAlign:'right',color:t.owed>0?'var(--red)':'var(--text-muted)'}}>{t.owed>0?formatMoney(t.owed):'—'}</td></tr>)}
+            <tr style={{fontWeight:700}}><td>Total</td><td>{bills.length}</td><td style={{textAlign:'right'}}>{formatMoney(byType.reduce((s,t)=>s+t.total,0))}</td><td style={{textAlign:'right',color:'var(--red)'}}>{formatMoney(byType.reduce((s,t)=>s+t.owed,0))}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="card">
+        <div className="card-title" style={{marginBottom:8}}>Debt Over Time</div>
+        {history.length<2?<div style={{padding:40,textAlign:'center',color:'var(--text-muted)'}}>Save 2+ snapshots to see debt trend</div>:<div className="chart-container"><canvas ref={chartRef}></canvas></div>}
+      </div>
+    </>
+  );
+}
+
+// ==================== MODALS ====================
+function QuickUpdate({ bills, onUpdate, onClose }) {
+  const [values, setValues] = useState(() => {
+    const v = {};
+    bills.forEach(b => { v[b.id] = { cost: b.cost, owed: b.owed || 0, available: b.available || 0, active: b.active !== false }; });
+    return v;
+  });
+  const handleChange = (id, field, val) => setValues(prev => ({ ...prev, [id]: { ...prev[id], [field]: parseFloat(val) || 0 } }));
+  const toggleActive = (id) => setValues(prev => ({ ...prev, [id]: { ...prev[id], active: !prev[id].active } }));
+  const handleSave = () => { Object.entries(values).forEach(([id, v]) => onUpdate(id, v)); onClose(); };
+
+  // Group by type, sort groups alphabetically, sort items within each group alphabetically
+  const grouped = {};
+  bills.forEach(b => { if (!grouped[b.type]) grouped[b.type] = []; grouped[b.type].push(b); });
+  const sortedGroups = Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
+  sortedGroups.forEach(([, items]) => items.sort((a, b) => a.name.localeCompare(b.name)));
+
+  const colGrid = '36px 1fr 90px 90px 90px';
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 740 }}>
+        <h2>⚡ Quick Update</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 16, fontSize: 14 }}>
+          Update balances as you log into each account. Toggle the switch to deactivate bills.
+        </p>
+        {sortedGroups.map(([type, items]) => (
+          <div key={type} style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>{type}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: colGrid, gap: 8, fontSize: 11, color: 'var(--text-muted)', padding: '0 12px 4px', alignItems: 'center' }}>
+              <span></span>
+              <span>Name</span>
+              <span style={{ textAlign: 'right' }}>Payment</span>
+              <span style={{ textAlign: 'right' }}>Owed</span>
+              <span style={{ textAlign: 'right' }}>Available</span>
+            </div>
+            {items.map(bill => {
+              const isActive = values[bill.id]?.active !== false;
+              return (
+                <div key={bill.id} style={{
+                  display: 'grid', gridTemplateColumns: colGrid, gap: 8, alignItems: 'center',
+                  padding: '10px 12px', borderBottom: '1px solid var(--border)',
+                  opacity: isActive ? 1 : 0.4, transition: 'opacity 0.2s'
+                }}>
+                  <div
+                    onClick={() => toggleActive(bill.id)}
+                    style={{
+                      width: 28, height: 16, borderRadius: 8, cursor: 'pointer', position: 'relative',
+                      background: isActive ? 'var(--green)' : 'var(--border)', transition: 'background 0.2s'
+                    }}
+                  >
+                    <div style={{
+                      width: 12, height: 12, borderRadius: 6, background: '#fff', position: 'absolute', top: 2,
+                      left: isActive ? 14 : 2, transition: 'left 0.2s'
+                    }}></div>
+                  </div>
+                  <div style={{ fontWeight: 500, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bill.name}</div>
+                  <input className="quick-update-input" type="number" step="0.01"
+                    value={values[bill.id]?.cost || ''} onChange={e => handleChange(bill.id, 'cost', e.target.value)}
+                    disabled={!isActive} style={{ opacity: isActive ? 1 : 0.5 }} />
+                  <input className="quick-update-input" type="number" step="0.01"
+                    value={values[bill.id]?.owed || ''} onChange={e => handleChange(bill.id, 'owed', e.target.value)}
+                    disabled={!isActive} style={{ opacity: isActive ? 1 : 0.5 }} />
+                  <input className="quick-update-input" type="number" step="0.01"
+                    value={values[bill.id]?.available || ''} onChange={e => handleChange(bill.id, 'available', e.target.value)}
+                    disabled={!isActive} style={{ opacity: isActive ? 1 : 0.5 }} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-success" onClick={handleSave}>💾 Save All</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BillModal({ bill, onSave, onClose, onDelete, types }) {
+  const [form, setForm] = useState(() => {
+    const defaults = { name: '', type: 'Bills', cost: 0, owed: 0, available: 0, creditLimit: 0, dueDay: 1, rate: 'Monthly', apr: 0, autoPay: false, active: true, notes: '' };
+    if (bill) return { ...defaults, ...bill };
+    return defaults;
+  });
+  const [customType, setCustomType] = useState(false);
+
+  const handleSave = () => {
+    const parsed = {
+      ...form,
+      cost: parseFloat(form.cost) || 0,
+      owed: parseFloat(form.owed) || 0,
+      available: parseFloat(form.available) || 0,
+      creditLimit: parseFloat(form.creditLimit) || 0,
+      dueDay: parseInt(form.dueDay) || 1,
+      apr: parseFloat(form.apr) || 0,
+    };
+    if (bill && bill.id) parsed.id = bill.id;
+    onSave(parsed);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>{bill ? 'Edit Bill' : 'Add New Bill'}</h2>
+        <div className="form-grid">
+          <div className="form-group"><label>Name</label><input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+          <div className="form-group"><label>Type</label>{customType ? (
+            <div style={{display:'flex',gap:6}}>
+              <input value={form.type} onChange={e => setForm({...form, type: e.target.value})} placeholder="New category name..." autoFocus style={{flex:1}} />
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setCustomType(false); if (!types.includes(form.type)) setForm({...form, type: 'Bills'}); }}>Cancel</button>
+            </div>
+          ) : (
+            <div style={{display:'flex',gap:6}}>
+              <select value={types.includes(form.type) ? form.type : '__custom'} onChange={e => { if (e.target.value === '__custom') setCustomType(true); else setForm({...form, type: e.target.value}); }} style={{flex:1}}>{types.map(t => <option key={t}>{t}</option>)}<option value="__custom">+ New Category...</option></select>
+            </div>
+          )}</div>
+          <div className="form-group"><label>Payment Amount</label><input type="number" step="0.01" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} /></div>
+          <div className="form-group"><label>Amount Owed</label><input type="number" step="0.01" value={form.owed} onChange={e => setForm({...form, owed: e.target.value})} /></div>
+          <div className="form-group"><label>Available Credit</label><input type="number" step="0.01" value={form.available} onChange={e => setForm({...form, available: e.target.value})} /></div>
+          <div className="form-group"><label>Credit Limit</label><input type="number" step="0.01" value={form.creditLimit} onChange={e => setForm({...form, creditLimit: e.target.value})} /></div>
+          <div className="form-group"><label>Frequency</label><select value={form.rate} onChange={e => setForm({...form, rate: e.target.value})}>{RATES.map(r => <option key={r}>{r}</option>)}</select></div>
+          {form.rate === 'Yearly' ? (
+            <div className="form-group"><label>Yearly Due Date (MM-DD)</label>
+              <div style={{display:'flex',gap:6}}>
+                <select value={form.yearlyDate ? form.yearlyDate.split('-')[0] : '01'} onChange={e => { const dd = (form.yearlyDate||'01-01').split('-')[1]; setForm({...form, yearlyDate: e.target.value + '-' + dd}); }}>
+                  {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => <option key={m} value={m}>{new Date(2000, parseInt(m)-1).toLocaleString('en-US',{month:'long'})}</option>)}
+                </select>
+                <input type="number" min="1" max="31" value={form.yearlyDate ? parseInt(form.yearlyDate.split('-')[1]) : 1} onChange={e => { const mm = (form.yearlyDate||'01-01').split('-')[0]; setForm({...form, yearlyDate: mm + '-' + String(e.target.value).padStart(2,'0')}); }} style={{width:70}} />
+              </div>
+            </div>
+          ) : (
+            <div className="form-group"><label>Due Day of Month</label><input type="number" min="1" max="31" value={form.dueDay} onChange={e => setForm({...form, dueDay: e.target.value})} /></div>
+          )}
+          <div className="form-group"><label>APR %</label><input type="number" step="0.01" value={form.apr} onChange={e => setForm({...form, apr: e.target.value})} /></div>
+          <div className="form-group"><label>Auto-Pay</label><select value={form.autoPay} onChange={e => setForm({...form, autoPay: e.target.value === 'true'})}><option value="false">Manual</option><option value="true">Auto-Pay</option></select></div>
+        </div>
+        <div className="form-group" style={{marginTop: 16}}><label>Notes</label><input value={form.notes || ''} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Any notes..." /></div>
+        <div style={{display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 24}}>
+          <div>{bill && onDelete && <button type="button" className="btn btn-danger" onClick={onDelete}>Delete</button>}</div>
+          <div style={{display: 'flex', gap: 10}}>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={handleSave}>{bill ? 'Save Changes' : 'Add Bill'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
