@@ -74,6 +74,24 @@
 - [ ] Sortable columns on All Bills (probably wait until the Dashboard ships, since the table style choice should be shared).
 - [ ] Tweaks to the bill editor — user mentioned holding for now.
 
+## Phase 4 chunk 4 — closed 2026-05-15
+
+All four §4.x pages shipped + smoke-tested. Build 0 warn / 0 err. 84/84 tests pass (was 40 entering chunk 4).
+
+- [x] **4a Dashboard** (`a4aa445`) — `DashboardPageViewModel` + `DashboardPeriodSection` in `PayDay.Core/ViewModels/`. Stats grid (4 tiles: monthly obligations rate-normalized, total owed, credit utilization %, bills due this period) + 3 period sections with sortable columns (Type/Name/Due/Cost). Same-column click flips asc↔desc; switching columns resets to ascending. ▲/▼ indicators bound via `[NotifyPropertyChangedFor]`. Nav glyph E9D9 (BIDashboard). 10 new tests.
+- [x] **4b Payoff Tracker** (`1d010fc`) — `PayoffTrackerPageViewModel` + `PayoffItem` in `PayDay.Core/ViewModels/`. Filters active bills with `Owed > 0`. PayoffItem wraps Bill + `PayoffCalculator.EstimatePayoff` result + clamped credit-limit progress fraction. Sort by `(Bucket, Months)` tuple — concrete months first, "never at this rate" next, uncomputable (zero payment) last; tiebreak by name. Nav glyph EB05 (PieSingle). 10 new tests.
+- [x] **4c Insights** (`b3f73b4`) — `InsightsPageViewModel` aggregates `History` (ordered `SnapshotPoint` list) + `TypeBreakdown` (entries sorted descending by total cost). `SaveSnapshotAsync` persists current state + JSON-ish per-bill breakdown and re-loads. LiveCharts2 `CartesianChart` for owed-over-time line + `PieChart` donut with pill-matching SkiaSharp colors. Code-behind builds `ISeries[]` so `PayDay.Core` stays free of chart deps. Empty-state overlay when no snapshots saved. Nav glyph E9D2 (PieSingle). Added `InsertSnapshotAsync` / `GetAllSnapshotsAsync` to `IDatabaseService`. 9 new tests.
+- [x] **4d Settings** (`f0cafb9`) — `SettingsPageViewModel` + `BackupSerializer` in `PayDay.Core/`. Five-card page: Pay Period (DatePicker writing via `PayPeriodService.SetPayAnchorAsync`), Appearance (RadioButtons; live theme switch on `MainWindow.RootGrid.RequestedTheme`, persisted to Settings table), Backup & Restore (FileSavePicker/FileOpenPicker round-trip, confirmation ContentDialog on import), Notion sync placeholder with PHASE 5 tag, About card. Theme applied at startup via `MainWindow.ApplyPersistedThemeAsync`. `IDatabaseService` extended with `GetAllPaymentsAsync`, `GetAllSettingsAsync`, `ReplaceAllDataAsync` (transactional). `BackupSerializer` is pure System.Text.Json with `formatVersion=1` + `exportedAt` header; refuses future versions. `App.MainWindow` is now a public static for picker `InitializeWithWindow`. 15 new tests.
+
+### Still open (deferred)
+
+- [ ] **Sortable columns on All Bills** — the Dashboard's sortable-table pattern (HyperlinkButton headers + `[NotifyPropertyChangedFor]` indicators) should retrofit. Probably wait for a polish pass.
+- [ ] **Bill editor tweaks** — user noted "we can make some tweaks later" after chunk-3b. No specifics; revisit when raised.
+
 ## Next sprint
 
-**Phase 4 chunk 4** — Dashboard page (§4.3) with the shared sortable-table style, Payoff Tracker (§4.5), Insights (§4.6), Settings (§4.7). Then any bill-editor tweaks the user wants. After that, Phase 5 (Notion sync), Phase 6 (backup), Phase 7 (ship).
+**Phase 5 — Notion sync** (`PAYDAY_WINUI3_PLAN.md` §5). Three Notion data-source IDs already seeded in the Settings table (`NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb`). Build `Services/NotionSyncService.cs` in the **app project** (not `PayDay.Core`, because credential storage uses Windows-only APIs). Bills sync bidirectional; Payments + Snapshots push-only.
+
+Integration token storage: Windows Credential Manager (DPAPI), keyed off something like `PayDay.NotionToken`. The Settings page's Notion card already has the PHASE 5 stub — flesh it out with a `PasswordBox` for the token, "Test connection" button, "Sync now" button, and last-synced timestamp.
+
+After Phase 5: Phase 6 (auto-rotating backups in `LocalFolder/backups/` — manual export/import already shipped), then Phase 7 (ship).
