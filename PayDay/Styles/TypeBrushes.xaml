@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Bill type pill colors — match PAYDAY_WINUI3_PLAN.md §4.8. -->
+    <SolidColorBrush x:Key="TypePillCards"         Color="#FD79A8" />
+    <SolidColorBrush x:Key="TypePillBills"         Color="#B2945B" />
+    <SolidColorBrush x:Key="TypePillLoans"         Color="#6C5CE7" />
+    <SolidColorBrush x:Key="TypePillSubscriptions" Color="#E17055" />
+    <SolidColorBrush x:Key="TypePillBusiness"      Color="#74B9FF" />
+    <SolidColorBrush x:Key="TypePillPeople"        Color="#00B894" />
+    <SolidColorBrush x:Key="TypePillMedical"       Color="#55EFC4" />
+    <SolidColorBrush x:Key="TypePillOther"         Color="#8B8FA3" />
+
+</ResourceDictionary>

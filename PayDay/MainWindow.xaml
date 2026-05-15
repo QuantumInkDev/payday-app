@@ -38,11 +38,11 @@
             SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
                 <NavigationViewItem
-                    Content="Home"
+                    Content="PayDay"
                     IsSelected="True"
-                    Tag="home">
+                    Tag="payday">
                     <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE80F;" />
+                        <FontIcon Glyph="&#xE8C7;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="About" Tag="about">

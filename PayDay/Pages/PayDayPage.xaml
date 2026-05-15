@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="PayDay.Pages.PayDayPage"
+    x:Name="PageRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:conv="using:PayDay.Converters"
+    xmlns:vm="using:PayDay.ViewModels"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <conv:TypeToBrushConverter x:Key="TypeToBrush" />
+        <conv:CurrencyConverter x:Key="Currency" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisible" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToCollapsed" Invert="True" />
+    </Page.Resources>
+
+    <Grid Padding="24,16,24,16" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock
+            Grid.Row="0"
+            Style="{StaticResource TitleTextBlockStyle}"
+            Text="PayDay" />
+
+        <!-- Hero card -->
+        <Border
+            Grid.Row="1"
+            Padding="20"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="12">
+            <Grid RowSpacing="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Spacing="2">
+                    <TextBlock
+                        FontSize="14"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.PeriodLabel, Mode=OneWay}" />
+                    <TextBlock
+                        FontSize="20"
+                        FontWeight="SemiBold"
+                        Text="{x:Bind ViewModel.PeriodRangeLabel, Mode=OneWay}" />
+                </StackPanel>
+
+                <Grid Grid.Row="1" ColumnSpacing="32">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Total Due" />
+                        <TextBlock
+                            FontSize="22"
+                            FontWeight="SemiBold"
+                            Text="{x:Bind ViewModel.TotalDue, Mode=OneWay, Converter={StaticResource Currency}}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Paid" />
+                        <TextBlock
+                            FontSize="22"
+                            FontWeight="SemiBold"
+                            Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                            Text="{x:Bind ViewModel.TotalPaid, Mode=OneWay, Converter={StaticResource Currency}}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Text="Remaining" />
+                        <TextBlock
+                            FontSize="22"
+                            FontWeight="SemiBold"
+                            Text="{x:Bind ViewModel.Remaining, Mode=OneWay, Converter={StaticResource Currency}}" />
+                    </StackPanel>
+                </Grid>
+
+                <ProgressBar
+                    Grid.Row="2"
+                    Maximum="1"
+                    Minimum="0"
+                    Value="{x:Bind ViewModel.ProgressFraction, Mode=OneWay}" />
+            </Grid>
+        </Border>
+
+        <!-- Scrollable content -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="16">
+
+                <!-- "All paid" empty state -->
+                <InfoBar
+                    IsClosable="False"
+                    IsOpen="{x:Bind ViewModel.IsAllPaid, Mode=OneWay}"
+                    Message="Every manual bill in this period is paid. Nice."
+                    Severity="Success"
+                    Title="All caught up" />
+
+                <!-- Auto-pay summary -->
+                <Expander
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    Visibility="{x:Bind ViewModel.HasCurrentPeriod, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                    <Expander.Header>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock FontWeight="SemiBold" Text="Auto-pay" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Deducted automatically — no action needed" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Text="{x:Bind ViewModel.AutoPayTotal, Mode=OneWay, Converter={StaticResource Currency}}" />
+                        </Grid>
+                    </Expander.Header>
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.AutoPayBills, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PeriodBillRow">
+                                <Grid Padding="8,6" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Grid.Column="0"
+                                        Padding="8,2"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
+                                        CornerRadius="10">
+                                        <TextBlock
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="White"
+                                            Text="{x:Bind Bill.Type}" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="0">
+                                        <TextBlock Text="{x:Bind Bill.Name}" />
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Text="{x:Bind DueDateLabel}" />
+                                    </StackPanel>
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Bill.Cost, Converter={StaticResource Currency}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Expander>
+
+                <!-- Unpaid header -->
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Unpaid"
+                    Visibility="{x:Bind ViewModel.HasCurrentPeriod, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                <ItemsControl ItemsSource="{x:Bind ViewModel.UnpaidBills, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PeriodBillRow">
+                            <Border
+                                Margin="0,0,0,8"
+                                Padding="12,10"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Grid.Column="0"
+                                        Padding="10,3"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
+                                        CornerRadius="10">
+                                        <TextBlock
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="White"
+                                            Text="{x:Bind Bill.Type}" />
+                                    </Border>
+                                    <StackPanel
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="0">
+                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind Bill.Name}" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Text="{x:Bind DueDateLabel}" />
+                                    </StackPanel>
+                                    <NumberBox
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        SmallChange="1"
+                                        SpinButtonPlacementMode="Hidden"
+                                        Value="{x:Bind AmountPaid, Mode=TwoWay}" />
+                                    <Button
+                                        Grid.Column="3"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding DataContext.MarkPaidCommand, ElementName=PageRoot}"
+                                        CommandParameter="{x:Bind}"
+                                        Content="Mark Paid"
+                                        Style="{ThemeResource AccentButtonStyle}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Paid header -->
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Paid"
+                    Visibility="{x:Bind ViewModel.HasCurrentPeriod, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                <ItemsControl ItemsSource="{x:Bind ViewModel.PaidBills, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PeriodBillRow">
+                            <Border
+                                Margin="0,0,0,8"
+                                Padding="12,10"
+                                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Opacity="0.85">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Grid.Column="0"
+                                        Padding="10,3"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
+                                        CornerRadius="10">
+                                        <TextBlock
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="White"
+                                            Text="{x:Bind Bill.Type}" />
+                                    </Border>
+                                    <StackPanel
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Spacing="0">
+                                        <TextBlock Text="{x:Bind Bill.Name}" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Text="{x:Bind DueDateLabel}" />
+                                    </StackPanel>
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        Margin="0,0,12,0"
+                                        VerticalAlignment="Center"
+                                        FontWeight="SemiBold"
+                                        Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                        Text="{x:Bind AmountPaid, Mode=OneWay, Converter={StaticResource Currency}}" />
+                                    <Button
+                                        Grid.Column="3"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding DataContext.UnmarkPaidCommand, ElementName=PageRoot}"
+                                        CommandParameter="{x:Bind}"
+                                        Content="Undo" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer: Mark All Paid -->
+        <Grid Grid.Row="3" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ProgressRing
+                Grid.Column="0"
+                HorizontalAlignment="Left"
+                IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" />
+            <Button
+                Grid.Column="1"
+                Command="{x:Bind ViewModel.MarkAllPaidCommand, Mode=OneWay}"
+                Content="Mark All Paid"
+                Style="{ThemeResource AccentButtonStyle}" />
+        </Grid>
+    </Grid>
+</Page>

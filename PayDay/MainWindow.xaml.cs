@@ -40,8 +40,8 @@ public sealed partial class MainWindow : Window
         {
             switch (item.Tag)
             {
-                case "home":
-                    NavFrame.Navigate(typeof(HomePage));
+                case "payday":
+                    NavFrame.Navigate(typeof(PayDayPage));
                     break;
                 case "about":
                     NavFrame.Navigate(typeof(AboutPage));
