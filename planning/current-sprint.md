@@ -1,51 +1,65 @@
-# Sprint: Phase 2 — SQLite Data Layer
+# Sprint: Phase 3 — Business Logic
 
 **Started:** 2026-05-15
 **Closed:** 2026-05-15
-**Scope:** Add NuGet dependencies, define the schema in `Services/DatabaseService.cs`, seed the 27 bills from the original HTML app on first launch.
-**Plan reference:** `PAYDAY_WINUI3_PLAN.md` §1.3, §2.1, §2.2, §2.3.
-**Prior sprint:** `sprint-01-bootstrap.md` (closed 2026-05-15, commit `6dce721`).
+**Scope:** Port the JS pay-period engine, payment-tracking helpers, and payoff calculator to C#. No UI yet — that's Phase 4.
+**Plan reference:** `PAYDAY_WINUI3_PLAN.md` §3 (§3.1 Pay Period Engine, §3.2 Payment Tracking, §3.3 Payoff Calculator).
+**Prior sprint:** `sprint-02-data-layer.md` (closed 2026-05-15, commit `0ee335f`).
 
 ## Tasks
 
-### 2.0 — NuGet dependencies (plan §1.3)
-- [x] `dotnet add package Microsoft.Data.Sqlite` → 10.0.8
-- [x] `dotnet add package CommunityToolkit.Mvvm` → 8.4.2
-- [~] ~~`dotnet add package CommunityToolkit.WinUI.Controls.DataTable`~~ — **deferred**; not published on NuGet under that ID (lives in CommunityToolkit/Labs-Windows on GitHub but not released). Re-evaluate when wiring the Bills page UI (Phase 4/5); pick a real published control then.
-- [x] `dotnet add package LiveChartsCore.SkiaSharpView.WinUI` → 2.0.2
-- [x] `dotnet add package System.Net.Http.Json` → 10.0.8
-- [x] Verify `dotnet build` still exits 0 after additions — 0 warn / 0 err, 7.16s
+### 3.0 — Models (new)
+- [x] `PayDay.Core/Models/PayPeriod.cs` — `Start`, `End`, `Payday`, `IsCurrent`, `Label`, `Key` (record); also `AssignedPayPeriod` in the same file.
+- [x] `PayDay.Core/Models/PeriodBill.cs` — record projecting `Bill` with the concrete `DueDate` that landed it in this period.
 
-### 2.1 — Schema (plan §2.1)
-- [x] Create `PayDay/Services/DatabaseService.cs` (singleton, wraps `Microsoft.Data.Sqlite`)
-- [x] DB file location: `ApplicationData.Current.LocalFolder` (persists across app updates)
-- [x] `CREATE TABLE Bills` — 17 columns, primary key `Id TEXT`, including `NotionPageId` for sync
-- [x] `CREATE TABLE Payments` — autoincrement Id, FK to Bills, `PeriodKey TEXT` ("YYYY-MM-DD")
-- [x] `CREATE TABLE Snapshots` — autoincrement Id, `SnapshotDate`, `TotalOwed`, JSON `Details`
-- [x] `CREATE TABLE Settings` — key/value
-- [x] All tables created idempotently on first run (`CREATE TABLE IF NOT EXISTS`)
+### 3.0a — PayDay.Core extraction (added mid-sprint)
+- [x] **New `PayDay.Core` class library (net9.0)** — holds models + pure business logic. Created because the WinUI tests project pulls in `Microsoft.WindowsAppRuntime.Bootstrap` module initializers that crash without package identity (COMException 0x80040154). Splitting out a plain net9.0 library lets tests run without the WinUI runtime.
+- [x] `PayDay.Core/Services/IDatabaseService.cs` — interface with the slice of DB methods that `PayPeriodService` / `PaymentService` need (`GetSettingAsync`, `SetSettingAsync`, `GetAllBillsAsync`, `InsertPaymentAsync`, `GetPaymentsByPeriodAsync`, `DeletePaymentsForBillInPeriodAsync`).
+- [x] `PayDay/Services/DatabaseService.cs` now implements `IDatabaseService` and gained `DeletePaymentsForBillInPeriodAsync`.
+- [x] `PayDay/PayDay.csproj` adds `<ProjectReference Include="..\PayDay.Core\PayDay.Core.csproj"/>`.
 
-### 2.2 — Data access layer (plan §2.2)
-- [x] CRUD methods for Bills (Upsert/Count/Get/GetAll/Delete), Payments (Insert/Delete/GetByPeriod), Snapshots (Insert/GetAll), Settings (Get/Set)
-- [x] Transaction support for bulk operations (`UpsertBillsAsync` wraps in `BeginTransactionAsync`)
-- [x] Auto-migration scaffold (`RunMigrationsAsync` + `SchemaVersion` Settings row, `CurrentSchemaVersion = 1`)
-- [x] Models in `PayDay/Models/`: `Bill.cs`, `Payment.cs`, `Snapshot.cs`
+### 3.1 — Pay Period Engine (plan §3.1)
+- [x] `PayDay.Core/Services/PayPeriodService.cs`
+  - [x] `GetPayPeriods(DateTime anchor, DateTime today, int count = 8)` — pure function, ports the JS `getPayPeriods`. Walks 14-day windows from anchor, picks the period containing `today`, labels it "This / Next / Following", returns the 3 labeled periods.
+  - [x] `GetBillDueDate(int dueDay, DateTime periodStart, DateTime periodEnd)` — checks prev/current/next month for the day-of-month that lands inside the window. Honors months that don't have the day (e.g. day 31 in Feb → falls through, returns null).
+  - [x] `AssignBillsToPeriods(IEnumerable<Bill> bills, IReadOnlyList<PayPeriod> periods)` — for each period, filters bills by Rate (Bi-Weekly: always, Monthly: by due-day-in-window, Yearly: by MM-DD in window, Once: never). Inactive bills are excluded upstream by the caller (or here — decide). Sorted by `DueDate`.
+  - [x] `GetCurrentPeriodsAsync(DatabaseService db)` — convenience: reads `PayAnchor` from Settings, gets active bills, returns assigned periods.
+  - [x] `GetEarlyStartAsync` / `SetEarlyStartAsync` — persists the "Early Start" toggle in Settings.
 
-### 2.3 — Seed data (plan §2.3)
-- [x] On first launch (Bills count == 0), insert 27 bills via `SeedData.Bills`:
-  - 4 Bills (Electric, Phone, Storage, Storage Clari)
-  - 15 Cards (Amazon, Apple, Burlington, 3× Capital One, 3× Citibank, 2× Credit One, Discovery, PayPal, Raymour, Target)
-  - 3 Loans (2× 401K, Prosper)
-  - 1 People (Mom)
-  - 4 Subscriptions (Google One, Spotify, Uber, YouTube Premium)
-- [x] Seed default Settings rows: `PayAnchor`, `EarlyStart`, `LastNotionSync`, `NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb`
+### 3.2 — Payment Tracking (plan §3.2)
+- [x] `PayDay.Core/Services/PaymentService.cs`
+  - [x] `MarkPaidAsync(string periodKey, string billId, double amount)` — inserts Payments row, returns the new id.
+  - [x] `UnmarkPaidAsync(string periodKey, string billId)` — deletes all matching rows for the period+bill combo.
+  - [x] `GetPeriodPaymentsAsync(string periodKey)` — passes through to DatabaseService.
+  - [x] `IsAllPaidAsync(string periodKey, IEnumerable<PeriodBill> manualBills)` — returns true if every non-AutoPay bill in the period has a payment.
+
+### 3.3 — Payoff Calculator (plan §3.3)
+- [x] `PayDay.Core/Services/PayoffCalculator.cs`
+  - [x] Static `EstimatePayoff(double owed, double payment, double apr = 0)` — returns months (int) or `null` (no balance / no payment) or `int.MaxValue` (payment can't beat interest). Matches JS formula exactly.
+
+### 3.4 — Tests
+- [x] `PayDay.Tests/PayDay.Tests.csproj` — xunit on net9.0, references `PayDay.Core` only (NOT the WinUI project). **21 tests pass.**
+- [x] `PayDay.Tests/PayPeriodServiceTests.cs`
+  - [x] Anchor in past → current period contains "today"; labels are exactly This/Next/Following in order.
+  - [x] Anchor in future → walks backwards by 14 days until it lands at-or-before today.
+  - [x] Today exactly on anchor → anchor is the current period.
+  - [x] `GetBillDueDate`: day-15 in a normal mid-month window → returns mid-month date.
+  - [x] `GetBillDueDate`: day-31 in February window → returns null (no Feb 31).
+  - [x] `AssignBillsToPeriods`: Bi-Weekly bill appears in every period.
+  - [x] `AssignBillsToPeriods`: "Once" bills never appear.
+  - [x] `AssignBillsToPeriods`: Yearly bill with `YearlyDate = "12-25"` lands in the period containing Dec 25.
+- [x] `PayDay.Tests/PayoffCalculatorTests.cs`
+  - [x] APR=0 → ceil(owed/payment).
+  - [x] APR>0, payment > interest → matches amortization formula.
+  - [x] payment <= interest → returns int.MaxValue (never).
+  - [x] owed=0 or payment=0 → returns null.
 
 ### Sprint exit criteria
-- [x] App launches, DB file created at `LocalState\payday.db` on first run, 27 bills present.
-- [x] Re-launch does not re-seed — count stays 27, 0 duplicate IDs.
-- [x] `SELECT COUNT(*) FROM Bills` returns 27 (verified via sqlite3 CLI against the LocalState DB).
+- [x] `dotnet test PayDay.Tests` exits 0 with all tests passing.
+- [x] `dotnet build PayDay/PayDay.csproj` exits 0 (no warnings in our code).
+- [x] No UI changes — app launches identically to Phase 2.
 - [x] Commit + push.
 
 ## Next sprint
 
-**Phase 3 — Business logic.** Pay period engine (`Services/PayPeriodService.cs`), payment tracking helpers, payoff calculator. See `PAYDAY_WINUI3_PLAN.md` §3.
+**Phase 4 — UI / Views.** Wire `PayPeriodService` into the `PayDay` page (the main view). NavigationView already has Home/About/Settings — replace Home with the PayDay page per plan §4.1.
