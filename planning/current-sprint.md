@@ -21,16 +21,15 @@
 - [x] Build clean.
 - **Deferred to 5b**: `InMemoryCredentialStore` in `PayDay.Tests/`. Defer until 5b actually uses it (writing the fake without a consumer is dead code).
 
-### 5b — NotionSyncService (bills, bidirectional) — next
-- [ ] `PayDay.Core/Services/NotionSyncService.cs` — ctor `(IDatabaseService, ICredentialStore, HttpMessageHandler? handler = null)`. Public surface:
-  - `Task<bool> TestConnectionAsync()` — pings `GET /v1/users/me`, returns true on 2xx.
-  - `Task SyncBillsAsync(CancellationToken)` — fetches Notion bills via `POST /v1/data_sources/{id}/query`, compares timestamps, applies last-write-wins, creates new pages for unmatched local bills, archives Notion pages for locally-deleted bills. Updates `Bill.NotionPageId` on the local row.
-  - `Task<DateTimeOffset?> GetLastSyncedAsync()` / `Task SetLastSyncedAsync(DateTimeOffset)` — reads/writes the `LastNotionSync` setting.
-- [ ] Notion API client — pure `HttpClient` (constructed from the injected handler) with the standard headers: `Authorization: Bearer {token}`, `Notion-Version: 2022-06-28`.
-- [ ] JSON shaping: convert `Bill` ↔ Notion page properties matching plan §5.2 schema (Name title, Type/Bill ID/Yearly Date/Notes/Frequency text, Payment/Owed/Available/Credit Limit/Due Day/APR number, Auto-Pay/Active checkbox).
-- [ ] `PayDay.Tests/InMemoryCredentialStore.cs`.
-- [ ] `PayDay.Tests/RecordingHttpHandler.cs` — captures requests and replays canned responses.
-- [ ] `PayDay.Tests/NotionSyncServiceTests.cs` — at least: TestConnection happy/sad paths, bills sync creates new page when no `NotionPageId`, bills sync updates Notion when local is newer, bills sync overwrites local when Notion is newer, bills sync archives a Notion page when local is missing, Bill ID matching populates `NotionPageId` on first sync, request headers correct.
+### 5b — NotionSyncService (bills bidirectional + push helpers)  ✅ landed
+- [x] `PayDay.Core/Services/NotionSyncService.cs` — ctor `(IDatabaseService, ICredentialStore, HttpMessageHandler? = null)`. Disposable. Surface: `TestConnectionAsync`, `SyncBillsAsync`, `PushPaymentAsync`, `PushSnapshotAsync`, `GetLastSyncedAsync` / `SetLastSyncedAsync`, `HasToken` / `SaveToken` / `DeleteToken`. Header `Notion-Version: 2025-09-03` (data-sources API). Auth via `Bearer {token}` from credential store.
+- [x] `PayDay.Core/Services/NotionSyncResult.cs` — record with `Created` / `Updated` / `Pulled` / `Archived` / `Errors`.
+- [x] **Bill ↔ Notion property mapping** — title (Name), checkbox (Auto-Pay, Active), number (Payment, Owed, Available, Credit Limit, Due Day, APR), rich_text (Type, Frequency, Bill ID, Yearly Date, Notes). Schema matches plan §5.2.
+- [x] **Bidirectional sync rules** — match on `Bill ID` text property; last-write-wins on `UpdatedAt` (SQLite UTC) vs `last_edited_time` (ISO 8601). New local → create page (parent `data_source_id`). New remote → upsert local. Archive-on-delete deferred (needs a tombstone table, marked with TODO).
+- [x] **Per-page error isolation** — a single page failure adds a string to `Result.Errors` and the sync continues. No early bailout.
+- [x] `PayDay.Tests/InMemoryCredentialStore.cs` + `RecordingHttpHandler.cs` + `NotionSyncServiceTests.cs` — 13 new tests covering TestConnection (no-token / 200 / 401), SyncBills preflight, create / update / pull / Bill-ID match / remote-only pull / last-synced stamp / per-page error isolation, push payment + snapshot, ParseSqliteUtc edge cases.
+- [x] **`InternalsVisibleTo PayDay.Tests`** added to `PayDay.Core.csproj` so internal helpers (`ParseSqliteUtc`, `BuildBillProperties`, `NotionPage`) are visible in tests without widening the public surface.
+- [x] 100/100 tests pass. Build 0 warn / 0 err.
 
 ### 5c — Payments + snapshots push, auto-sync on payment
 - [ ] Extend `NotionSyncService` with `Task PushPaymentAsync(Payment)` and `Task PushSnapshotAsync(Snapshot)`. Each writes its `NotionPageId` back to the local row.
