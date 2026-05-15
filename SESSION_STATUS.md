@@ -8,17 +8,16 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 6 chunk 6c — first-launch restore prompt.** 6b landed 2026-05-15: `WindowsBackupStore` writes to `LocalFolder/backups/`, `App.Backups` singleton wired, both VMs auto-backup on mark-paid / mark-all / snapshot save (fire-and-forget via `PendingAutoBackup`). Build 0 warn / 0 err. Tests 144/144 (was 137).
+**Phase 7 — Ship.** Phase 6 closed 2026-05-15 across 6a (`9874397`), 6b (`474b4f3`), 6c (this commit). Auto-rotating backups now run on every mark-paid / mark-all / snapshot save, capped at 10 files in `LocalFolder/backups/`. First-launch restore prompt fires when the Bills table is empty but backups exist. Build 0 warn / 0 err. Tests 150/150 (was 121 at sprint start; +29 across 6a, 6b, 6c).
 
-Next: 6c — on first launch, if the Bills table is empty but backups exist, offer to restore the newest.
+**Manual smoke test for 6c is still pending** — needs the user to delete `payday.db` from `LocalState` and relaunch to confirm the dialog actually fires + restore round-trips. The pure-logic path (`BackupRestorePrompt.GetCandidateAsync` + `ApplyAsync`) is fully unit-tested.
 
-- **`App.OnLaunched`** — after `DatabaseService.Instance.InitializeAsync()`, before activating MainWindow: check `(await DatabaseService.Instance.GetAllBillsAsync()).Count == 0` and `await Backups.LatestAsync()` returns non-null. If both true, show a `ContentDialog` (needs an XamlRoot — easiest path is to push the prompt onto MainWindow after activation, or show from the first page's Loaded handler so the dialog has a root).
-- **Restore path** — read JSON via `Backups.ReadAsync(latest.FileName)`, parse with `BackupSerializer.FromJson`, then `DatabaseService.Instance.ReplaceAllDataAsync(...)`. Same shape as the existing Settings → Import flow (chunk 4d).
-- **Dialog copy** — title "Restore from backup?", body shows `latest.FileName` + `latest.LastWriteUtc`. Buttons: "Restore" (primary), "Start fresh" (close).
-- **Tests** — extract the empty-DB check into a static helper or a small `BackupRestorePrompt` service so it's unit-testable without WinUI. Verify: empty DB + no backups → no prompt; empty DB + backup → returns Latest; non-empty DB → no prompt.
-- **Smoke test** — wipe `payday.db` from `LocalState`, relaunch, confirm prompt fires and accepting restores all bills/payments/snapshots/settings.
+Next: Phase 7 — MSIX packaging + Microsoft Store / sideload distribution per `PAYDAY_WINUI3_PLAN.md` §7.
 
-After Phase 6: Phase 7 — ship (MSIX packaging, signing, Microsoft Store or sideload distribution per §7).
+- **Self-signed cert + MSIX** — `winapp cert generate` to produce a code-signing cert, trust it in CurrentUser/TrustedPeople, then `winapp sign` + package via the existing `winapp run` toolchain. The `winui-packaging` skill covers this end to end.
+- **Increment package version** — bump `<Version>` in `PayDay.csproj` from `0.1.0` to `0.1.1` (or pick a Phase 7 milestone number) before packaging.
+- **Decide on distribution** — sideload-only MSIX is the minimum; Store submission is a stretch goal that needs developer-account setup + privacy policy + asset variants.
+- **CI/CD (optional)** — GitHub Actions workflow that builds + signs the MSIX on tag push. Defer unless user wants it before first user-installed build.
 
 ---
 
