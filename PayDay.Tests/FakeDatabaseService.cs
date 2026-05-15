@@ -74,4 +74,42 @@ internal sealed class FakeDatabaseService : IDatabaseService
     public Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync()
         => Task.FromResult<IReadOnlyList<Snapshot>>(
             Snapshots.OrderBy(s => s.SnapshotDate, System.StringComparer.Ordinal).ToList());
+
+    public Task<IReadOnlyList<Payment>> GetAllPaymentsAsync()
+        => Task.FromResult<IReadOnlyList<Payment>>(Payments.ToList());
+
+    public Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync()
+        => Task.FromResult<IReadOnlyDictionary<string, string?>>(
+            new Dictionary<string, string?>(Settings));
+
+    public Task ReplaceAllDataAsync(
+        IReadOnlyList<Bill> bills,
+        IReadOnlyList<Payment> payments,
+        IReadOnlyList<Snapshot> snapshots,
+        IReadOnlyDictionary<string, string?> settings)
+    {
+        Bills.Clear();
+        Payments.Clear();
+        Snapshots.Clear();
+        Settings.Clear();
+        _nextPaymentId = 1;
+        _nextSnapshotId = 1;
+
+        Bills.AddRange(bills);
+        foreach (var p in payments)
+        {
+            p.Id = _nextPaymentId++;
+            Payments.Add(p);
+        }
+        foreach (var s in snapshots)
+        {
+            s.Id = _nextSnapshotId++;
+            Snapshots.Add(s);
+        }
+        foreach (var (k, v) in settings)
+        {
+            Settings[k] = v;
+        }
+        return Task.CompletedTask;
+    }
 }

@@ -19,8 +19,21 @@ public interface IDatabaseService
 
     Task<long> InsertPaymentAsync(Payment payment);
     Task<IReadOnlyList<Payment>> GetPaymentsByPeriodAsync(string periodKey);
+    Task<IReadOnlyList<Payment>> GetAllPaymentsAsync();
     Task<int> DeletePaymentsForBillInPeriodAsync(string periodKey, string billId);
 
     Task<long> InsertSnapshotAsync(Snapshot snapshot);
     Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync();
+
+    Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync();
+
+    /// <summary>
+    /// Atomically clears the Bills / Payments / Snapshots / Settings tables and
+    /// inserts the supplied data. Used by JSON import (plan §4.7 / §6.1).
+    /// </summary>
+    Task ReplaceAllDataAsync(
+        IReadOnlyList<Bill> bills,
+        IReadOnlyList<Payment> payments,
+        IReadOnlyList<Snapshot> snapshots,
+        IReadOnlyDictionary<string, string?> settings);
 }

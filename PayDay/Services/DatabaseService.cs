@@ -289,6 +289,20 @@ public sealed class DatabaseService : IDatabaseService
         return list;
     }
 
+    public async Task<IReadOnlyList<Payment>> GetAllPaymentsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Payments ORDER BY PeriodKey, PaidAt;";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var list = new List<Payment>();
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            list.Add(MapPayment(reader));
+        }
+        return list;
+    }
+
     private static Payment MapPayment(SqliteDataReader r) => new()
     {
         Id           = r.GetInt64(r.GetOrdinal("Id")),
@@ -342,6 +356,86 @@ public sealed class DatabaseService : IDatabaseService
         Details      = r.IsDBNull(r.GetOrdinal("Details"))      ? null : r.GetString(r.GetOrdinal("Details")),
         NotionPageId = r.IsDBNull(r.GetOrdinal("NotionPageId")) ? null : r.GetString(r.GetOrdinal("NotionPageId")),
     };
+
+    // ------------------------------------------------------------------
+    // Bulk read / replace (for JSON export + import)
+    // ------------------------------------------------------------------
+
+    public async Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Key, Value FROM Settings;";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var dict = new Dictionary<string, string?>(StringComparer.Ordinal);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            var key = reader.GetString(0);
+            var value = reader.IsDBNull(1) ? null : reader.GetString(1);
+            dict[key] = value;
+        }
+        return dict;
+    }
+
+    public async Task ReplaceAllDataAsync(
+        IReadOnlyList<Bill> bills,
+        IReadOnlyList<Payment> payments,
+        IReadOnlyList<Snapshot> snapshots,
+        IReadOnlyDictionary<string, string?> settings)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+
+        await ExecuteAsync(conn, tx, "DELETE FROM Payments;").ConfigureAwait(false);
+        await ExecuteAsync(conn, tx, "DELETE FROM Snapshots;").ConfigureAwait(false);
+        await ExecuteAsync(conn, tx, "DELETE FROM Bills;").ConfigureAwait(false);
+        await ExecuteAsync(conn, tx, "DELETE FROM Settings;").ConfigureAwait(false);
+
+        foreach (var bill in bills)
+        {
+            await UpsertBillInternalAsync(conn, tx, bill).ConfigureAwait(false);
+        }
+        foreach (var payment in payments)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO Payments(BillId, PeriodKey, AmountPaid, PaidAt, NotionPageId)
+                VALUES($BillId, $PeriodKey, $AmountPaid, COALESCE($PaidAt, datetime('now')), $NotionPageId);
+                """;
+            cmd.Parameters.AddWithValue("$BillId", payment.BillId);
+            cmd.Parameters.AddWithValue("$PeriodKey", payment.PeriodKey);
+            cmd.Parameters.AddWithValue("$AmountPaid", payment.AmountPaid);
+            cmd.Parameters.AddWithValue("$PaidAt", (object?)payment.PaidAt ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$NotionPageId", (object?)payment.NotionPageId ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        foreach (var snapshot in snapshots)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO Snapshots(SnapshotDate, TotalOwed, Details, NotionPageId)
+                VALUES($Date, $Total, $Details, $NotionPageId);
+                """;
+            cmd.Parameters.AddWithValue("$Date", snapshot.SnapshotDate);
+            cmd.Parameters.AddWithValue("$Total", snapshot.TotalOwed);
+            cmd.Parameters.AddWithValue("$Details", (object?)snapshot.Details ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$NotionPageId", (object?)snapshot.NotionPageId ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        foreach (var (key, value) in settings)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO Settings(Key, Value) VALUES($k, $v);";
+            cmd.Parameters.AddWithValue("$k", key);
+            cmd.Parameters.AddWithValue("$v", (object?)value ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+
+        await tx.CommitAsync().ConfigureAwait(false);
+    }
 
     // ------------------------------------------------------------------
     // Seed (called from InitializeAsync when Bills table is empty)
