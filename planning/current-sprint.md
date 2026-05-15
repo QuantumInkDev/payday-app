@@ -22,13 +22,15 @@
 - [x] `PayDay.Tests/BackupRotationServiceTests.cs` — 16 new tests covering filename format, snapshot contents, under-10 keeps all, at-11 trims oldest, many-extra trims all, ordering, pattern filtering, latest, read, and tail invariant (25 creates → 10 files).
 - [x] 137/137 tests pass (was 121). Build 0 warn / 0 err on both PayDay.csproj and PayDay.Tests.csproj.
 
-### 6b — WindowsBackupStore + VM wiring  ⏳ next
-- [ ] `PayDay/Services/WindowsBackupStore.cs` — `IBackupStore` against `ApplicationData.Current.LocalFolder/backups/`. Lazy-create folder, `ReplaceExisting` on write, `PermanentDelete` on delete. Read/write via `FileIO.ReadTextAsync` / `WriteTextAsync`.
-- [ ] `App.xaml.cs` — `App.Backups` singleton (`new BackupRotationService(DatabaseService.Instance, new WindowsBackupStore())`).
-- [ ] `PayDayPageViewModel` — optional `BackupRotationService?` ctor param. After local payment insert in `MarkPaidAsync` / `MarkAllPaidAsync`, kick off `BackupSafeAsync` fire-and-forget. Public `PendingAutoBackup`, `LastBackupStatus`, `LastBackupError`.
-- [ ] `InsightsPageViewModel` — same pattern in `SaveSnapshotAsync`.
-- [ ] `PayDayPage.xaml.cs` + `InsightsPage.xaml.cs` — pass `App.Backups` into the VM ctor.
-- [ ] `PayDay.Tests/AutoBackupTests.cs` — fire-and-forget backup on mark-paid / mark-all / snapshot save; no-service path; backup-failure surfaces but doesn't roll back the local insert.
+### 6b — WindowsBackupStore + VM wiring  ✅ landed
+- [x] `PayDay/Services/WindowsBackupStore.cs` — `IBackupStore` against `ApplicationData.Current.LocalFolder/backups/`. Lazy-create folder via `CreateFolderAsync(OpenIfExists)`, `ReplaceExisting` on write, `PermanentDelete` on delete, silent on missing files. Read/write via `FileIO.ReadTextAsync` / `WriteTextAsync`. `BackupEntry.LastWriteUtc` sourced from `BasicProperties.DateModified.UtcDateTime`.
+- [x] `App.xaml.cs` — `App.Backups` singleton (`new BackupRotationService(DatabaseService.Instance, new WindowsBackupStore())`).
+- [x] `PayDayPageViewModel` — optional `BackupRotationService?` ctor param. After local payment insert in `MarkPaidAsync` and at the end of `MarkAllPaidAsync` (one rotation per batch, not one per row), kicks off `BackupSafeAsync` fire-and-forget. Public `PendingAutoBackup` task; `LastBackupStatus` + `LastBackupError` observable for UI.
+- [x] `InsightsPageViewModel` — same pattern in `SaveSnapshotAsync` after the local insert + LoadAsync re-fetch.
+- [x] `BackupStatus` enum (`NotConfigured` / `Ok` / `Failed`) added to `BackupRotationService.cs`.
+- [x] `PayDayPage.xaml.cs` + `InsightsPage.xaml.cs` — pass `App.Backups` into the VM ctor.
+- [x] `PayDay.Tests/AutoBackupTests.cs` — 7 new tests: no-service path / backup ok / backup fail (local row still persists) / mark-all triggers exactly one backup, mirrored for snapshot save. Uses inline `ThrowingBackupStore` fake.
+- [x] 144/144 tests pass (was 137). Build 0 warn / 0 err on PayDay.csproj and PayDay.Tests.csproj.
 
 ### 6c — First-launch restore prompt  ⏳ later
 - [ ] `App.OnLaunched` — after `DatabaseService.Instance.InitializeAsync()`, check if `Bills` is empty and `App.Backups.LatestAsync()` returns non-null. Show a `ContentDialog` offering to restore from the newest backup.

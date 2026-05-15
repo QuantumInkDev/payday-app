@@ -8,18 +8,15 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 6 chunk 6b — `WindowsBackupStore` + VM wiring.** 6a landed 2026-05-15: `IBackupStore` + `BackupRotationService` in `PayDay.Core`, `InMemoryBackupStore` test fake, 16 new tests. Build 0 warn / 0 err. Tests 137/137 (was 121).
+**Phase 6 chunk 6c — first-launch restore prompt.** 6b landed 2026-05-15: `WindowsBackupStore` writes to `LocalFolder/backups/`, `App.Backups` singleton wired, both VMs auto-backup on mark-paid / mark-all / snapshot save (fire-and-forget via `PendingAutoBackup`). Build 0 warn / 0 err. Tests 144/144 (was 137).
 
-Next: 6b — implement the real backup store and wire it into the VMs.
+Next: 6c — on first launch, if the Bills table is empty but backups exist, offer to restore the newest.
 
-- **`PayDay/Services/WindowsBackupStore.cs`** — implements `IBackupStore` against `ApplicationData.Current.LocalFolder`. Creates a `backups/` subfolder on demand (`CreateFolderAsync(..., CreationCollisionOption.OpenIfExists)`). `WriteAsync` → `CreateFileAsync(..., ReplaceExisting)` + `WriteTextAsync`. `ListAsync` → `GetFilesAsync()` projecting to `BackupEntry(file.Name, file.DateCreated.UtcDateTime)` (or `BasicProperties.DateModified` — either works for trim ordering). `ReadAsync` → `ReadTextAsync`. `DeleteAsync` → `DeleteAsync(StorageDeleteOption.PermanentDelete)`, guarded against missing files.
-- **`App.xaml.cs`** — add a process-wide `App.Backups` (`new BackupRotationService(DatabaseService.Instance, new WindowsBackupStore())`).
-- **`PayDayPageViewModel`** — optional `BackupRotationService?` ctor param. After local payment insert (both `MarkPaidAsync` and `MarkAllPaidAsync`), kick off `BackupSafeAsync` fire-and-forget. Public `PendingAutoBackup` Task for tests, same pattern as `PendingNotionPush`. On failure, set `LastBackupStatus` + `LastBackupError` observables (UI can pick up later if we want a banner).
-- **`InsightsPageViewModel`** — same pattern in `SaveSnapshotAsync` after the local insert.
-- **Tests** — add an in-memory backup store assertion path to `AutoSyncTests` (or a new `AutoBackupTests` file) covering: no service / push ok / push fail / mark-all triggers backup once.
-- **PayDayPage.xaml.cs + InsightsPage.xaml.cs** — pass `App.Backups` into the VM ctor.
-
-Then chunk 6c: empty-DB → restore-prompt on first launch + smoke test.
+- **`App.OnLaunched`** — after `DatabaseService.Instance.InitializeAsync()`, before activating MainWindow: check `(await DatabaseService.Instance.GetAllBillsAsync()).Count == 0` and `await Backups.LatestAsync()` returns non-null. If both true, show a `ContentDialog` (needs an XamlRoot — easiest path is to push the prompt onto MainWindow after activation, or show from the first page's Loaded handler so the dialog has a root).
+- **Restore path** — read JSON via `Backups.ReadAsync(latest.FileName)`, parse with `BackupSerializer.FromJson`, then `DatabaseService.Instance.ReplaceAllDataAsync(...)`. Same shape as the existing Settings → Import flow (chunk 4d).
+- **Dialog copy** — title "Restore from backup?", body shows `latest.FileName` + `latest.LastWriteUtc`. Buttons: "Restore" (primary), "Start fresh" (close).
+- **Tests** — extract the empty-DB check into a static helper or a small `BackupRestorePrompt` service so it's unit-testable without WinUI. Verify: empty DB + no backups → no prompt; empty DB + backup → returns Latest; non-empty DB → no prompt.
+- **Smoke test** — wipe `payday.db` from `LocalState`, relaunch, confirm prompt fires and accepting restores all bills/payments/snapshots/settings.
 
 After Phase 6: Phase 7 — ship (MSIX packaging, signing, Microsoft Store or sideload distribution per §7).
 

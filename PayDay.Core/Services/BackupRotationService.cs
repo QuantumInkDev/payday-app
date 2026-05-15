@@ -111,3 +111,14 @@ public sealed class BackupRotationService
         entry.FileName.StartsWith(FileNamePrefix, StringComparison.OrdinalIgnoreCase)
         && entry.FileName.EndsWith(FileNameExtension, StringComparison.OrdinalIgnoreCase);
 }
+
+/// <summary>Outcome of the fire-and-forget auto-backup that runs after a payment or snapshot.</summary>
+public enum BackupStatus
+{
+    /// <summary>No <see cref="BackupRotationService"/> was wired — e.g., a test VM that didn't pass one.</summary>
+    NotConfigured,
+    /// <summary>Backup written and trim completed.</summary>
+    Ok,
+    /// <summary>An exception bubbled out of the rotation service. See <c>LastBackupError</c>.</summary>
+    Failed,
+}
