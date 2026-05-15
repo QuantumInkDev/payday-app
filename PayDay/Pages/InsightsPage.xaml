@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="PayDay.Pages.InsightsPage"
+    x:Name="PageRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:conv="using:PayDay.Converters"
+    xmlns:lvc="using:LiveChartsCore.SkiaSharpView.WinUI"
+    xmlns:vm="using:PayDay.ViewModels"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <conv:TypeToBrushConverter x:Key="TypeToBrush" />
+        <conv:CurrencyConverter x:Key="Currency" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisible" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToCollapsed" Invert="True" />
+    </Page.Resources>
+
+    <Grid Padding="24,16,24,16" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title row -->
+        <Grid Grid.Row="0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Insights" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.SummaryLabel, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel
+                Grid.Column="1"
+                Margin="0,0,16,0"
+                VerticalAlignment="Center"
+                Spacing="0">
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Text="CURRENT TOTAL OWED"
+                    TextAlignment="Right" />
+                <TextBlock
+                    FontSize="22"
+                    FontWeight="SemiBold"
+                    Text="{x:Bind ViewModel.CurrentTotalOwed, Mode=OneWay, Converter={StaticResource Currency}}"
+                    TextAlignment="Right" />
+            </StackPanel>
+            <Button
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                Click="OnSaveSnapshotClick"
+                Content="Save Snapshot"
+                Style="{ThemeResource AccentButtonStyle}"
+                ToolTipService.ToolTip="Capture the current state for trend tracking" />
+        </Grid>
+
+        <!-- Two-column body: line chart left, donut + legend right -->
+        <Grid Grid.Row="1" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Owed-over-time -->
+            <Border
+                Grid.Column="0"
+                Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Text="Total Owed Over Time" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Each point is a saved snapshot" />
+                    </StackPanel>
+
+                    <!-- Empty state overlay -->
+                    <StackPanel
+                        Grid.Row="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="6"
+                        Visibility="{x:Bind ViewModel.HasSnapshots, Mode=OneWay, Converter={StaticResource BoolToCollapsed}}">
+                        <FontIcon
+                            FontSize="32"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Glyph="&#xE9D2;" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="No history yet. Click 'Save Snapshot' to capture a point."
+                            TextAlignment="Center" />
+                    </StackPanel>
+
+                    <lvc:CartesianChart
+                        x:Name="HistoryChart"
+                        Grid.Row="1"
+                        Visibility="{x:Bind ViewModel.HasSnapshots, Mode=OneWay, Converter={StaticResource BoolToVisible}}" />
+                </Grid>
+            </Border>
+
+            <!-- Type breakdown -->
+            <Border
+                Grid.Column="1"
+                Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Text="Spending Breakdown" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="By bill type, weighted by cost" />
+                    </StackPanel>
+
+                    <lvc:PieChart
+                        x:Name="BreakdownChart"
+                        Grid.Row="1"
+                        MinHeight="200" />
+
+                    <!-- Legend -->
+                    <ItemsControl Grid.Row="2" ItemsSource="{x:Bind ViewModel.TypeBreakdown, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TypeBreakdownEntry">
+                                <Grid Margin="0,2" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Grid.Column="0"
+                                        Width="12"
+                                        Height="12"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Type, Converter={StaticResource TypeToBrush}}"
+                                        CornerRadius="2" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        FontSize="12"
+                                        Text="{x:Bind Type}" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                        <Run Text="{x:Bind TotalCost, Converter={StaticResource Currency}}" />
+                                        <Run Text="·" />
+                                        <Run Text="{x:Bind Percent}" /><Run Text="%" />
+                                    </TextBlock>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

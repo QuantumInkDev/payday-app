@@ -20,4 +20,7 @@ public interface IDatabaseService
     Task<long> InsertPaymentAsync(Payment payment);
     Task<IReadOnlyList<Payment>> GetPaymentsByPeriodAsync(string periodKey);
     Task<int> DeletePaymentsForBillInPeriodAsync(string periodKey, string billId);
+
+    Task<long> InsertSnapshotAsync(Snapshot snapshot);
+    Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync();
 }
