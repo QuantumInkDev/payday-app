@@ -16,8 +16,10 @@ internal sealed class FakeDatabaseService : IDatabaseService
     public Dictionary<string, string?> Settings { get; } = new();
     public List<Bill> Bills { get; } = new();
     public List<Payment> Payments { get; } = new();
+    public List<Snapshot> Snapshots { get; } = new();
 
     private long _nextPaymentId = 1;
+    private long _nextSnapshotId = 1;
 
     public Task<string?> GetSettingAsync(string key)
         => Task.FromResult(Settings.TryGetValue(key, out var v) ? v : null);
@@ -61,4 +63,15 @@ internal sealed class FakeDatabaseService : IDatabaseService
         var removed = Payments.RemoveAll(p => p.PeriodKey == periodKey && p.BillId == billId);
         return Task.FromResult(removed);
     }
+
+    public Task<long> InsertSnapshotAsync(Snapshot snapshot)
+    {
+        snapshot.Id = _nextSnapshotId++;
+        Snapshots.Add(snapshot);
+        return Task.FromResult(snapshot.Id);
+    }
+
+    public Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync()
+        => Task.FromResult<IReadOnlyList<Snapshot>>(
+            Snapshots.OrderBy(s => s.SnapshotDate, System.StringComparer.Ordinal).ToList());
 }
