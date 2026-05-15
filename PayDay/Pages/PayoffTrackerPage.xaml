@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="PayDay.Pages.PayoffTrackerPage"
+    x:Name="PageRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:conv="using:PayDay.Converters"
+    xmlns:vm="using:PayDay.ViewModels"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <conv:TypeToBrushConverter x:Key="TypeToBrush" />
+        <conv:CurrencyConverter x:Key="Currency" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisible" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToCollapsed" Invert="True" />
+    </Page.Resources>
+
+    <Grid Padding="24,16,24,16" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Title row -->
+        <Grid Grid.Row="0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Payoff Tracker" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.SummaryLabel, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Spacing="0">
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Text="TOTAL OWED"
+                    TextAlignment="Right" />
+                <TextBlock
+                    FontSize="22"
+                    FontWeight="SemiBold"
+                    Text="{x:Bind ViewModel.TotalOwed, Mode=OneWay, Converter={StaticResource Currency}}"
+                    TextAlignment="Right" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Empty state -->
+        <InfoBar
+            Grid.Row="1"
+            IsClosable="False"
+            IsOpen="{x:Bind ViewModel.IsEmpty, Mode=OneWay}"
+            Message="When a bill carries a balance, it shows up here with an estimated payoff timeline."
+            Severity="Success"
+            Title="Nothing to pay off" />
+
+        <!-- Items -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PayoffItem">
+                        <Border
+                            Margin="0,0,0,12"
+                            Padding="16"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10">
+                            <Grid RowSpacing="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- Top row: type pill + name + owed -->
+                                <Grid Grid.Row="0" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Grid.Column="0"
+                                        Padding="10,3"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
+                                        CornerRadius="10">
+                                        <TextBlock
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="White"
+                                            Text="{x:Bind Bill.Type}" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
+                                        <TextBlock FontSize="16" FontWeight="SemiBold" Text="{x:Bind Bill.Name}" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind PaymentLabel}" />
+                                    </StackPanel>
+                                    <StackPanel
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        Spacing="0">
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Text="OWED"
+                                            TextAlignment="Right" />
+                                        <TextBlock
+                                            FontSize="20"
+                                            FontWeight="SemiBold"
+                                            Text="{x:Bind Bill.Owed, Converter={StaticResource Currency}}"
+                                            TextAlignment="Right" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Progress bar (only for items with a credit limit) -->
+                                <StackPanel
+                                    Grid.Row="1"
+                                    Spacing="4"
+                                    Visibility="{x:Bind HasProgress, Converter={StaticResource BoolToVisible}}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            Grid.Column="0"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Text="LIMIT USED" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                            <Run Text="{x:Bind Bill.Owed, Converter={StaticResource Currency}}" />
+                                            <Run Text=" / " />
+                                            <Run Text="{x:Bind Bill.CreditLimit, Converter={StaticResource Currency}}" />
+                                        </TextBlock>
+                                    </Grid>
+                                    <ProgressBar
+                                        Maximum="1"
+                                        Minimum="0"
+                                        Value="{x:Bind ProgressFraction}" />
+                                </StackPanel>
+
+                                <!-- Payoff estimate -->
+                                <Grid Grid.Row="2" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon
+                                        Grid.Column="0"
+                                        VerticalAlignment="Center"
+                                        FontSize="14"
+                                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                        Glyph="&#xE823;" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        FontWeight="SemiBold"
+                                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                        Text="{x:Bind PayoffLabel}" />
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</Page>
