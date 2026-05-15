@@ -25,6 +25,9 @@ public partial class App : Application
     /// <summary>Process-wide Notion sync service. Disposed when the app shuts down.</summary>
     public static NotionSyncService Notion { get; } = new(DatabaseService.Instance, Credentials);
 
+    /// <summary>Process-wide auto-backup rotation service writing to <c>LocalFolder/backups/</c>.</summary>
+    public static BackupRotationService Backups { get; } = new(DatabaseService.Instance, new WindowsBackupStore());
+
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
     /// executed, and as such is the logical equivalent of main() or WinMain().

@@ -20,11 +20,16 @@ public sealed partial class InsightsPageViewModel : ObservableObject
 {
     private readonly IDatabaseService _db;
     private readonly NotionSyncService? _notion;
+    private readonly BackupRotationService? _backups;
 
-    public InsightsPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
+    public InsightsPageViewModel(
+        IDatabaseService db,
+        NotionSyncService? notion = null,
+        BackupRotationService? backups = null)
     {
         _db = db;
         _notion = notion;
+        _backups = backups;
     }
 
     [ObservableProperty]
@@ -34,6 +39,14 @@ public sealed partial class InsightsPageViewModel : ObservableObject
     private string _lastNotionPushError = string.Empty;
 
     public Task? PendingNotionPush { get; private set; }
+
+    [ObservableProperty]
+    private BackupStatus _lastBackupStatus = BackupStatus.NotConfigured;
+
+    [ObservableProperty]
+    private string _lastBackupError = string.Empty;
+
+    public Task? PendingAutoBackup { get; private set; }
 
     [ObservableProperty]
     private bool _isLoading;
@@ -119,6 +132,7 @@ public sealed partial class InsightsPageViewModel : ObservableObject
         snapshot.Id = id;
         await LoadAsync().ConfigureAwait(true);
         PendingNotionPush = PushSnapshotSafeAsync(snapshot);
+        PendingAutoBackup = BackupSafeAsync();
         return id;
     }
 
@@ -140,6 +154,27 @@ public sealed partial class InsightsPageViewModel : ObservableObject
         {
             LastNotionPushStatus = NotionPushStatus.Failed;
             LastNotionPushError = ex.Message;
+        }
+    }
+
+    /// <summary>Fire-and-forget auto-backup mirror of <c>PayDayPageViewModel.BackupSafeAsync</c>.</summary>
+    private async Task BackupSafeAsync()
+    {
+        if (_backups is null)
+        {
+            LastBackupStatus = BackupStatus.NotConfigured;
+            return;
+        }
+        try
+        {
+            await _backups.CreateAsync().ConfigureAwait(true);
+            LastBackupStatus = BackupStatus.Ok;
+            LastBackupError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LastBackupStatus = BackupStatus.Failed;
+            LastBackupError = ex.Message;
         }
     }
 

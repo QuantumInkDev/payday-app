@@ -21,13 +21,18 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     private readonly PayPeriodService _periodService;
     private readonly PaymentService _paymentService;
     private readonly NotionSyncService? _notion;
+    private readonly BackupRotationService? _backups;
 
-    public PayDayPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
+    public PayDayPageViewModel(
+        IDatabaseService db,
+        NotionSyncService? notion = null,
+        BackupRotationService? backups = null)
     {
         _db = db;
         _periodService = new PayPeriodService(db);
         _paymentService = new PaymentService(db);
         _notion = notion;
+        _backups = backups;
     }
 
     [ObservableProperty]
@@ -42,6 +47,18 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     /// Null if no pushes have been started yet.
     /// </summary>
     public Task? PendingNotionPush { get; private set; }
+
+    [ObservableProperty]
+    private BackupStatus _lastBackupStatus = BackupStatus.NotConfigured;
+
+    [ObservableProperty]
+    private string _lastBackupError = string.Empty;
+
+    /// <summary>
+    /// The most recent auto-backup kicked off by a mark-paid action. Tests
+    /// await this to wait for the fire-and-forget rotation to finish.
+    /// </summary>
+    public Task? PendingAutoBackup { get; private set; }
 
     // ------------------------------------------------------------------
     // Bound state
@@ -202,6 +219,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
             AmountPaid = amount,
             PaidAt = DateTime.UtcNow.ToString("O"),
         }, row.Bill.Name);
+        PendingAutoBackup = BackupSafeAsync();
     }
 
     [RelayCommand]
@@ -242,6 +260,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         }
         RecalculateTotals();
         PendingNotionPush = Task.WhenAll(pushes);
+        PendingAutoBackup = BackupSafeAsync();
     }
 
     private bool CanMarkAllPaid() => UnpaidBills.Count > 0;
@@ -267,6 +286,31 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         {
             LastNotionPushStatus = NotionPushStatus.Failed;
             LastNotionPushError = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Fire-and-forget auto-backup: snapshots the full DB to LocalFolder/backups/
+    /// and trims to <see cref="BackupRotationService.MaxBackups"/>. Failures are
+    /// surfaced via <see cref="LastBackupStatus"/> but never throw to the caller.
+    /// </summary>
+    private async Task BackupSafeAsync()
+    {
+        if (_backups is null)
+        {
+            LastBackupStatus = BackupStatus.NotConfigured;
+            return;
+        }
+        try
+        {
+            await _backups.CreateAsync().ConfigureAwait(true);
+            LastBackupStatus = BackupStatus.Ok;
+            LastBackupError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LastBackupStatus = BackupStatus.Failed;
+            LastBackupError = ex.Message;
         }
     }
 }
