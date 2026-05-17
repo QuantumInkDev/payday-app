@@ -14,7 +14,11 @@
     mc:Ignorable="d">
 
     <ScrollViewer MaxHeight="540" VerticalScrollBarVisibility="Auto">
-        <StackPanel MinWidth="380" Spacing="12">
+        <!-- Right padding leaves room for the scrollbar so it doesn't overlap the right-edge fields. -->
+        <StackPanel
+            MinWidth="380"
+            Padding="0,0,16,0"
+            Spacing="12">
 
             <TextBox
                 Header="Name"
@@ -25,7 +29,7 @@
                 Header="Type"
                 HorizontalAlignment="Stretch"
                 IsEditable="True"
-                ItemsSource="{x:Bind vm:BillEditorViewModel.KnownTypes}"
+                ItemsSource="{x:Bind ViewModel.TypeOptions}"
                 Text="{x:Bind ViewModel.Type, Mode=TwoWay}" />
 
             <Grid ColumnSpacing="12">

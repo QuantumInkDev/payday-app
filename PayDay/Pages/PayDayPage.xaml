@@ -155,7 +155,7 @@
                                         Padding="8,2"
                                         VerticalAlignment="Center"
                                         Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
-                                        CornerRadius="10">
+                                        CornerRadius="4">
                                         <TextBlock
                                             FontSize="11"
                                             FontWeight="SemiBold"
@@ -207,7 +207,7 @@
                                         Padding="10,3"
                                         VerticalAlignment="Center"
                                         Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
-                                        CornerRadius="10">
+                                        CornerRadius="4">
                                         <TextBlock
                                             FontSize="11"
                                             FontWeight="SemiBold"
@@ -272,7 +272,7 @@
                                         Padding="10,3"
                                         VerticalAlignment="Center"
                                         Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
-                                        CornerRadius="10">
+                                        CornerRadius="4">
                                         <TextBlock
                                             FontSize="11"
                                             FontWeight="SemiBold"
