@@ -35,6 +35,20 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
     };
 
     private readonly IDatabaseService _db;
+    private readonly NotionSyncService? _notion;
+
+    [ObservableProperty]
+    private NotionPushStatus _lastNotionPushStatus = NotionPushStatus.NotConfigured;
+
+    [ObservableProperty]
+    private string _lastNotionPushError = string.Empty;
+
+    /// <summary>
+    /// The most recent push kicked off by <see cref="SaveBillAsync"/>. Tests
+    /// await this to wait for the fire-and-forget push to finish deterministically.
+    /// Null until the first save.
+    /// </summary>
+    public Task? PendingNotionPush { get; private set; }
 
     [ObservableProperty]
     private bool _isLoading;
@@ -72,9 +86,10 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
     private string IndicatorFor(AllBillsSortColumn col)
         => col != SortColumn ? string.Empty : SortAscending ? " ▲" : " ▼";
 
-    public AllBillsPageViewModel(IDatabaseService db)
+    public AllBillsPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
     {
         _db = db;
+        _notion = notion;
     }
 
     public async Task LoadAsync()
@@ -106,8 +121,37 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
         }
     }
 
-    /// <summary>Persists the bill (only used today for the Active toggle).</summary>
-    public Task SaveBillAsync(Bill bill) => _db.UpsertBillAsync(bill);
+    /// <summary>
+    /// Persists the bill locally, then fire-and-forgets a Notion push so
+    /// Active-toggle changes and bill edits flow to Notion without waiting
+    /// for the next manual Sync Now. Tests await <see cref="PendingNotionPush"/>
+    /// to make the side effect deterministic.
+    /// </summary>
+    public async Task SaveBillAsync(Bill bill)
+    {
+        await _db.UpsertBillAsync(bill).ConfigureAwait(true);
+        PendingNotionPush = PushBillSafeAsync(bill);
+    }
+
+    private async Task PushBillSafeAsync(Bill bill)
+    {
+        if (_notion is null || !_notion.HasToken())
+        {
+            LastNotionPushStatus = NotionPushStatus.NotConfigured;
+            return;
+        }
+        try
+        {
+            await _notion.PushBillAsync(bill).ConfigureAwait(true);
+            LastNotionPushStatus = NotionPushStatus.Ok;
+            LastNotionPushError = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            LastNotionPushStatus = NotionPushStatus.Failed;
+            LastNotionPushError = ex.Message;
+        }
+    }
 
     [RelayCommand]
     private Task RefreshAsync() => LoadAsync();

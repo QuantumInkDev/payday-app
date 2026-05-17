@@ -206,6 +206,69 @@ public sealed class NotionSyncService : IDisposable
     // Payments + Snapshots (push only) — chunk 5c
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// Pushes a single bill's current state to Notion (fast path: PATCH the
+    /// known page; slow path: filter-query the data source by Bill ID then
+    /// PATCH or POST). When a page is newly discovered or created, the bill's
+    /// <see cref="Bill.NotionPageId"/> is written back via
+    /// <see cref="IDatabaseService.UpsertBillAsync"/> so the next push hits
+    /// the fast path.
+    /// </summary>
+    public async Task<string> PushBillAsync(Bill bill, CancellationToken ct = default)
+    {
+        var token = _credentials.Get(TokenKey);
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("No Notion token configured.");
+        var dataSourceId = await _db.GetSettingAsync(BillsDataSourceSetting).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(dataSourceId))
+            throw new InvalidOperationException($"Setting '{BillsDataSourceSetting}' is empty.");
+
+        var properties = BuildBillProperties(bill);
+
+        if (!string.IsNullOrEmpty(bill.NotionPageId))
+        {
+            await UpdatePageAsync(bill.NotionPageId!, properties, token!, ct).ConfigureAwait(false);
+            return bill.NotionPageId!;
+        }
+
+        var existingPageId = await FindBillPageIdAsync(dataSourceId!, bill.Id, token!, ct).ConfigureAwait(false);
+        if (existingPageId is not null)
+        {
+            await UpdatePageAsync(existingPageId, properties, token!, ct).ConfigureAwait(false);
+            bill.NotionPageId = existingPageId;
+            await _db.UpsertBillAsync(bill).ConfigureAwait(false);
+            return existingPageId;
+        }
+
+        var newPageId = await CreatePageAsync(dataSourceId!, properties, token!, ct).ConfigureAwait(false);
+        bill.NotionPageId = newPageId;
+        await _db.UpsertBillAsync(bill).ConfigureAwait(false);
+        return newPageId;
+    }
+
+    private async Task<string?> FindBillPageIdAsync(string dataSourceId, string billId, string token, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"v1/data_sources/{dataSourceId}/query");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Content = JsonContent.Create(new Dictionary<string, object?>
+        {
+            ["filter"] = new Dictionary<string, object?>
+            {
+                ["property"] = "Bill ID",
+                ["rich_text"] = new Dictionary<string, object?> { ["equals"] = billId },
+            },
+            ["page_size"] = 1,
+        });
+        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(resp, "Notion query (Bill ID filter)").ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        if (doc.RootElement.TryGetProperty("results", out var results) && results.GetArrayLength() > 0)
+        {
+            return results[0].GetProperty("id").GetString();
+        }
+        return null;
+    }
+
     public async Task<string> PushPaymentAsync(Payment payment, string billName, CancellationToken ct = default)
     {
         var token = _credentials.Get(TokenKey);

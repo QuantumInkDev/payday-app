@@ -184,4 +184,92 @@ public class AutoSyncTests
         Assert.Equal(NotionPushStatus.Failed, vm.LastNotionPushStatus);
         Assert.NotEmpty(vm.LastNotionPushError);
     }
+
+    // ------------------------------------------------------------------
+    // AllBillsPageViewModel — bills (chunk 7b)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task SaveBill_NoNotionService_StatusStaysNotConfigured()
+    {
+        var db = SeedDb();
+        var vm = new AllBillsPageViewModel(db);
+        await vm.LoadAsync();
+
+        var bill = db.Bills.Single();
+        bill.Name = "Electric Co. (renamed)";
+        await vm.SaveBillAsync(bill);
+        if (vm.PendingNotionPush is not null) await vm.PendingNotionPush;
+
+        Assert.Equal("Electric Co. (renamed)", db.Bills.Single().Name);
+        Assert.Equal(NotionPushStatus.NotConfigured, vm.LastNotionPushStatus);
+    }
+
+    [Fact]
+    public async Task SaveBill_NotionWithoutToken_StatusStaysNotConfigured_NoHttp()
+    {
+        var db = SeedDb();
+        var handler = new RecordingHttpHandler();
+        using var notion = new NotionSyncService(db, Creds(withToken: false), handler);
+        var vm = new AllBillsPageViewModel(db, notion);
+        await vm.LoadAsync();
+
+        var bill = db.Bills.Single();
+        bill.Active = false;
+        await vm.SaveBillAsync(bill);
+        if (vm.PendingNotionPush is not null) await vm.PendingNotionPush;
+
+        Assert.False(db.Bills.Single().Active);
+        Assert.Equal(NotionPushStatus.NotConfigured, vm.LastNotionPushStatus);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task SaveBill_PushSucceeds_StatusOk()
+    {
+        var db = SeedDb();
+        // Pre-seed NotionPageId so PushBillAsync hits the fast path (PATCH only, no query).
+        db.Bills.Single().NotionPageId = "page-electric";
+        var handler = new RecordingHttpHandler();
+        handler.OnPatch("v1/pages/page-electric", _ => RecordingHttpHandler.Ok("""{ "id": "page-electric" }"""));
+        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
+        var vm = new AllBillsPageViewModel(db, notion);
+        await vm.LoadAsync();
+
+        var bill = db.Bills.Single();
+        bill.Cost = 450;
+        await vm.SaveBillAsync(bill);
+        Assert.NotNull(vm.PendingNotionPush);
+        await vm.PendingNotionPush!;
+
+        Assert.Equal(450, db.Bills.Single().Cost);
+        Assert.Equal(NotionPushStatus.Ok, vm.LastNotionPushStatus);
+        Assert.Empty(vm.LastNotionPushError);
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(System.Net.Http.HttpMethod.Patch, req.Method);
+        Assert.Equal("v1/pages/page-electric", req.Path);
+        Assert.Contains("Electric", req.Body);
+    }
+
+    [Fact]
+    public async Task SaveBill_PushFails_LocalRowStillPersists_StatusFailed()
+    {
+        var db = SeedDb();
+        db.Bills.Single().NotionPageId = "page-electric";
+        var handler = new RecordingHttpHandler();
+        handler.OnPatch("v1/pages/page-electric",
+            _ => RecordingHttpHandler.Json(HttpStatusCode.InternalServerError, """{ "code": "boom" }"""));
+        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
+        var vm = new AllBillsPageViewModel(db, notion);
+        await vm.LoadAsync();
+
+        var bill = db.Bills.Single();
+        bill.Cost = 999;
+        await vm.SaveBillAsync(bill);
+        await vm.PendingNotionPush!;
+
+        Assert.Equal(999, db.Bills.Single().Cost); // local persist is NOT rolled back
+        Assert.Equal(NotionPushStatus.Failed, vm.LastNotionPushStatus);
+        Assert.NotEmpty(vm.LastNotionPushError);
+    }
 }

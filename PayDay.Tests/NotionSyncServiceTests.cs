@@ -352,6 +352,79 @@ public class NotionSyncServiceTests
     }
 
     [Fact]
+    public async Task PushBillAsync_NoToken_Throws()
+    {
+        var (db, creds) = SetupFakes(seedToken: false);
+        using var svc = Build(db, creds, new RecordingHttpHandler());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => svc.PushBillAsync(new Bill { Id = "1", Name = "Electric", Type = "Bills", Rate = "Monthly" }));
+    }
+
+    [Fact]
+    public async Task PushBillAsync_KnownNotionPageId_PatchesDirectlyWithoutQuery()
+    {
+        var (db, creds) = SetupFakes();
+        var bill = new Bill { Id = "1", Name = "Electric", Type = "Bills", Cost = 400, Rate = "Monthly", DueDay = 8, NotionPageId = "page-known" };
+        db.Bills.Add(bill);
+        var handler = new RecordingHttpHandler();
+        handler.OnPatch("v1/pages/page-known", _ => RecordingHttpHandler.Ok("""{ "id": "page-known" }"""));
+        using var svc = Build(db, creds, handler);
+
+        var pageId = await svc.PushBillAsync(bill);
+
+        Assert.Equal("page-known", pageId);
+        var patch = Assert.Single(handler.Requests, r => r.Method == HttpMethod.Patch);
+        Assert.Equal("v1/pages/page-known", patch.Path);
+        Assert.Contains("Electric", patch.Body);
+        // Fast path skips the filter query entirely.
+        Assert.DoesNotContain(handler.Requests, r => r.Path.EndsWith("/query"));
+    }
+
+    [Fact]
+    public async Task PushBillAsync_UnknownPageId_FilterFindsMatch_PatchesAndWritesBackId()
+    {
+        var (db, creds) = SetupFakes();
+        var bill = new Bill { Id = "42", Name = "Hulu", Type = "Subscriptions", Cost = 9, Rate = "Monthly", DueDay = 7, NotionPageId = null };
+        db.Bills.Add(bill);
+        var handler = new RecordingHttpHandler();
+        handler.OnPost($"v1/data_sources/{BillsDsId}/query",
+            _ => RecordingHttpHandler.Ok(QueryResponse(
+                PageJson("page-hulu", "42", "Hulu", "2026-05-15T10:00:00.000Z", type: "Subscriptions"))));
+        handler.OnPatch("v1/pages/page-hulu", _ => RecordingHttpHandler.Ok("""{ "id": "page-hulu" }"""));
+        using var svc = Build(db, creds, handler);
+
+        var pageId = await svc.PushBillAsync(bill);
+
+        Assert.Equal("page-hulu", pageId);
+        Assert.Equal("page-hulu", db.Bills[0].NotionPageId);
+        var filter = handler.Requests.Single(r => r.Path.EndsWith("/query"));
+        Assert.Contains("\"Bill ID\"", filter.Body);
+        Assert.Contains("\"equals\":\"42\"", filter.Body);
+        Assert.Contains(handler.Requests, r => r.Method == HttpMethod.Patch && r.Path == "v1/pages/page-hulu");
+    }
+
+    [Fact]
+    public async Task PushBillAsync_UnknownPageId_FilterReturnsEmpty_CreatesAndWritesBackId()
+    {
+        var (db, creds) = SetupFakes();
+        var bill = new Bill { Id = "99", Name = "Brand New", Type = "Bills", Cost = 25, Rate = "Monthly", DueDay = 1, NotionPageId = null };
+        db.Bills.Add(bill);
+        var handler = new RecordingHttpHandler();
+        handler.OnPost($"v1/data_sources/{BillsDsId}/query",
+            _ => RecordingHttpHandler.Ok(QueryResponse()));
+        handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "page-brand-new" }"""));
+        using var svc = Build(db, creds, handler);
+
+        var pageId = await svc.PushBillAsync(bill);
+
+        Assert.Equal("page-brand-new", pageId);
+        Assert.Equal("page-brand-new", db.Bills[0].NotionPageId);
+        Assert.Contains(handler.Requests, r => r.Method == HttpMethod.Post && r.Path == "v1/pages");
+        Assert.DoesNotContain(handler.Requests, r => r.Method == HttpMethod.Patch);
+    }
+
+    [Fact]
     public async Task PushSnapshotAsync_PostsToSnapshotsDataSource()
     {
         var (db, creds) = SetupFakes();
