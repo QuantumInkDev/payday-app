@@ -17,7 +17,7 @@ public sealed partial class BillEditorViewModel : ObservableObject
     /// <summary>Well-known bill types — also offered as ComboBox suggestions; users can still type a custom one.</summary>
     public static readonly string[] KnownTypes =
     {
-        "Cards", "Bills", "Loans", "Subscriptions", "Business", "People", "Medical", "Other",
+        "Cards", "Bills", "Loans", "Installments", "Subscriptions", "Business", "People", "Medical", "Other",
     };
 
     /// <summary>
