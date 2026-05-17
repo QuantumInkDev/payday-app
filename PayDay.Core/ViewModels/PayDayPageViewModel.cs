@@ -208,17 +208,25 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         row.PaymentId = id;
         row.AmountPaid = amount;
         row.IsPaid = true;
+
+        // Decrement the bill's Remaining by the submitted amount (clamped to 0).
+        // The user manages APR/interest manually — we only subtract what they paid.
+        row.Bill.Remaining = Math.Max(0, row.Bill.Remaining - amount);
+        await _db.UpsertBillAsync(row.Bill).ConfigureAwait(true);
+
         UnpaidBills.Remove(row);
         PaidBills.Add(row);
         RecalculateTotals();
-        PendingNotionPush = PushPaymentSafeAsync(new Payment
-        {
-            Id = id,
-            BillId = row.Bill.Id,
-            PeriodKey = CurrentPeriodKey,
-            AmountPaid = amount,
-            PaidAt = DateTime.UtcNow.ToString("O"),
-        }, row.Bill.Name);
+        PendingNotionPush = Task.WhenAll(
+            PushPaymentSafeAsync(new Payment
+            {
+                Id = id,
+                BillId = row.Bill.Id,
+                PeriodKey = CurrentPeriodKey,
+                AmountPaid = amount,
+                PaidAt = DateTime.UtcNow.ToString("O"),
+            }, row.Bill.Name),
+            PushBillSafeAsync(row.Bill));
         PendingAutoBackup = BackupSafeAsync();
     }
 
@@ -226,10 +234,20 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     private async Task UnmarkPaidAsync(PeriodBillRow? row)
     {
         if (row is null || CurrentPeriodKey is null) return;
+        // Capture how much was paid before the row is reset, so we can restore Remaining.
+        var refunded = row.AmountPaid;
         await _paymentService.UnmarkPaidAsync(CurrentPeriodKey, row.Bill.Id).ConfigureAwait(true);
         row.PaymentId = null;
         row.IsPaid = false;
         row.AmountPaid = row.Bill.Payment;
+
+        if (refunded > 0)
+        {
+            row.Bill.Remaining += refunded;
+            await _db.UpsertBillAsync(row.Bill).ConfigureAwait(true);
+            PendingNotionPush = PushBillSafeAsync(row.Bill);
+        }
+
         PaidBills.Remove(row);
         UnpaidBills.Add(row);
         RecalculateTotals();
@@ -240,6 +258,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     {
         if (CurrentPeriodKey is null) return;
         var pushes = new List<Task>();
+        var updatedBills = new List<Bill>();
         foreach (var row in UnpaidBills.ToList())
         {
             var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Payment;
@@ -247,6 +266,10 @@ public sealed partial class PayDayPageViewModel : ObservableObject
             row.PaymentId = id;
             row.AmountPaid = amount;
             row.IsPaid = true;
+
+            row.Bill.Remaining = Math.Max(0, row.Bill.Remaining - amount);
+            updatedBills.Add(row.Bill);
+
             UnpaidBills.Remove(row);
             PaidBills.Add(row);
             pushes.Add(PushPaymentSafeAsync(new Payment
@@ -257,6 +280,11 @@ public sealed partial class PayDayPageViewModel : ObservableObject
                 AmountPaid = amount,
                 PaidAt = DateTime.UtcNow.ToString("O"),
             }, row.Bill.Name));
+            pushes.Add(PushBillSafeAsync(row.Bill));
+        }
+        foreach (var bill in updatedBills)
+        {
+            await _db.UpsertBillAsync(bill).ConfigureAwait(true);
         }
         RecalculateTotals();
         PendingNotionPush = Task.WhenAll(pushes);
@@ -286,6 +314,25 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         {
             LastNotionPushStatus = NotionPushStatus.Failed;
             LastNotionPushError = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Fire-and-forget bill push (used after a mark-paid decrements
+    /// <see cref="Bill.Remaining"/>). Only sets <see cref="LastNotionPushStatus"/>
+    /// on failure so the per-payment push controls the success status.
+    /// </summary>
+    private async Task PushBillSafeAsync(Bill bill)
+    {
+        if (_notion is null || !_notion.HasToken()) return;
+        try
+        {
+            await _notion.PushBillAsync(bill).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LastNotionPushStatus = NotionPushStatus.Failed;
+            LastNotionPushError = $"Bill push: {ex.Message}";
         }
     }
 
