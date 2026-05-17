@@ -44,6 +44,7 @@ public partial class App : Application
     protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         await DatabaseService.Instance.InitializeAsync();
+        await TypeColorService.LoadAsync(DatabaseService.Instance);
 
         MainWindow = new MainWindow();
         MainWindow.Activate();
