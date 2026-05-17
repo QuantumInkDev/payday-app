@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using PayDay.Models;
 
 namespace PayDay.ViewModels;
@@ -16,9 +17,15 @@ public sealed class BillGroup
     public ObservableCollection<Bill> Bills { get; }
     public int Count => Bills.Count;
 
+    public double TotalPayment { get; }
+    public double TotalRemaining { get; }
+
     public BillGroup(string key, IEnumerable<Bill> bills)
     {
         Key = key;
-        Bills = new ObservableCollection<Bill>(bills);
+        var list = bills.ToList();
+        Bills = new ObservableCollection<Bill>(list);
+        TotalPayment = list.Sum(b => b.Payment);
+        TotalRemaining = list.Sum(b => b.Remaining);
     }
 }

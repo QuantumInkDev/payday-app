@@ -260,6 +260,25 @@ public class AllBillsPageViewModelTests
     }
 
     [Fact]
+    public async Task BillGroup_TotalPaymentAndRemaining_SumAcrossGroup()
+    {
+        var db = new FakeDatabaseService();
+        db.Bills.Add(MakeBill("a", "Amazon", "Cards", payment: 87, remaining: 1545));
+        db.Bills.Add(MakeBill("b", "Apple", "Cards", payment: 61, remaining: 1647));
+        db.Bills.Add(MakeBill("c", "Electric", "Bills", payment: 400, remaining: 0));
+        var vm = new AllBillsPageViewModel(db);
+
+        await vm.LoadAsync();
+
+        var cards = vm.Groups.Single(g => g.Key == "Cards");
+        var bills = vm.Groups.Single(g => g.Key == "Bills");
+        Assert.Equal(87 + 61, cards.TotalPayment);
+        Assert.Equal(1545 + 1647, cards.TotalRemaining);
+        Assert.Equal(400, bills.TotalPayment);
+        Assert.Equal(0, bills.TotalRemaining);
+    }
+
+    [Fact]
     public async Task LoadAsync_PreservesCurrentSortState()
     {
         var db = new FakeDatabaseService();

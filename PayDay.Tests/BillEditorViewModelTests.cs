@@ -93,6 +93,27 @@ public class BillEditorViewModelTests
     }
 
     [Fact]
+    public void Ctor_ExtraTypes_AreAddedToTypeOptionsAlongsideKnown()
+    {
+        var bill = new Bill { Id = "x", Name = "X" };
+        var vm = new BillEditorViewModel(bill, isAddMode: true, extraTypes: new[] { "Crypto", "Cards", "Animal Care" });
+
+        // KnownTypes (8) + 2 new customs ("Crypto", "Animal Care"). "Cards" is deduped.
+        Assert.Equal(BillEditorViewModel.KnownTypes.Length + 2, vm.TypeOptions.Count);
+        Assert.Contains("Crypto", vm.TypeOptions);
+        Assert.Contains("Animal Care", vm.TypeOptions);
+    }
+
+    [Fact]
+    public void Ctor_BillTypeNotInKnownOrExtras_IsStillSurfacedInTypeOptions()
+    {
+        var bill = new Bill { Id = "x", Name = "X", Type = "Legacy" };
+        var vm = new BillEditorViewModel(bill, isAddMode: false);
+
+        Assert.Contains("Legacy", vm.TypeOptions);
+    }
+
+    [Fact]
     public void ApplyToOriginal_BlankNotesAndYearlyDateBecomeNull()
     {
         var bill = new Bill { Name = "X", Notes = "old", YearlyDate = "12-25" };

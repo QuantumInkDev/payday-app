@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PayDay.Models;
 
@@ -16,6 +19,14 @@ public sealed partial class BillEditorViewModel : ObservableObject
     {
         "Cards", "Bills", "Loans", "Subscriptions", "Business", "People", "Medical", "Other",
     };
+
+    /// <summary>
+    /// Bound to the editor's Type ComboBox. Always starts with <see cref="KnownTypes"/>
+    /// and then any custom types passed in via the ctor (typed before, persisted as
+    /// existing bills). Lets the editor surface previously-typed customs without
+    /// requiring a separate settings table.
+    /// </summary>
+    public ObservableCollection<string> TypeOptions { get; } = new();
 
     /// <summary>Bill rate options (the period engine recognises these exactly).</summary>
     public static readonly string[] Rates = { "Monthly", "Bi-Weekly", "Yearly", "Once" };
@@ -67,10 +78,29 @@ public sealed partial class BillEditorViewModel : ObservableObject
 
     public bool CanSave => !string.IsNullOrWhiteSpace(Name);
 
-    public BillEditorViewModel(Bill bill, bool isAddMode)
+    public BillEditorViewModel(Bill bill, bool isAddMode, IEnumerable<string>? extraTypes = null)
     {
         _original = bill;
         IsAddMode = isAddMode;
+
+        foreach (var t in KnownTypes) TypeOptions.Add(t);
+        if (extraTypes is not null)
+        {
+            var known = new HashSet<string>(TypeOptions, StringComparer.OrdinalIgnoreCase);
+            foreach (var t in extraTypes
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (known.Add(t)) TypeOptions.Add(t);
+            }
+        }
+        // If the bill being edited has a type not in the list (e.g. legacy), surface it too.
+        if (!string.IsNullOrWhiteSpace(bill.Type)
+            && !TypeOptions.Any(t => string.Equals(t, bill.Type, StringComparison.OrdinalIgnoreCase)))
+        {
+            TypeOptions.Add(bill.Type);
+        }
 
         _name = bill.Name;
         _type = string.IsNullOrEmpty(bill.Type) ? "Bills" : bill.Type;
