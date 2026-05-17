@@ -18,11 +18,33 @@ public sealed partial class DashboardPageViewModel : ObservableObject
 {
     private readonly IDatabaseService _db;
     private readonly PayPeriodService _periodService;
+    private readonly NotionSyncService? _notion;
 
-    public DashboardPageViewModel(IDatabaseService db)
+    public DashboardPageViewModel(IDatabaseService db, NotionSyncService? notion = null)
     {
         _db = db;
         _periodService = new PayPeriodService(db);
+        _notion = notion;
+    }
+
+    /// <summary>
+    /// Persists a bill edit (from clicking a Dashboard row) and fire-and-forgets
+    /// a Notion push so the change reaches the remote DB without a manual sync.
+    /// Mirrors <c>AllBillsPageViewModel.SaveBillAsync</c>.
+    /// </summary>
+    public Task? PendingNotionPush { get; private set; }
+
+    public async Task SaveBillAsync(Bill bill)
+    {
+        await _db.UpsertBillAsync(bill).ConfigureAwait(true);
+        PendingNotionPush = PushBillSafeAsync(bill);
+    }
+
+    private async Task PushBillSafeAsync(Bill bill)
+    {
+        if (_notion is null || !_notion.HasToken()) return;
+        try { await _notion.PushBillAsync(bill).ConfigureAwait(true); }
+        catch { /* surface via toast later — silent for now to match prior behavior */ }
     }
 
     [ObservableProperty]
