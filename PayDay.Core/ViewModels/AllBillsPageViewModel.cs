@@ -13,8 +13,8 @@ namespace PayDay.ViewModels;
 public enum AllBillsSortColumn
 {
     Name,
-    Cost,
-    Owed,
+    Payment,
+    Remaining,
     Due,
     Rate,
 }
@@ -63,23 +63,23 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NameIndicator))]
-    [NotifyPropertyChangedFor(nameof(CostIndicator))]
-    [NotifyPropertyChangedFor(nameof(OwedIndicator))]
+    [NotifyPropertyChangedFor(nameof(PaymentIndicator))]
+    [NotifyPropertyChangedFor(nameof(RemainingIndicator))]
     [NotifyPropertyChangedFor(nameof(DueIndicator))]
     [NotifyPropertyChangedFor(nameof(RateIndicator))]
     private AllBillsSortColumn _sortColumn = AllBillsSortColumn.Name;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NameIndicator))]
-    [NotifyPropertyChangedFor(nameof(CostIndicator))]
-    [NotifyPropertyChangedFor(nameof(OwedIndicator))]
+    [NotifyPropertyChangedFor(nameof(PaymentIndicator))]
+    [NotifyPropertyChangedFor(nameof(RemainingIndicator))]
     [NotifyPropertyChangedFor(nameof(DueIndicator))]
     [NotifyPropertyChangedFor(nameof(RateIndicator))]
     private bool _sortAscending = true;
 
     public string NameIndicator => IndicatorFor(AllBillsSortColumn.Name);
-    public string CostIndicator => IndicatorFor(AllBillsSortColumn.Cost);
-    public string OwedIndicator => IndicatorFor(AllBillsSortColumn.Owed);
+    public string PaymentIndicator => IndicatorFor(AllBillsSortColumn.Payment);
+    public string RemainingIndicator => IndicatorFor(AllBillsSortColumn.Remaining);
     public string DueIndicator => IndicatorFor(AllBillsSortColumn.Due);
     public string RateIndicator => IndicatorFor(AllBillsSortColumn.Rate);
 
@@ -188,8 +188,8 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
     {
         IEnumerable<Bill> ordered = SortColumn switch
         {
-            AllBillsSortColumn.Cost => bills.OrderBy(b => b.Cost),
-            AllBillsSortColumn.Owed => bills.OrderBy(b => b.Owed),
+            AllBillsSortColumn.Payment   => bills.OrderBy(b => b.Payment),
+            AllBillsSortColumn.Remaining => bills.OrderBy(b => b.Remaining),
             AllBillsSortColumn.Due  => bills.OrderBy(b => b.DueDay),
             AllBillsSortColumn.Rate => bills.OrderBy(b => b.Rate, StringComparer.OrdinalIgnoreCase),
             _                       => bills.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase),

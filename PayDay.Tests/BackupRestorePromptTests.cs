@@ -63,9 +63,9 @@ public class BackupRestorePromptTests
     {
         var (prompt, db, store) = Build();
         var json = BackupSerializer.ToJson(
-            new[] { new Bill { Id = "b1", Name = "Amazon", Type = "Cards", Cost = 50 } },
+            new[] { new Bill { Id = "b1", Name = "Amazon", Type = "Cards", Payment =50 } },
             new[] { new Payment { Id = 1, BillId = "b1", PeriodKey = "2026-05-15", AmountPaid = 50 } },
-            new[] { new Snapshot { Id = 1, SnapshotDate = "2026-05-15", TotalOwed = 1000 } },
+            new[] { new Snapshot { Id = 1, SnapshotDate = "2026-05-15", TotalRemaining =1000 } },
             new Dictionary<string, string?> { ["PayAnchor"] = "2026-05-15" });
         var stamp = new DateTime(2026, 5, 14, 12, 0, 0, DateTimeKind.Utc);
         var name = BackupRotationService.FormatFileName(stamp);
@@ -87,7 +87,7 @@ public class BackupRestorePromptTests
         var db = new FakeDatabaseService();
         var store = new InMemoryBackupStore();
         var backups = new BackupRotationService(db, store);
-        db.Bills.Add(new Bill { Id = "b1", Name = "Electric", Type = "Bills", Cost = 80 });
+        db.Bills.Add(new Bill { Id = "b1", Name = "Electric", Type = "Bills", Payment =80 });
         db.Settings["PayAnchor"] = "2026-05-15";
         var fileName = await backups.CreateAsync();
 

@@ -5,8 +5,8 @@ public sealed class Bill
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
-    public double Cost { get; set; }
-    public double Owed { get; set; }
+    public double Payment { get; set; }
+    public double Remaining { get; set; }
     public double Available { get; set; }
     public double CreditLimit { get; set; }
     public int DueDay { get; set; } = 1;

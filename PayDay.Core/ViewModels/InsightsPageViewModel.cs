@@ -52,7 +52,7 @@ public sealed partial class InsightsPageViewModel : ObservableObject
     private bool _isLoading;
 
     [ObservableProperty]
-    private double _currentTotalOwed;
+    private double _currentTotalRemaining;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSnapshots))]
@@ -78,31 +78,31 @@ public sealed partial class InsightsPageViewModel : ObservableObject
         {
             var bills = await _db.GetAllBillsAsync().ConfigureAwait(true);
             var active = bills.Where(b => b.Active).ToList();
-            CurrentTotalOwed = active.Sum(b => b.Owed);
+            CurrentTotalRemaining = active.Sum(b => b.Remaining);
 
             History.Clear();
             var snapshots = await _db.GetAllSnapshotsAsync().ConfigureAwait(true);
             foreach (var s in snapshots.OrderBy(s => s.SnapshotDate, StringComparer.Ordinal))
             {
-                History.Add(new SnapshotPoint(ParseDate(s.SnapshotDate), s.TotalOwed));
+                History.Add(new SnapshotPoint(ParseDate(s.SnapshotDate), s.TotalRemaining));
             }
             SnapshotCount = History.Count;
 
             TypeBreakdown.Clear();
-            var totalCost = active.Sum(b => b.Cost);
+            var totalPayment = active.Sum(b => b.Payment);
             var grouped = active
                 .GroupBy(b => b.Type)
                 .Select(g => new
                 {
                     Type = g.Key,
-                    Total = g.Sum(b => b.Cost),
+                    Total = g.Sum(b => b.Payment),
                     Count = g.Count(),
                 })
                 .Where(g => g.Total > 0)
                 .OrderByDescending(g => g.Total);
             foreach (var g in grouped)
             {
-                var pct = totalCost > 0 ? Math.Round(g.Total / totalCost * 100.0, 1) : 0;
+                var pct = totalPayment > 0 ? Math.Round(g.Total / totalPayment * 100.0, 1) : 0;
                 TypeBreakdown.Add(new TypeBreakdownEntry(g.Type, g.Total, g.Count, pct));
             }
         }
@@ -125,7 +125,7 @@ public sealed partial class InsightsPageViewModel : ObservableObject
         var snapshot = new Snapshot
         {
             SnapshotDate = date,
-            TotalOwed = active.Sum(b => b.Owed),
+            TotalRemaining = active.Sum(b => b.Remaining),
             Details = SerializeDetails(active),
         };
         var id = await _db.InsertSnapshotAsync(snapshot).ConfigureAwait(true);
@@ -184,20 +184,20 @@ public sealed partial class InsightsPageViewModel : ObservableObject
             : DateTime.Today;
 
     /// <summary>
-    /// Compact JSON-ish list of "id:owed" pairs. Skips the full serializer —
+    /// Compact JSON-ish list of "id:remaining" pairs. Skips the full serializer —
     /// this column is informational/debug only and isn't read back yet.
     /// </summary>
     private static string SerializeDetails(IEnumerable<Bill> bills)
     {
         var entries = bills
-            .Where(b => b.Owed > 0)
-            .Select(b => $"\"{b.Id}\":{b.Owed.ToString("F2", CultureInfo.InvariantCulture)}");
+            .Where(b => b.Remaining > 0)
+            .Select(b => $"\"{b.Id}\":{b.Remaining.ToString("F2", CultureInfo.InvariantCulture)}");
         return "{" + string.Join(",", entries) + "}";
     }
 }
 
-/// <summary>One point in the owed-over-time chart.</summary>
-public sealed record SnapshotPoint(DateTime Date, double TotalOwed);
+/// <summary>One point in the remaining-over-time chart.</summary>
+public sealed record SnapshotPoint(DateTime Date, double TotalRemaining);
 
 /// <summary>One slice of the type-breakdown donut, plus the legend stats.</summary>
-public sealed record TypeBreakdownEntry(string Type, double TotalCost, int Count, double Percent);
+public sealed record TypeBreakdownEntry(string Type, double TotalPayment, int Count, double Percent);

@@ -111,7 +111,7 @@ public class PayPeriodServiceTests
     [Fact]
     public void AssignBillsToPeriods_BiWeeklyBill_AppearsInEveryPeriod()
     {
-        var bill = new Bill { Id = "x", Name = "Bi-weekly", Type = "Loans", Rate = "Bi-Weekly", Active = true, Cost = 50 };
+        var bill = new Bill { Id = "x", Name = "Bi-weekly", Type = "Loans", Rate = "Bi-Weekly", Active = true, Payment =50 };
         var periods = PayPeriodService.GetPayPeriods(
             anchor: new DateTime(2026, 3, 20),
             today: new DateTime(2026, 5, 15));
@@ -128,7 +128,7 @@ public class PayPeriodServiceTests
     [Fact]
     public void AssignBillsToPeriods_OnceBill_NeverAppears()
     {
-        var bill = new Bill { Id = "x", Name = "One-off", Type = "Other", Rate = "Once", Active = true, Cost = 10 };
+        var bill = new Bill { Id = "x", Name = "One-off", Type = "Other", Rate = "Once", Active = true, Payment =10 };
         var periods = PayPeriodService.GetPayPeriods(
             anchor: new DateTime(2026, 3, 20),
             today: new DateTime(2026, 5, 15));
@@ -141,7 +141,7 @@ public class PayPeriodServiceTests
     [Fact]
     public void AssignBillsToPeriods_InactiveBill_IsExcluded()
     {
-        var bill = new Bill { Id = "x", Name = "Hidden", Type = "Bills", Rate = "Bi-Weekly", Active = false, Cost = 10 };
+        var bill = new Bill { Id = "x", Name = "Hidden", Type = "Bills", Rate = "Bi-Weekly", Active = false, Payment =10 };
         var periods = PayPeriodService.GetPayPeriods(
             anchor: new DateTime(2026, 3, 20),
             today: new DateTime(2026, 5, 15));
@@ -163,7 +163,7 @@ public class PayPeriodServiceTests
             Rate = "Yearly",
             YearlyDate = "12-25",
             Active = true,
-            Cost = 100,
+            Payment =100,
         };
 
         // 3 periods centered on Dec 25, 2026
@@ -183,8 +183,8 @@ public class PayPeriodServiceTests
     {
         var bills = new[]
         {
-            new Bill { Id = "a", Name = "A", Type = "Loans", Rate = "Bi-Weekly", Active = true, Cost = 100 },
-            new Bill { Id = "b", Name = "B", Type = "Loans", Rate = "Bi-Weekly", Active = true, Cost = 50.50 },
+            new Bill { Id = "a", Name = "A", Type = "Loans", Rate = "Bi-Weekly", Active = true, Payment =100 },
+            new Bill { Id = "b", Name = "B", Type = "Loans", Rate = "Bi-Weekly", Active = true, Payment =50.50 },
         };
         var periods = PayPeriodService.GetPayPeriods(
             anchor: new DateTime(2026, 3, 20),
@@ -200,8 +200,8 @@ public class PayPeriodServiceTests
     {
         var bills = new[]
         {
-            new Bill { Id = "late", Name = "Late", Type = "Bills", Rate = "Monthly", DueDay = 25, Active = true, Cost = 10 },
-            new Bill { Id = "early", Name = "Early", Type = "Bills", Rate = "Monthly", DueDay = 1, Active = true, Cost = 10 },
+            new Bill { Id = "late", Name = "Late", Type = "Bills", Rate = "Monthly", DueDay = 25, Active = true, Payment =10 },
+            new Bill { Id = "early", Name = "Early", Type = "Bills", Rate = "Monthly", DueDay = 1, Active = true, Payment =10 },
         };
         // Period containing both day 1 and day 25 — pick a long window of "This".
         var anchor = new DateTime(2026, 4, 1);

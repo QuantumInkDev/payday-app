@@ -45,7 +45,8 @@ public static class BackupSerializer
 
     public static BackupFile FromJson(string json)
     {
-        var parsed = JsonSerializer.Deserialize<BackupFile>(json, Options)
+        var migrated = MigrateLegacyBillKeys(json);
+        var parsed = JsonSerializer.Deserialize<BackupFile>(migrated, Options)
             ?? throw new InvalidOperationException("Backup file is empty.");
         if (parsed.FormatVersion <= 0)
         {
@@ -62,6 +63,82 @@ public static class BackupSerializer
         parsed.Snapshots ??= new List<Snapshot>();
         parsed.Settings ??= new Dictionary<string, string?>();
         return parsed;
+    }
+
+    /// <summary>
+    /// Older v1 backups (pre-Phase-7c) stored <c>cost</c> and <c>owed</c> keys
+    /// inside each bill. After the Cost→Payment / Owed→Remaining rename, those
+    /// keys no longer map to anything. Rewrite legacy keys to the new names so
+    /// existing backup files keep restoring correctly.
+    /// </summary>
+    private static string MigrateLegacyBillKeys(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("bills", out var billsEl) || billsEl.ValueKind != JsonValueKind.Array)
+        {
+            return json;
+        }
+
+        var needsRewrite = false;
+        foreach (var bill in billsEl.EnumerateArray())
+        {
+            if (bill.ValueKind != JsonValueKind.Object) continue;
+            if (bill.TryGetProperty("cost", out _) || bill.TryGetProperty("owed", out _))
+            {
+                needsRewrite = true;
+                break;
+            }
+        }
+        if (!needsRewrite) return json;
+
+        using var stream = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            WriteRewrittenRoot(doc.RootElement, writer);
+        }
+        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteRewrittenRoot(JsonElement root, Utf8JsonWriter writer)
+    {
+        writer.WriteStartObject();
+        foreach (var prop in root.EnumerateObject())
+        {
+            if (prop.NameEquals("bills") && prop.Value.ValueKind == JsonValueKind.Array)
+            {
+                writer.WritePropertyName("bills");
+                writer.WriteStartArray();
+                foreach (var bill in prop.Value.EnumerateArray())
+                {
+                    WriteRewrittenBill(bill, writer);
+                }
+                writer.WriteEndArray();
+            }
+            else
+            {
+                prop.WriteTo(writer);
+            }
+        }
+        writer.WriteEndObject();
+    }
+
+    private static void WriteRewrittenBill(JsonElement bill, Utf8JsonWriter writer)
+    {
+        if (bill.ValueKind != JsonValueKind.Object)
+        {
+            bill.WriteTo(writer);
+            return;
+        }
+        writer.WriteStartObject();
+        foreach (var prop in bill.EnumerateObject())
+        {
+            var name = prop.NameEquals("cost") ? "payment"
+                     : prop.NameEquals("owed") ? "remaining"
+                     : prop.Name;
+            writer.WritePropertyName(name);
+            prop.Value.WriteTo(writer);
+        }
+        writer.WriteEndObject();
     }
 }
 

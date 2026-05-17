@@ -13,7 +13,7 @@ public class InsightsPageViewModelTests
         string type = "Bills", double owed = 0, bool active = true)
         => new()
         {
-            Id = id, Name = name, Type = type, Cost = cost, Owed = owed,
+            Id = id, Name = name, Type = type, Payment = cost, Remaining = owed,
             Active = active, Rate = "Monthly", DueDay = 1,
         };
 
@@ -28,22 +28,22 @@ public class InsightsPageViewModelTests
         var vm = new InsightsPageViewModel(db);
         await vm.LoadAsync();
 
-        Assert.Equal(350, vm.CurrentTotalOwed);
+        Assert.Equal(350, vm.CurrentTotalRemaining);
     }
 
     [Fact]
     public async Task LoadAsync_History_OrderedByDateAscending()
     {
         var db = new FakeDatabaseService();
-        db.Snapshots.Add(new Snapshot { Id = 1, SnapshotDate = "2026-03-15", TotalOwed = 500 });
-        db.Snapshots.Add(new Snapshot { Id = 2, SnapshotDate = "2026-01-01", TotalOwed = 100 });
-        db.Snapshots.Add(new Snapshot { Id = 3, SnapshotDate = "2026-02-15", TotalOwed = 300 });
+        db.Snapshots.Add(new Snapshot { Id = 1, SnapshotDate = "2026-03-15", TotalRemaining =500 });
+        db.Snapshots.Add(new Snapshot { Id = 2, SnapshotDate = "2026-01-01", TotalRemaining =100 });
+        db.Snapshots.Add(new Snapshot { Id = 3, SnapshotDate = "2026-02-15", TotalRemaining =300 });
 
         var vm = new InsightsPageViewModel(db);
         await vm.LoadAsync();
 
         Assert.Equal(3, vm.SnapshotCount);
-        Assert.Equal(new[] { 100.0, 300, 500 }, vm.History.Select(p => p.TotalOwed));
+        Assert.Equal(new[] { 100.0, 300, 500 }, vm.History.Select(p => p.TotalRemaining));
         Assert.True(vm.History[0].Date < vm.History[1].Date);
     }
 
@@ -62,7 +62,7 @@ public class InsightsPageViewModelTests
         // Total = 300. Cards = 200 (66.7%), Bills = 50 (16.7%), Loans = 50 (16.7%).
         Assert.Equal(3, vm.TypeBreakdown.Count);
         Assert.Equal("Cards", vm.TypeBreakdown[0].Type);
-        Assert.Equal(200, vm.TypeBreakdown[0].TotalCost);
+        Assert.Equal(200, vm.TypeBreakdown[0].TotalPayment);
         Assert.Equal(2, vm.TypeBreakdown[0].Count);
         Assert.Equal(66.7, vm.TypeBreakdown[0].Percent);
     }
@@ -109,7 +109,7 @@ public class InsightsPageViewModelTests
         Assert.True(id > 0);
         Assert.Equal(1, vm.SnapshotCount);
         Assert.Single(vm.History);
-        Assert.Equal(500, vm.History[0].TotalOwed);
+        Assert.Equal(500, vm.History[0].TotalRemaining);
         Assert.Equal(new DateTime(2026, 5, 15), vm.History[0].Date);
         Assert.Single(db.Snapshots);
         Assert.Contains("\"a\":500.00", db.Snapshots[0].Details);
@@ -124,11 +124,11 @@ public class InsightsPageViewModelTests
         await vm.LoadAsync();
         Assert.Contains("No snapshots", vm.SummaryLabel);
 
-        db.Snapshots.Add(new Snapshot { SnapshotDate = "2026-01-01", TotalOwed = 100 });
+        db.Snapshots.Add(new Snapshot { SnapshotDate = "2026-01-01", TotalRemaining =100 });
         await vm.LoadAsync();
         Assert.Equal("1 snapshot saved", vm.SummaryLabel);
 
-        db.Snapshots.Add(new Snapshot { SnapshotDate = "2026-02-01", TotalOwed = 100 });
+        db.Snapshots.Add(new Snapshot { SnapshotDate = "2026-02-01", TotalRemaining =100 });
         await vm.LoadAsync();
         Assert.Equal("2 snapshots saved", vm.SummaryLabel);
     }
@@ -154,7 +154,7 @@ public class InsightsPageViewModelTests
 
         await vm.LoadAsync();
 
-        Assert.Equal(0, vm.CurrentTotalOwed);
+        Assert.Equal(0, vm.CurrentTotalRemaining);
         Assert.Empty(vm.History);
         Assert.Empty(vm.TypeBreakdown);
         Assert.False(vm.HasSnapshots);

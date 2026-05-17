@@ -10,7 +10,7 @@ namespace PayDay.Services;
 
 public sealed class DatabaseService : IDatabaseService
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
     private const string SchemaVersionKey = "SchemaVersion";
 
     private static readonly Lazy<DatabaseService> _instance = new(() => new DatabaseService());
@@ -71,10 +71,48 @@ public sealed class DatabaseService : IDatabaseService
         var existing = await GetSettingAsync(SchemaVersionKey).ConfigureAwait(false);
         var version = int.TryParse(existing, out var v) ? v : 0;
 
-        // Future schema bumps: while (version < CurrentSchemaVersion) { ... apply migration ...; version++; }
+        // Schema v1 → v2: rename Bills.Cost → Payment, Bills.Owed → Remaining,
+        // Snapshots.TotalOwed → TotalRemaining. ALTER TABLE RENAME COLUMN is
+        // safe and lossless on SQLite 3.25+. The Bills renames sit in one
+        // transaction; the Snapshots rename is separate so each is conditional
+        // on the column actually existing (lets the migration re-run safely).
+        if (version < 2)
+        {
+            if (await ColumnExistsAsync("Bills", "Cost").ConfigureAwait(false))
+            {
+                await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+                await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+                await ExecuteAsync(conn, tx, "ALTER TABLE Bills RENAME COLUMN Cost TO Payment;").ConfigureAwait(false);
+                await ExecuteAsync(conn, tx, "ALTER TABLE Bills RENAME COLUMN Owed TO Remaining;").ConfigureAwait(false);
+                await tx.CommitAsync().ConfigureAwait(false);
+            }
+            if (await ColumnExistsAsync("Snapshots", "TotalOwed").ConfigureAwait(false))
+            {
+                await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+                await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+                await ExecuteAsync(conn, tx, "ALTER TABLE Snapshots RENAME COLUMN TotalOwed TO TotalRemaining;").ConfigureAwait(false);
+                await tx.CommitAsync().ConfigureAwait(false);
+            }
+        }
+
         if (version == CurrentSchemaVersion) return;
 
         await SetSettingAsync(SchemaVersionKey, CurrentSchemaVersion.ToString()).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ColumnExistsAsync(string table, string column)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table});";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var nameOrdinal = reader.GetOrdinal("name");
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            if (string.Equals(reader.GetString(nameOrdinal), column, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------
@@ -174,15 +212,15 @@ public sealed class DatabaseService : IDatabaseService
         await using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = """
-            INSERT INTO Bills(Id, Name, Type, Cost, Owed, Available, CreditLimit, DueDay, Rate, APR,
+            INSERT INTO Bills(Id, Name, Type, Payment, Remaining, Available, CreditLimit, DueDay, Rate, APR,
                               AutoPay, Active, YearlyDate, Notes, NotionPageId)
-            VALUES($Id, $Name, $Type, $Cost, $Owed, $Available, $CreditLimit, $DueDay, $Rate, $APR,
+            VALUES($Id, $Name, $Type, $Payment, $Remaining, $Available, $CreditLimit, $DueDay, $Rate, $APR,
                    $AutoPay, $Active, $YearlyDate, $Notes, $NotionPageId)
             ON CONFLICT(Id) DO UPDATE SET
                 Name = excluded.Name,
                 Type = excluded.Type,
-                Cost = excluded.Cost,
-                Owed = excluded.Owed,
+                Payment = excluded.Payment,
+                Remaining = excluded.Remaining,
                 Available = excluded.Available,
                 CreditLimit = excluded.CreditLimit,
                 DueDay = excluded.DueDay,
@@ -198,8 +236,8 @@ public sealed class DatabaseService : IDatabaseService
         cmd.Parameters.AddWithValue("$Id", bill.Id);
         cmd.Parameters.AddWithValue("$Name", bill.Name);
         cmd.Parameters.AddWithValue("$Type", bill.Type);
-        cmd.Parameters.AddWithValue("$Cost", bill.Cost);
-        cmd.Parameters.AddWithValue("$Owed", bill.Owed);
+        cmd.Parameters.AddWithValue("$Payment", bill.Payment);
+        cmd.Parameters.AddWithValue("$Remaining", bill.Remaining);
         cmd.Parameters.AddWithValue("$Available", bill.Available);
         cmd.Parameters.AddWithValue("$CreditLimit", bill.CreditLimit);
         cmd.Parameters.AddWithValue("$DueDay", bill.DueDay);
@@ -218,8 +256,8 @@ public sealed class DatabaseService : IDatabaseService
         Id           = r.GetString(r.GetOrdinal("Id")),
         Name         = r.GetString(r.GetOrdinal("Name")),
         Type         = r.GetString(r.GetOrdinal("Type")),
-        Cost         = r.GetDouble(r.GetOrdinal("Cost")),
-        Owed         = r.GetDouble(r.GetOrdinal("Owed")),
+        Payment      = r.GetDouble(r.GetOrdinal("Payment")),
+        Remaining    = r.GetDouble(r.GetOrdinal("Remaining")),
         Available    = r.GetDouble(r.GetOrdinal("Available")),
         CreditLimit  = r.GetDouble(r.GetOrdinal("CreditLimit")),
         DueDay       = r.GetInt32(r.GetOrdinal("DueDay")),
@@ -322,12 +360,12 @@ public sealed class DatabaseService : IDatabaseService
         await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO Snapshots(SnapshotDate, TotalOwed, Details, NotionPageId)
+            INSERT INTO Snapshots(SnapshotDate, TotalRemaining, Details, NotionPageId)
             VALUES($Date, $Total, $Details, $NotionPageId);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$Date", snapshot.SnapshotDate);
-        cmd.Parameters.AddWithValue("$Total", snapshot.TotalOwed);
+        cmd.Parameters.AddWithValue("$Total", snapshot.TotalRemaining);
         cmd.Parameters.AddWithValue("$Details", (object?)snapshot.Details ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$NotionPageId", (object?)snapshot.NotionPageId ?? DBNull.Value);
         var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
@@ -352,7 +390,7 @@ public sealed class DatabaseService : IDatabaseService
     {
         Id           = r.GetInt64(r.GetOrdinal("Id")),
         SnapshotDate = r.GetString(r.GetOrdinal("SnapshotDate")),
-        TotalOwed    = r.GetDouble(r.GetOrdinal("TotalOwed")),
+        TotalRemaining = r.GetDouble(r.GetOrdinal("TotalRemaining")),
         Details      = r.IsDBNull(r.GetOrdinal("Details"))      ? null : r.GetString(r.GetOrdinal("Details")),
         NotionPageId = r.IsDBNull(r.GetOrdinal("NotionPageId")) ? null : r.GetString(r.GetOrdinal("NotionPageId")),
     };
@@ -415,11 +453,11 @@ public sealed class DatabaseService : IDatabaseService
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = """
-                INSERT INTO Snapshots(SnapshotDate, TotalOwed, Details, NotionPageId)
+                INSERT INTO Snapshots(SnapshotDate, TotalRemaining, Details, NotionPageId)
                 VALUES($Date, $Total, $Details, $NotionPageId);
                 """;
             cmd.Parameters.AddWithValue("$Date", snapshot.SnapshotDate);
-            cmd.Parameters.AddWithValue("$Total", snapshot.TotalOwed);
+            cmd.Parameters.AddWithValue("$Total", snapshot.TotalRemaining);
             cmd.Parameters.AddWithValue("$Details", (object?)snapshot.Details ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$NotionPageId", (object?)snapshot.NotionPageId ?? DBNull.Value);
             await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -475,8 +513,8 @@ public sealed class DatabaseService : IDatabaseService
             Id           TEXT PRIMARY KEY,
             Name         TEXT NOT NULL,
             Type         TEXT NOT NULL,
-            Cost         REAL NOT NULL DEFAULT 0,
-            Owed         REAL DEFAULT 0,
+            Payment      REAL NOT NULL DEFAULT 0,
+            Remaining    REAL DEFAULT 0,
             Available    REAL DEFAULT 0,
             CreditLimit  REAL DEFAULT 0,
             DueDay       INTEGER DEFAULT 1,
@@ -505,11 +543,11 @@ public sealed class DatabaseService : IDatabaseService
 
     private const string SchemaSnapshots = """
         CREATE TABLE IF NOT EXISTS Snapshots (
-            Id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            SnapshotDate TEXT NOT NULL,
-            TotalOwed    REAL NOT NULL,
-            Details      TEXT,
-            NotionPageId TEXT
+            Id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            SnapshotDate   TEXT NOT NULL,
+            TotalRemaining REAL NOT NULL,
+            Details        TEXT,
+            NotionPageId   TEXT
         );
         """;
 

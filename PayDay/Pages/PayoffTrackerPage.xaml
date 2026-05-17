@@ -44,12 +44,12 @@
                 <TextBlock
                     FontSize="11"
                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    Text="TOTAL OWED"
+                    Text="TOTAL REMAINING"
                     TextAlignment="Right" />
                 <TextBlock
                     FontSize="22"
                     FontWeight="SemiBold"
-                    Text="{x:Bind ViewModel.TotalOwed, Mode=OneWay, Converter={StaticResource Currency}}"
+                    Text="{x:Bind ViewModel.TotalRemaining, Mode=OneWay, Converter={StaticResource Currency}}"
                     TextAlignment="Right" />
             </StackPanel>
         </Grid>
@@ -115,12 +115,12 @@
                                         <TextBlock
                                             FontSize="11"
                                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                            Text="OWED"
+                                            Text="REMAINING"
                                             TextAlignment="Right" />
                                         <TextBlock
                                             FontSize="20"
                                             FontWeight="SemiBold"
-                                            Text="{x:Bind Bill.Owed, Converter={StaticResource Currency}}"
+                                            Text="{x:Bind Bill.Remaining, Converter={StaticResource Currency}}"
                                             TextAlignment="Right" />
                                     </StackPanel>
                                 </Grid>
@@ -144,7 +144,7 @@
                                             Grid.Column="1"
                                             FontSize="11"
                                             Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run Text="{x:Bind Bill.Owed, Converter={StaticResource Currency}}" />
+                                            <Run Text="{x:Bind Bill.Remaining, Converter={StaticResource Currency}}" />
                                             <Run Text=" / " />
                                             <Run Text="{x:Bind Bill.CreditLimit, Converter={StaticResource Currency}}" />
                                         </TextBlock>

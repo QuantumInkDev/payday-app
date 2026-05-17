@@ -172,7 +172,7 @@
                                     <TextBlock
                                         Grid.Column="2"
                                         VerticalAlignment="Center"
-                                        Text="{x:Bind Bill.Cost, Converter={StaticResource Currency}}" />
+                                        Text="{x:Bind Bill.Payment, Converter={StaticResource Currency}}" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

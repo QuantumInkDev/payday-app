@@ -40,8 +40,8 @@ public sealed partial class InsightsPage : Page
         {
             new LineSeries<double>
             {
-                Values = ViewModel.History.Select(p => p.TotalOwed).ToArray(),
-                Name = "Total Owed",
+                Values = ViewModel.History.Select(p => p.TotalRemaining).ToArray(),
+                Name = "Total Remaining",
                 GeometrySize = 8,
                 Stroke = new SolidColorPaint(new SKColor(0x6C, 0x5C, 0xE7), 2),
                 Fill = new SolidColorPaint(new SKColor(0x6C, 0x5C, 0xE7, 40)),
@@ -70,7 +70,7 @@ public sealed partial class InsightsPage : Page
         BreakdownChart.Series = ViewModel.TypeBreakdown
             .Select(entry => new PieSeries<double>
             {
-                Values = new[] { entry.TotalCost },
+                Values = new[] { entry.TotalPayment },
                 Name = entry.Type,
                 Fill = new SolidColorPaint(ColorForType(entry.Type)),
                 InnerRadius = 60,

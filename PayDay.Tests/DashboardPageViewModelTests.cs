@@ -28,9 +28,9 @@ public class DashboardPageViewModelTests
         double owed = 0, double creditLimit = 0)
         => new()
         {
-            Id = id, Name = name, Cost = cost, Type = type, Rate = rate,
+            Id = id, Name = name, Payment = cost, Type = type, Rate = rate,
             DueDay = dueDay, AutoPay = autoPay, Active = active,
-            Owed = owed, CreditLimit = creditLimit,
+            Remaining = owed, CreditLimit = creditLimit,
         };
 
     [Fact]
@@ -60,7 +60,7 @@ public class DashboardPageViewModelTests
         await vm.LoadAsync(DefaultToday);
 
         Assert.Equal(100, vm.TotalMonthlyObligations);
-        Assert.Equal(500, vm.TotalOwed);
+        Assert.Equal(500, vm.TotalRemaining);
     }
 
     [Fact]
@@ -165,9 +165,9 @@ public class DashboardPageViewModelTests
         await vm.LoadAsync(DefaultToday);
 
         var section = vm.Sections[0];
-        section.SortByCommand.Execute("Cost");
+        section.SortByCommand.Execute("Payment");
 
-        Assert.Equal(new[] { 50.0, 100.0, 200.0 }, section.ManualBills.Select(b => b.Bill.Cost));
+        Assert.Equal(new[] { 50.0, 100.0, 200.0 }, section.ManualBills.Select(b => b.Bill.Payment));
     }
 
     [Fact]
@@ -185,8 +185,8 @@ public class DashboardPageViewModelTests
         section.SortByCommand.Execute("Name"); // desc
         Assert.False(section.SortAscending);
 
-        section.SortByCommand.Execute("Cost"); // switching columns → ascending
-        Assert.Equal(DashboardSortColumn.Cost, section.SortColumn);
+        section.SortByCommand.Execute("Payment"); // switching columns → ascending
+        Assert.Equal(DashboardSortColumn.Payment, section.SortColumn);
         Assert.True(section.SortAscending);
     }
 

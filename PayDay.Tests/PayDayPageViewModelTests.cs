@@ -26,7 +26,7 @@ public class PayDayPageViewModelTests
         bool autoPay = false, int dueDay = 20, string rate = "Monthly", string type = "Bills")
         => new()
         {
-            Id = id, Name = name, Cost = cost, AutoPay = autoPay,
+            Id = id, Name = name, Payment = cost, AutoPay = autoPay,
             DueDay = dueDay, Rate = rate, Type = type, Active = true,
         };
 

@@ -76,11 +76,11 @@
                         FontSize="11"
                         FontWeight="SemiBold"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        Text="TOTAL OWED" />
+                        Text="TOTAL REMAINING" />
                     <TextBlock
                         FontSize="24"
                         FontWeight="SemiBold"
-                        Text="{x:Bind ViewModel.TotalOwed, Mode=OneWay, Converter={StaticResource Currency}}" />
+                        Text="{x:Bind ViewModel.TotalRemaining, Mode=OneWay, Converter={StaticResource Currency}}" />
                     <TextBlock
                         FontSize="11"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
@@ -276,17 +276,17 @@
                                             Grid.Column="3"
                                             Padding="0"
                                             Command="{x:Bind SortByCommand}"
-                                            CommandParameter="Cost">
+                                            CommandParameter="Payment">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock
                                                     FontSize="11"
                                                     FontWeight="SemiBold"
                                                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                    Text="COST" />
+                                                    Text="PAYMENT" />
                                                 <TextBlock
                                                     FontSize="11"
                                                     Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                                                    Text="{x:Bind CostIndicator, Mode=OneWay}" />
+                                                    Text="{x:Bind PaymentIndicator, Mode=OneWay}" />
                                             </StackPanel>
                                         </HyperlinkButton>
                                     </Grid>
@@ -328,7 +328,7 @@
                                                         Grid.Column="3"
                                                         VerticalAlignment="Center"
                                                         FontWeight="SemiBold"
-                                                        Text="{x:Bind Bill.Cost, Converter={StaticResource Currency}}" />
+                                                        Text="{x:Bind Bill.Payment, Converter={StaticResource Currency}}" />
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -407,7 +407,7 @@
                                                         Grid.Column="3"
                                                         VerticalAlignment="Center"
                                                         FontWeight="SemiBold"
-                                                        Text="{x:Bind Bill.Cost, Converter={StaticResource Currency}}" />
+                                                        Text="{x:Bind Bill.Payment, Converter={StaticResource Currency}}" />
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>

@@ -20,7 +20,7 @@ public class AutoBackupTests
     {
         var db = new FakeDatabaseService();
         db.Settings["PayAnchor"] = "2026-05-15";
-        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Cost = 400, DueDay = 15, Rate = "Monthly", Active = true });
+        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Payment =400, DueDay = 15, Rate = "Monthly", Active = true });
         return db;
     }
 
@@ -87,7 +87,7 @@ public class AutoBackupTests
     public async Task MarkAllPaid_TriggersExactlyOneBackup()
     {
         var db = SeedDb();
-        db.Bills.Add(new Bill { Id = "2", Name = "Phone", Type = "Bills", Cost = 100, DueDay = 15, Rate = "Monthly", Active = true });
+        db.Bills.Add(new Bill { Id = "2", Name = "Phone", Type = "Bills", Payment =100, DueDay = 15, Rate = "Monthly", Active = true });
         var store = new InMemoryBackupStore();
         var backups = new BackupRotationService(db, store);
         var vm = new PayDayPageViewModel(db, notion: null, backups: backups);

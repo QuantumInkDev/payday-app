@@ -21,7 +21,7 @@ public class AutoSyncTests
         db.Settings[NotionSyncService.BillsDataSourceSetting] = "bills-ds";
         db.Settings[NotionSyncService.PaymentsDataSourceSetting] = "payments-ds";
         db.Settings[NotionSyncService.SnapshotsDataSourceSetting] = "snap-ds";
-        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Cost = 400, DueDay = 15, Rate = "Monthly", Active = true });
+        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Payment =400, DueDay = 15, Rate = "Monthly", Active = true });
         return db;
     }
 
@@ -116,7 +116,7 @@ public class AutoSyncTests
     public async Task MarkAllPaid_PushesEveryPayment()
     {
         var db = SeedDb();
-        db.Bills.Add(new Bill { Id = "2", Name = "Phone", Type = "Bills", Cost = 100, DueDay = 15, Rate = "Monthly", Active = true });
+        db.Bills.Add(new Bill { Id = "2", Name = "Phone", Type = "Bills", Payment =100, DueDay = 15, Rate = "Monthly", Active = true });
         var handler = new RecordingHttpHandler();
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "p" }"""));
         using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
@@ -237,12 +237,12 @@ public class AutoSyncTests
         await vm.LoadAsync();
 
         var bill = db.Bills.Single();
-        bill.Cost = 450;
+        bill.Payment =450;
         await vm.SaveBillAsync(bill);
         Assert.NotNull(vm.PendingNotionPush);
         await vm.PendingNotionPush!;
 
-        Assert.Equal(450, db.Bills.Single().Cost);
+        Assert.Equal(450, db.Bills.Single().Payment);
         Assert.Equal(NotionPushStatus.Ok, vm.LastNotionPushStatus);
         Assert.Empty(vm.LastNotionPushError);
         var req = Assert.Single(handler.Requests);
@@ -264,11 +264,11 @@ public class AutoSyncTests
         await vm.LoadAsync();
 
         var bill = db.Bills.Single();
-        bill.Cost = 999;
+        bill.Payment =999;
         await vm.SaveBillAsync(bill);
         await vm.PendingNotionPush!;
 
-        Assert.Equal(999, db.Bills.Single().Cost); // local persist is NOT rolled back
+        Assert.Equal(999, db.Bills.Single().Payment); // local persist is NOT rolled back
         Assert.Equal(NotionPushStatus.Failed, vm.LastNotionPushStatus);
         Assert.NotEmpty(vm.LastNotionPushError);
     }

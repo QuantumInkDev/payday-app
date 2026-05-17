@@ -13,8 +13,8 @@ public class PayoffTrackerPageViewModelTests
         string type = "Cards", bool active = true)
         => new()
         {
-            Id = id, Name = name, Type = type, Cost = cost,
-            Owed = owed, APR = apr, CreditLimit = creditLimit,
+            Id = id, Name = name, Type = type, Payment = cost,
+            Remaining = owed, APR = apr, CreditLimit = creditLimit,
             Active = active,
         };
 
@@ -130,7 +130,7 @@ public class PayoffTrackerPageViewModelTests
         var vm = new PayoffTrackerPageViewModel(db);
         await vm.LoadAsync();
 
-        Assert.Equal(350, vm.TotalOwed);
+        Assert.Equal(350, vm.TotalRemaining);
         Assert.False(vm.IsEmpty);
         Assert.Contains("2 bills", vm.SummaryLabel);
     }
@@ -145,7 +145,7 @@ public class PayoffTrackerPageViewModelTests
 
         Assert.True(vm.IsEmpty);
         Assert.Equal(0, vm.ItemCount);
-        Assert.Equal(0, vm.TotalOwed);
+        Assert.Equal(0, vm.TotalRemaining);
     }
 
     [Fact]

@@ -93,34 +93,34 @@
                 Grid.Column="2"
                 Padding="0"
                 Command="{x:Bind ViewModel.SortByCommand}"
-                CommandParameter="Cost">
+                CommandParameter="Payment">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock
                         FontSize="11"
                         FontWeight="SemiBold"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        Text="COST" />
+                        Text="PAYMENT" />
                     <TextBlock
                         FontSize="11"
                         Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                        Text="{x:Bind ViewModel.CostIndicator, Mode=OneWay}" />
+                        Text="{x:Bind ViewModel.PaymentIndicator, Mode=OneWay}" />
                 </StackPanel>
             </HyperlinkButton>
             <HyperlinkButton
                 Grid.Column="3"
                 Padding="0"
                 Command="{x:Bind ViewModel.SortByCommand}"
-                CommandParameter="Owed">
+                CommandParameter="Remaining">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock
                         FontSize="11"
                         FontWeight="SemiBold"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        Text="OWED" />
+                        Text="REMAINING" />
                     <TextBlock
                         FontSize="11"
                         Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                        Text="{x:Bind ViewModel.OwedIndicator, Mode=OneWay}" />
+                        Text="{x:Bind ViewModel.RemainingIndicator, Mode=OneWay}" />
                 </StackPanel>
             </HyperlinkButton>
             <HyperlinkButton
@@ -250,12 +250,12 @@
                                                 <TextBlock
                                                     Grid.Column="2"
                                                     VerticalAlignment="Center"
-                                                    Text="{x:Bind Cost, Converter={StaticResource Currency}}" />
+                                                    Text="{x:Bind Payment, Converter={StaticResource Currency}}" />
 
                                                 <TextBlock
                                                     Grid.Column="3"
                                                     VerticalAlignment="Center"
-                                                    Text="{x:Bind Owed, Converter={StaticResource Currency}}" />
+                                                    Text="{x:Bind Remaining, Converter={StaticResource Currency}}" />
 
                                                 <TextBlock
                                                     Grid.Column="4"

@@ -42,7 +42,7 @@ public class NotionSyncServiceTests
         string lastEdited,
         string type = "Cards",
         double payment = 0,
-        double owed = 0,
+        double remaining = 0,
         bool active = true,
         bool autoPay = false,
         int dueDay = 1)
@@ -54,7 +54,7 @@ public class NotionSyncServiceTests
         var typeSelect = $$"""{ "id": "t1", "name": {{JsonSerializer.Serialize(type)}}, "color": "default" }""";
         var billIdText = T(billId);
         var paymentN = payment.ToString("R", CultureInfo.InvariantCulture);
-        var owedN = owed.ToString("R", CultureInfo.InvariantCulture);
+        var remainingN = remaining.ToString("R", CultureInfo.InvariantCulture);
         var dueDayN = dueDay.ToString(CultureInfo.InvariantCulture);
         var activeC = active ? "true" : "false";
         var autoPayC = autoPay ? "true" : "false";
@@ -69,7 +69,7 @@ public class NotionSyncServiceTests
             "Name":         { "type": "title",     "title":     {{nameTitle}} },
             "Type":         { "type": "select",    "select":    {{typeSelect}} },
             "Payment":      { "type": "number",    "number": {{paymentN}} },
-            "Owed":         { "type": "number",    "number": {{owedN}} },
+            "Remaining":    { "type": "number",    "number": {{remainingN}} },
             "Available":    { "type": "number",    "number": 0 },
             "Credit Limit": { "type": "number",    "number": 0 },
             "Due Day":      { "type": "number",    "number": {{dueDayN}} },
@@ -154,7 +154,7 @@ public class NotionSyncServiceTests
     public async Task SyncBills_LocalBillNotInNotion_CreatesPage()
     {
         var (db, creds) = SetupFakes();
-        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Cost = 400, DueDay = 8, Rate = "Monthly", Active = true, UpdatedAt = "2026-05-15 10:00:00" });
+        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Payment =400, DueDay = 8, Rate = "Monthly", Active = true, UpdatedAt = "2026-05-15 10:00:00" });
         var handler = new RecordingHttpHandler();
         handler.OnPost($"v1/data_sources/{BillsDsId}/query", _ => RecordingHttpHandler.Ok(QueryResponse()));
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "new-page-id" }"""));
@@ -183,7 +183,7 @@ public class NotionSyncServiceTests
             Id = "1",
             Name = "Electric (renamed)",
             Type = "Bills",
-            Cost = 400,
+            Payment =400,
             DueDay = 8,
             Rate = "Monthly",
             Active = true,
@@ -216,7 +216,7 @@ public class NotionSyncServiceTests
             Id = "1",
             Name = "Electric",
             Type = "Bills",
-            Cost = 400,
+            Payment =400,
             DueDay = 8,
             Rate = "Monthly",
             Active = true,
@@ -232,7 +232,7 @@ public class NotionSyncServiceTests
 
         Assert.Equal(1, result.Pulled);
         Assert.Equal("Electric Co.", db.Bills[0].Name);
-        Assert.Equal(425, db.Bills[0].Cost);
+        Assert.Equal(425, db.Bills[0].Payment);
         Assert.Equal("page-1", db.Bills[0].NotionPageId);
         Assert.DoesNotContain(handler.Requests, r => r.Method == HttpMethod.Patch);
     }
@@ -247,7 +247,7 @@ public class NotionSyncServiceTests
             Id = "1",
             Name = "Electric",
             Type = "Bills",
-            Cost = 400,
+            Payment =400,
             DueDay = 8,
             Rate = "Monthly",
             Active = true,
@@ -283,7 +283,7 @@ public class NotionSyncServiceTests
         Assert.Single(db.Bills);
         Assert.Equal("99", db.Bills[0].Id);
         Assert.Equal("Internet", db.Bills[0].Name);
-        Assert.Equal(75, db.Bills[0].Cost);
+        Assert.Equal(75, db.Bills[0].Payment);
         Assert.Equal("page-2", db.Bills[0].NotionPageId);
     }
 
@@ -307,8 +307,8 @@ public class NotionSyncServiceTests
     public async Task SyncBills_PageCreateFailure_RecordedAsError_OthersContinue()
     {
         var (db, creds) = SetupFakes();
-        db.Bills.Add(new Bill { Id = "1", Name = "Bad", Type = "Bills", Cost = 0, DueDay = 1, Rate = "Monthly", Active = true, UpdatedAt = "2026-05-15 10:00:00" });
-        db.Bills.Add(new Bill { Id = "2", Name = "Good", Type = "Bills", Cost = 0, DueDay = 1, Rate = "Monthly", Active = true, UpdatedAt = "2026-05-15 10:00:00" });
+        db.Bills.Add(new Bill { Id = "1", Name = "Bad", Type = "Bills", Payment =0, DueDay = 1, Rate = "Monthly", Active = true, UpdatedAt = "2026-05-15 10:00:00" });
+        db.Bills.Add(new Bill { Id = "2", Name = "Good", Type = "Bills", Payment =0, DueDay = 1, Rate = "Monthly", Active = true, UpdatedAt = "2026-05-15 10:00:00" });
         var handler = new RecordingHttpHandler();
         handler.OnPost($"v1/data_sources/{BillsDsId}/query", _ => RecordingHttpHandler.Ok(QueryResponse()));
         var calls = 0;
@@ -365,7 +365,7 @@ public class NotionSyncServiceTests
     public async Task PushBillAsync_KnownNotionPageId_PatchesDirectlyWithoutQuery()
     {
         var (db, creds) = SetupFakes();
-        var bill = new Bill { Id = "1", Name = "Electric", Type = "Bills", Cost = 400, Rate = "Monthly", DueDay = 8, NotionPageId = "page-known" };
+        var bill = new Bill { Id = "1", Name = "Electric", Type = "Bills", Payment =400, Rate = "Monthly", DueDay = 8, NotionPageId = "page-known" };
         db.Bills.Add(bill);
         var handler = new RecordingHttpHandler();
         handler.OnPatch("v1/pages/page-known", _ => RecordingHttpHandler.Ok("""{ "id": "page-known" }"""));
@@ -385,7 +385,7 @@ public class NotionSyncServiceTests
     public async Task PushBillAsync_UnknownPageId_FilterFindsMatch_PatchesAndWritesBackId()
     {
         var (db, creds) = SetupFakes();
-        var bill = new Bill { Id = "42", Name = "Hulu", Type = "Subscriptions", Cost = 9, Rate = "Monthly", DueDay = 7, NotionPageId = null };
+        var bill = new Bill { Id = "42", Name = "Hulu", Type = "Subscriptions", Payment =9, Rate = "Monthly", DueDay = 7, NotionPageId = null };
         db.Bills.Add(bill);
         var handler = new RecordingHttpHandler();
         handler.OnPost($"v1/data_sources/{BillsDsId}/query",
@@ -408,7 +408,7 @@ public class NotionSyncServiceTests
     public async Task PushBillAsync_UnknownPageId_FilterReturnsEmpty_CreatesAndWritesBackId()
     {
         var (db, creds) = SetupFakes();
-        var bill = new Bill { Id = "99", Name = "Brand New", Type = "Bills", Cost = 25, Rate = "Monthly", DueDay = 1, NotionPageId = null };
+        var bill = new Bill { Id = "99", Name = "Brand New", Type = "Bills", Payment =25, Rate = "Monthly", DueDay = 1, NotionPageId = null };
         db.Bills.Add(bill);
         var handler = new RecordingHttpHandler();
         handler.OnPost($"v1/data_sources/{BillsDsId}/query",
@@ -432,7 +432,7 @@ public class NotionSyncServiceTests
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "snap-page" }"""));
         using var svc = Build(db, creds, handler);
 
-        var pageId = await svc.PushSnapshotAsync(new Snapshot { Id = 1, SnapshotDate = "2026-05-15", TotalOwed = 12000, Details = "{}" });
+        var pageId = await svc.PushSnapshotAsync(new Snapshot { Id = 1, SnapshotDate = "2026-05-15", TotalRemaining =12000, Details = "{}" });
 
         Assert.Equal("snap-page", pageId);
         var req = handler.Requests.Single(r => r.Method == HttpMethod.Post && r.Path == "v1/pages");

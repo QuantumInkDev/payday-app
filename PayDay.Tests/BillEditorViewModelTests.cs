@@ -10,8 +10,8 @@ public class BillEditorViewModelTests
     {
         var bill = new Bill
         {
-            Id = "abc", Name = "Electric", Type = "Bills", Cost = 400,
-            Owed = 50, Available = 0, CreditLimit = 0, DueDay = 8,
+            Id = "abc", Name = "Electric", Type = "Bills", Payment =400,
+            Remaining =50, Available = 0, CreditLimit = 0, DueDay = 8,
             Rate = "Monthly", APR = 0, AutoPay = false, Active = true,
             YearlyDate = null, Notes = "Variable",
         };
@@ -20,7 +20,7 @@ public class BillEditorViewModelTests
 
         Assert.Equal("Electric", vm.Name);
         Assert.Equal("Bills", vm.Type);
-        Assert.Equal(400, vm.Cost);
+        Assert.Equal(400, vm.Payment);
         Assert.Equal(8, vm.DueDay);
         Assert.Equal("Variable", vm.Notes);
         Assert.True(vm.Active);
@@ -57,12 +57,12 @@ public class BillEditorViewModelTests
     [Fact]
     public void ApplyToOriginal_CopiesFieldsBack()
     {
-        var bill = new Bill { Id = "abc", Name = "Old", Type = "Bills", Cost = 100 };
+        var bill = new Bill { Id = "abc", Name = "Old", Type = "Bills", Payment =100 };
         var vm = new BillEditorViewModel(bill, isAddMode: false)
         {
             Name = "New Name",
             Type = "Cards",
-            Cost = 250,
+            Payment =250,
             DueDay = 15,
             AutoPay = true,
             Notes = "  trimmed  ",
@@ -73,7 +73,7 @@ public class BillEditorViewModelTests
         Assert.Equal("abc", bill.Id); // Id untouched
         Assert.Equal("New Name", bill.Name);
         Assert.Equal("Cards", bill.Type);
-        Assert.Equal(250, bill.Cost);
+        Assert.Equal(250, bill.Payment);
         Assert.Equal(15, bill.DueDay);
         Assert.True(bill.AutoPay);
         Assert.Equal("trimmed", bill.Notes); // whitespace trimmed

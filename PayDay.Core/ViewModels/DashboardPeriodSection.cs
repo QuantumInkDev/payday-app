@@ -13,7 +13,7 @@ public enum DashboardSortColumn
     DueDate,
     Name,
     Type,
-    Cost,
+    Payment,
 }
 
 /// <summary>
@@ -44,20 +44,20 @@ public sealed partial class DashboardPeriodSection : ObservableObject
     [NotifyPropertyChangedFor(nameof(DueDateIndicator))]
     [NotifyPropertyChangedFor(nameof(NameIndicator))]
     [NotifyPropertyChangedFor(nameof(TypeIndicator))]
-    [NotifyPropertyChangedFor(nameof(CostIndicator))]
+    [NotifyPropertyChangedFor(nameof(PaymentIndicator))]
     private DashboardSortColumn _sortColumn = DashboardSortColumn.DueDate;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DueDateIndicator))]
     [NotifyPropertyChangedFor(nameof(NameIndicator))]
     [NotifyPropertyChangedFor(nameof(TypeIndicator))]
-    [NotifyPropertyChangedFor(nameof(CostIndicator))]
+    [NotifyPropertyChangedFor(nameof(PaymentIndicator))]
     private bool _sortAscending = true;
 
     public string DueDateIndicator => IndicatorFor(DashboardSortColumn.DueDate);
     public string NameIndicator => IndicatorFor(DashboardSortColumn.Name);
     public string TypeIndicator => IndicatorFor(DashboardSortColumn.Type);
-    public string CostIndicator => IndicatorFor(DashboardSortColumn.Cost);
+    public string PaymentIndicator => IndicatorFor(DashboardSortColumn.Payment);
 
     private string IndicatorFor(DashboardSortColumn col)
         => col != SortColumn ? string.Empty : SortAscending ? " ▲" : " ▼";
@@ -76,8 +76,8 @@ public sealed partial class DashboardPeriodSection : ObservableObject
                 ManualBills.Add(pb);
             }
         }
-        ManualTotal = ManualBills.Sum(b => b.Bill.Cost);
-        AutoPayTotal = AutoPayBills.Sum(b => b.Bill.Cost);
+        ManualTotal = ManualBills.Sum(b => b.Bill.Payment);
+        AutoPayTotal = AutoPayBills.Sum(b => b.Bill.Payment);
         ApplySort();
     }
 
@@ -113,7 +113,7 @@ public sealed partial class DashboardPeriodSection : ObservableObject
         {
             DashboardSortColumn.Name => list.OrderBy(b => b.Bill.Name, StringComparer.OrdinalIgnoreCase),
             DashboardSortColumn.Type => list.OrderBy(b => b.Bill.Type, StringComparer.OrdinalIgnoreCase),
-            DashboardSortColumn.Cost => list.OrderBy(b => b.Bill.Cost),
+            DashboardSortColumn.Payment => list.OrderBy(b => b.Bill.Payment),
             _ => list.OrderBy(b => b.DueDate ?? DateTime.MaxValue),
         };
         var snapshot = ordered.ToList();
