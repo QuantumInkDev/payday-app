@@ -68,6 +68,22 @@ public class AllBillsPageViewModelTests
     }
 
     [Fact]
+    public async Task LoadAsync_InstallmentsSortsBetweenLoansAndSubscriptions()
+    {
+        var db = new FakeDatabaseService();
+        db.Bills.Add(MakeBill("1", "Spotify", "Subscriptions"));
+        db.Bills.Add(MakeBill("2", "AfterPay", "Installments"));
+        db.Bills.Add(MakeBill("3", "401K", "Loans"));
+
+        var vm = new AllBillsPageViewModel(db);
+        await vm.LoadAsync();
+
+        Assert.Equal("Loans", vm.Groups[0].Key);
+        Assert.Equal("Installments", vm.Groups[1].Key);
+        Assert.Equal("Subscriptions", vm.Groups[2].Key);
+    }
+
+    [Fact]
     public async Task LoadAsync_CustomTypeSortsAfterKnownTypes()
     {
         var db = new FakeDatabaseService();

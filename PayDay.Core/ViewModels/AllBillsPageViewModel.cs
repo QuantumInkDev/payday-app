@@ -31,7 +31,7 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
     /// <summary>Canonical order of well-known bill types (plan §4.8). Custom types follow alphabetically.</summary>
     private static readonly string[] TypeOrder =
     {
-        "Cards", "Bills", "Loans", "Subscriptions", "Business", "People", "Medical", "Other"
+        "Cards", "Bills", "Loans", "Installments", "Subscriptions", "Business", "People", "Medical", "Other"
     };
 
     private readonly IDatabaseService _db;
