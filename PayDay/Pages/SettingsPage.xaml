@@ -12,11 +12,13 @@
 
     <Page.Resources>
         <conv:NotionStatusToBrushConverter x:Key="NotionStatusBrush" />
+        <conv:HexToBrushConverter x:Key="HexToBrush" />
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Padding="24,16,24,24" RowSpacing="20">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -98,9 +100,73 @@
                 </StackPanel>
             </Border>
 
-            <!-- Backup -->
+            <!-- Type Colors -->
             <Border
                 Grid.Row="3"
+                Padding="20"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Text="Type Colors" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Pick the pill color for each bill type. Changes apply on the next page navigation." />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.TypeColorEntries, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate xmlns:vm="using:PayDay.ViewModels" x:DataType="vm:TypeColorEntry">
+                                <Grid Margin="0,4" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Grid.Column="0"
+                                        Width="28"
+                                        Height="20"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind Hex, Mode=OneWay, Converter={StaticResource HexToBrush}}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Text="{x:Bind Type}" />
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Consolas"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                        Text="{x:Bind Hex, Mode=OneWay}" />
+                                    <Button
+                                        Grid.Column="3"
+                                        Click="OnChangeTypeColorClick"
+                                        Content="Change…"
+                                        Tag="{x:Bind Type}" />
+                                    <Button
+                                        Grid.Column="4"
+                                        Click="OnResetTypeColorClick"
+                                        Content="Reset"
+                                        Tag="{x:Bind Type}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Backup -->
+            <Border
+                Grid.Row="4"
                 Padding="20"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -123,7 +189,7 @@
 
             <!-- Notion sync -->
             <Border
-                Grid.Row="4"
+                Grid.Row="5"
                 Padding="20"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -206,7 +272,7 @@
 
             <!-- About -->
             <Border
-                Grid.Row="5"
+                Grid.Row="6"
                 Padding="20"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -264,7 +330,7 @@
 
             <!-- Status -->
             <InfoBar
-                Grid.Row="6"
+                Grid.Row="7"
                 IsClosable="True"
                 IsOpen="{x:Bind ViewModel.HasStatus, Mode=OneWay}"
                 Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
