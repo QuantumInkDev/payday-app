@@ -50,7 +50,7 @@
                 Style="{ThemeResource AccentButtonStyle}" />
         </Grid>
 
-        <!-- Column header row (visual only — sortable columns are deferred) -->
+        <!-- Sortable column header row. TYPE and ACTIVE are static; the rest are HyperlinkButtons that drive ViewModel.SortByCommand. -->
         <Grid
             Grid.Row="1"
             Padding="12,6"
@@ -72,36 +72,91 @@
                 FontWeight="SemiBold"
                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                 Text="TYPE" />
-            <TextBlock
+            <HyperlinkButton
                 Grid.Column="1"
-                FontSize="11"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="NAME" />
-            <TextBlock
+                Padding="0"
+                Command="{x:Bind ViewModel.SortByCommand}"
+                CommandParameter="Name">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="NAME" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Text="{x:Bind ViewModel.NameIndicator, Mode=OneWay}" />
+                </StackPanel>
+            </HyperlinkButton>
+            <HyperlinkButton
                 Grid.Column="2"
-                FontSize="11"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="COST" />
-            <TextBlock
+                Padding="0"
+                Command="{x:Bind ViewModel.SortByCommand}"
+                CommandParameter="Cost">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="COST" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Text="{x:Bind ViewModel.CostIndicator, Mode=OneWay}" />
+                </StackPanel>
+            </HyperlinkButton>
+            <HyperlinkButton
                 Grid.Column="3"
-                FontSize="11"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="OWED" />
-            <TextBlock
+                Padding="0"
+                Command="{x:Bind ViewModel.SortByCommand}"
+                CommandParameter="Owed">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="OWED" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Text="{x:Bind ViewModel.OwedIndicator, Mode=OneWay}" />
+                </StackPanel>
+            </HyperlinkButton>
+            <HyperlinkButton
                 Grid.Column="4"
-                FontSize="11"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="DUE" />
-            <TextBlock
+                Padding="0"
+                Command="{x:Bind ViewModel.SortByCommand}"
+                CommandParameter="Due">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="DUE" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Text="{x:Bind ViewModel.DueIndicator, Mode=OneWay}" />
+                </StackPanel>
+            </HyperlinkButton>
+            <HyperlinkButton
                 Grid.Column="5"
-                FontSize="11"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Text="RATE" />
+                Padding="0"
+                Command="{x:Bind ViewModel.SortByCommand}"
+                CommandParameter="Rate">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="RATE" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Text="{x:Bind ViewModel.RateIndicator, Mode=OneWay}" />
+                </StackPanel>
+            </HyperlinkButton>
             <TextBlock
                 Grid.Column="6"
                 FontSize="11"
