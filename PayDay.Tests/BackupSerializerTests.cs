@@ -31,7 +31,7 @@ public class BackupSerializerTests
             new Bill
             {
                 Id = "b1", Name = "Amazon", Type = "Cards",
-                Cost = 55, Owed = 1200.00, Available = 1800, CreditLimit = 3000,
+                Payment =55, Remaining =1200.00, Available = 1800, CreditLimit = 3000,
                 DueDay = 1, Rate = "Monthly", APR = 24.99,
                 AutoPay = false, Active = true, Notes = "test note",
             },
@@ -42,7 +42,7 @@ public class BackupSerializerTests
         };
         var snapshots = new[]
         {
-            new Snapshot { Id = 1, SnapshotDate = "2026-05-15", TotalOwed = 1200.00, Details = "{\"b1\":1200.00}" },
+            new Snapshot { Id = 1, SnapshotDate = "2026-05-15", TotalRemaining =1200.00, Details = "{\"b1\":1200.00}" },
         };
         var settings = new Dictionary<string, string?>
         {
@@ -58,7 +58,7 @@ public class BackupSerializerTests
         Assert.Single(parsed.Bills);
         var b = parsed.Bills[0];
         Assert.Equal("Amazon", b.Name);
-        Assert.Equal(1200.00, b.Owed);
+        Assert.Equal(1200.00, b.Remaining);
         Assert.Equal(24.99, b.APR);
         Assert.Equal("test note", b.Notes);
         Assert.True(b.Active);
@@ -69,7 +69,7 @@ public class BackupSerializerTests
         Assert.Equal(55, parsed.Payments[0].AmountPaid);
 
         Assert.Single(parsed.Snapshots);
-        Assert.Equal(1200.00, parsed.Snapshots[0].TotalOwed);
+        Assert.Equal(1200.00, parsed.Snapshots[0].TotalRemaining);
 
         Assert.Equal("2026-03-20", parsed.Settings["PayAnchor"]);
         Assert.Equal("false", parsed.Settings["EarlyStart"]);
@@ -100,5 +100,24 @@ public class BackupSerializerTests
         Assert.Empty(parsed.Payments);
         Assert.Empty(parsed.Snapshots);
         Assert.Empty(parsed.Settings);
+    }
+
+    [Fact]
+    public void FromJson_LegacyCostAndOwedKeys_RestoreAsPaymentAndRemaining()
+    {
+        // Pre-Phase-7c backups stored bills with "cost" and "owed" keys.
+        var legacyJson = """
+        {
+          "formatVersion": 1,
+          "exportedAt": "2026-05-15T00:00:00",
+          "bills": [
+            { "id": "1", "name": "Amazon", "type": "Cards", "cost": 55.0, "owed": 1200.00 }
+          ]
+        }
+        """;
+        var parsed = BackupSerializer.FromJson(legacyJson);
+        var bill = Assert.Single(parsed.Bills);
+        Assert.Equal(55.0, bill.Payment);
+        Assert.Equal(1200.00, bill.Remaining);
     }
 }

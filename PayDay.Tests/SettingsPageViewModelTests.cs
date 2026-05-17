@@ -79,7 +79,7 @@ public class SettingsPageViewModelTests
     public async Task ExportAsync_ReturnsRoundTrippableJson()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(new Bill { Id = "1", Name = "Test", Type = "Cards", Cost = 50, Active = true });
+        db.Bills.Add(new Bill { Id = "1", Name = "Test", Type = "Cards", Payment = 50, Active = true });
         db.Settings["PayAnchor"] = "2026-03-20";
 
         var vm = new SettingsPageViewModel(db);

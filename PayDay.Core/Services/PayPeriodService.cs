@@ -119,7 +119,7 @@ public sealed class PayPeriodService
                 var db = b.DueDate ?? DateTime.MaxValue;
                 return da.CompareTo(db);
             });
-            var total = assigned.Sum(b => b.Bill.Cost);
+            var total = assigned.Sum(b => b.Bill.Payment);
             result.Add(new AssignedPayPeriod(period, assigned, total));
         }
         return result;

@@ -185,8 +185,8 @@ public sealed partial class PayDayPageViewModel : ObservableObject
 
     private void RecalculateTotals()
     {
-        var manualTotal = UnpaidBills.Sum(r => r.Bill.Cost) + PaidBills.Sum(r => r.Bill.Cost);
-        AutoPayTotal = AutoPayBills.Sum(r => r.Bill.Cost);
+        var manualTotal = UnpaidBills.Sum(r => r.Bill.Payment) + PaidBills.Sum(r => r.Bill.Payment);
+        AutoPayTotal = AutoPayBills.Sum(r => r.Bill.Payment);
         TotalDue = manualTotal;
         TotalPaid = PaidBills.Sum(r => r.AmountPaid);
         Remaining = Math.Max(0, manualTotal - TotalPaid);
@@ -203,7 +203,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     private async Task MarkPaidAsync(PeriodBillRow? row)
     {
         if (row is null || CurrentPeriodKey is null) return;
-        var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Cost;
+        var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Payment;
         var id = await _paymentService.MarkPaidAsync(CurrentPeriodKey, row.Bill.Id, amount).ConfigureAwait(true);
         row.PaymentId = id;
         row.AmountPaid = amount;
@@ -229,7 +229,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         await _paymentService.UnmarkPaidAsync(CurrentPeriodKey, row.Bill.Id).ConfigureAwait(true);
         row.PaymentId = null;
         row.IsPaid = false;
-        row.AmountPaid = row.Bill.Cost;
+        row.AmountPaid = row.Bill.Payment;
         PaidBills.Remove(row);
         UnpaidBills.Add(row);
         RecalculateTotals();
@@ -242,7 +242,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         var pushes = new List<Task>();
         foreach (var row in UnpaidBills.ToList())
         {
-            var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Cost;
+            var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Payment;
             var id = await _paymentService.MarkPaidAsync(CurrentPeriodKey, row.Bill.Id, amount).ConfigureAwait(true);
             row.PaymentId = id;
             row.AmountPaid = amount;

@@ -28,7 +28,7 @@ public sealed partial class PeriodBillRow : ObservableObject
         Bill = periodBill.Bill;
         DueDate = periodBill.DueDate;
         PeriodKey = periodKey;
-        _amountPaid = periodBill.Bill.Cost;
+        _amountPaid = periodBill.Bill.Payment;
     }
 
     public string DueDateLabel => DueDate is { } d

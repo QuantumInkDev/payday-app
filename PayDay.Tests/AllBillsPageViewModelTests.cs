@@ -12,8 +12,8 @@ public class AllBillsPageViewModelTests
         string name,
         string type,
         bool active = true,
-        double cost = 0,
-        double owed = 0,
+        double payment = 0,
+        double remaining = 0,
         int dueDay = 1,
         string rate = "Monthly")
         => new()
@@ -22,8 +22,8 @@ public class AllBillsPageViewModelTests
             Name = name,
             Type = type,
             Active = active,
-            Cost = cost,
-            Owed = owed,
+            Payment = payment,
+            Remaining = remaining,
             DueDay = dueDay,
             Rate = rate,
         };
@@ -141,8 +141,8 @@ public class AllBillsPageViewModelTests
         Assert.Equal(AllBillsSortColumn.Name, vm.SortColumn);
         Assert.True(vm.SortAscending);
         Assert.Equal(" ▲", vm.NameIndicator);
-        Assert.Equal(string.Empty, vm.CostIndicator);
-        Assert.Equal(string.Empty, vm.OwedIndicator);
+        Assert.Equal(string.Empty, vm.PaymentIndicator);
+        Assert.Equal(string.Empty, vm.RemainingIndicator);
         Assert.Equal(string.Empty, vm.DueIndicator);
         Assert.Equal(string.Empty, vm.RateIndicator);
     }
@@ -151,21 +151,21 @@ public class AllBillsPageViewModelTests
     public async Task SortByCommand_SameColumnTwice_FlipsDirection()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(MakeBill("1", "Amazon", "Cards", cost: 30));
-        db.Bills.Add(MakeBill("2", "Best Buy", "Cards", cost: 10));
-        db.Bills.Add(MakeBill("3", "Chase", "Cards", cost: 20));
+        db.Bills.Add(MakeBill("1", "Amazon", "Cards", payment: 30));
+        db.Bills.Add(MakeBill("2", "Best Buy", "Cards", payment: 10));
+        db.Bills.Add(MakeBill("3", "Chase", "Cards", payment: 20));
         var vm = new AllBillsPageViewModel(db);
         await vm.LoadAsync();
 
-        vm.SortByCommand.Execute("Cost");
-        Assert.Equal(AllBillsSortColumn.Cost, vm.SortColumn);
+        vm.SortByCommand.Execute("Payment");
+        Assert.Equal(AllBillsSortColumn.Payment, vm.SortColumn);
         Assert.True(vm.SortAscending);
-        Assert.Equal(" ▲", vm.CostIndicator);
+        Assert.Equal(" ▲", vm.PaymentIndicator);
         Assert.Equal(new[] { "Best Buy", "Chase", "Amazon" }, vm.Groups[0].Bills.Select(b => b.Name).ToArray());
 
-        vm.SortByCommand.Execute("Cost");
+        vm.SortByCommand.Execute("Payment");
         Assert.False(vm.SortAscending);
-        Assert.Equal(" ▼", vm.CostIndicator);
+        Assert.Equal(" ▼", vm.PaymentIndicator);
         Assert.Equal(new[] { "Amazon", "Chase", "Best Buy" }, vm.Groups[0].Bills.Select(b => b.Name).ToArray());
     }
 
@@ -173,16 +173,16 @@ public class AllBillsPageViewModelTests
     public async Task SortByCommand_SwitchingColumn_ResetsToAscending()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(MakeBill("1", "Zeta", "Cards", cost: 10));
-        db.Bills.Add(MakeBill("2", "Alpha", "Cards", cost: 99));
+        db.Bills.Add(MakeBill("1", "Zeta", "Cards", payment: 10));
+        db.Bills.Add(MakeBill("2", "Alpha", "Cards", payment: 99));
         var vm = new AllBillsPageViewModel(db);
         await vm.LoadAsync();
 
         vm.SortByCommand.Execute("Name"); // default was Name asc; same column flips to desc
         Assert.False(vm.SortAscending);
 
-        vm.SortByCommand.Execute("Cost"); // switching column resets to asc
-        Assert.Equal(AllBillsSortColumn.Cost, vm.SortColumn);
+        vm.SortByCommand.Execute("Payment"); // switching column resets to asc
+        Assert.Equal(AllBillsSortColumn.Payment, vm.SortColumn);
         Assert.True(vm.SortAscending);
         Assert.Equal(new[] { "Zeta", "Alpha" }, vm.Groups[0].Bills.Select(b => b.Name).ToArray());
     }
@@ -191,14 +191,14 @@ public class AllBillsPageViewModelTests
     public async Task SortByCommand_AppliesSortToEveryGroup()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(MakeBill("1", "Z-card", "Cards", cost: 5));
-        db.Bills.Add(MakeBill("2", "A-card", "Cards", cost: 50));
-        db.Bills.Add(MakeBill("3", "Y-bill", "Bills", cost: 7));
-        db.Bills.Add(MakeBill("4", "B-bill", "Bills", cost: 70));
+        db.Bills.Add(MakeBill("1", "Z-card", "Cards", payment: 5));
+        db.Bills.Add(MakeBill("2", "A-card", "Cards", payment: 50));
+        db.Bills.Add(MakeBill("3", "Y-bill", "Bills", payment: 7));
+        db.Bills.Add(MakeBill("4", "B-bill", "Bills", payment: 70));
         var vm = new AllBillsPageViewModel(db);
         await vm.LoadAsync();
 
-        vm.SortByCommand.Execute("Cost");
+        vm.SortByCommand.Execute("Payment");
 
         var cards = vm.Groups.Single(g => g.Key == "Cards");
         var bills = vm.Groups.Single(g => g.Key == "Bills");
@@ -225,13 +225,13 @@ public class AllBillsPageViewModelTests
     public async Task SortByCommand_SortsByOwedAndRate()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(MakeBill("1", "A", "Cards", owed: 500, rate: "Yearly"));
-        db.Bills.Add(MakeBill("2", "B", "Cards", owed: 100, rate: "Monthly"));
-        db.Bills.Add(MakeBill("3", "C", "Cards", owed: 250, rate: "Bi-Weekly"));
+        db.Bills.Add(MakeBill("1", "A", "Cards", remaining: 500, rate: "Yearly"));
+        db.Bills.Add(MakeBill("2", "B", "Cards", remaining: 100, rate: "Monthly"));
+        db.Bills.Add(MakeBill("3", "C", "Cards", remaining: 250, rate: "Bi-Weekly"));
         var vm = new AllBillsPageViewModel(db);
         await vm.LoadAsync();
 
-        vm.SortByCommand.Execute("Owed");
+        vm.SortByCommand.Execute("Remaining");
         Assert.Equal(new[] { "B", "C", "A" }, vm.Groups[0].Bills.Select(b => b.Name).ToArray());
 
         vm.SortByCommand.Execute("Rate");
@@ -243,8 +243,8 @@ public class AllBillsPageViewModelTests
     public async Task SortByCommand_UnknownColumn_IsNoOp()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(MakeBill("1", "X", "Cards", cost: 10));
-        db.Bills.Add(MakeBill("2", "Y", "Cards", cost: 20));
+        db.Bills.Add(MakeBill("1", "X", "Cards", payment: 10));
+        db.Bills.Add(MakeBill("2", "Y", "Cards", payment: 20));
         var vm = new AllBillsPageViewModel(db);
         await vm.LoadAsync();
 
@@ -263,20 +263,20 @@ public class AllBillsPageViewModelTests
     public async Task LoadAsync_PreservesCurrentSortState()
     {
         var db = new FakeDatabaseService();
-        db.Bills.Add(MakeBill("1", "Amazon", "Cards", cost: 30));
-        db.Bills.Add(MakeBill("2", "Best Buy", "Cards", cost: 10));
+        db.Bills.Add(MakeBill("1", "Amazon", "Cards", payment: 30));
+        db.Bills.Add(MakeBill("2", "Best Buy", "Cards", payment: 10));
         var vm = new AllBillsPageViewModel(db);
         await vm.LoadAsync();
 
-        vm.SortByCommand.Execute("Cost");
-        vm.SortByCommand.Execute("Cost"); // descending by cost
+        vm.SortByCommand.Execute("Payment");
+        vm.SortByCommand.Execute("Payment"); // descending by cost
         Assert.Equal(new[] { "Amazon", "Best Buy" }, vm.Groups[0].Bills.Select(b => b.Name).ToArray());
 
         // Add a new bill and refresh — sort state must survive.
-        db.Bills.Add(MakeBill("3", "Chase", "Cards", cost: 20));
+        db.Bills.Add(MakeBill("3", "Chase", "Cards", payment: 20));
         await vm.RefreshCommand.ExecuteAsync(null);
 
-        Assert.Equal(AllBillsSortColumn.Cost, vm.SortColumn);
+        Assert.Equal(AllBillsSortColumn.Payment, vm.SortColumn);
         Assert.False(vm.SortAscending);
         Assert.Equal(new[] { "Amazon", "Chase", "Best Buy" }, vm.Groups[0].Bills.Select(b => b.Name).ToArray());
     }

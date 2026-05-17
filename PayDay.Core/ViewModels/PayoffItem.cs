@@ -31,11 +31,11 @@ public sealed class PayoffItem
     public PayoffItem(Bill bill)
     {
         Bill = bill;
-        EstimatedMonths = PayoffCalculator.EstimatePayoff(bill.Owed, bill.Cost, bill.APR);
+        EstimatedMonths = PayoffCalculator.EstimatePayoff(bill.Remaining, bill.Payment, bill.APR);
 
         HasProgress = bill.CreditLimit > 0;
         ProgressFraction = HasProgress
-            ? System.Math.Clamp(bill.Owed / bill.CreditLimit, 0, 1)
+            ? System.Math.Clamp(bill.Remaining / bill.CreditLimit, 0, 1)
             : 0;
 
         PayoffLabel = EstimatedMonths switch
@@ -47,8 +47,8 @@ public sealed class PayoffItem
         };
 
         PaymentLabel = bill.APR > 0
-            ? $"${bill.Cost:N2}/mo @ {bill.APR:N1}% APR"
-            : $"${bill.Cost:N2}/mo";
+            ? $"${bill.Payment:N2}/mo @ {bill.APR:N1}% APR"
+            : $"${bill.Payment:N2}/mo";
     }
 
     /// <summary>

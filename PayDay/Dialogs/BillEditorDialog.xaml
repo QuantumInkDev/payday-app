@@ -35,10 +35,10 @@
                 </Grid.ColumnDefinitions>
                 <NumberBox
                     Grid.Column="0"
-                    Header="Cost"
+                    Header="Payment"
                     Minimum="0"
                     SpinButtonPlacementMode="Compact"
-                    Value="{x:Bind ViewModel.Cost, Mode=TwoWay}" />
+                    Value="{x:Bind ViewModel.Payment, Mode=TwoWay}" />
                 <NumberBox
                     Grid.Column="1"
                     Header="APR (%)"
@@ -55,10 +55,10 @@
                 </Grid.ColumnDefinitions>
                 <NumberBox
                     Grid.Column="0"
-                    Header="Owed"
+                    Header="Remaining"
                     Minimum="0"
                     SpinButtonPlacementMode="Hidden"
-                    Value="{x:Bind ViewModel.Owed, Mode=TwoWay}" />
+                    Value="{x:Bind ViewModel.Remaining, Mode=TwoWay}" />
                 <NumberBox
                     Grid.Column="1"
                     Header="Available"
