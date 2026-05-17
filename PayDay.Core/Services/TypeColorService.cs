@@ -21,6 +21,7 @@ public static class TypeColorService
         ["Cards"]         = "#FD79A8",
         ["Bills"]         = "#B2945B",
         ["Loans"]         = "#6C5CE7",
+        ["Installments"]  = "#FDCB6E",
         ["Subscriptions"] = "#E17055",
         ["Business"]      = "#74B9FF",
         ["People"]        = "#00B894",
