@@ -311,7 +311,7 @@
                                                             HorizontalAlignment="Left"
                                                             VerticalAlignment="Center"
                                                             Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
-                                                            CornerRadius="10">
+                                                            CornerRadius="4">
                                                             <TextBlock
                                                                 FontSize="11"
                                                                 FontWeight="SemiBold"
@@ -392,7 +392,7 @@
                                                             HorizontalAlignment="Left"
                                                             VerticalAlignment="Center"
                                                             Background="{x:Bind Bill.Type, Converter={StaticResource TypeToBrush}}"
-                                                            CornerRadius="10">
+                                                            CornerRadius="4">
                                                             <TextBlock
                                                                 FontSize="11"
                                                                 FontWeight="SemiBold"
