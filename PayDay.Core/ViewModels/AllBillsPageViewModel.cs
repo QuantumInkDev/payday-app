@@ -10,10 +10,21 @@ using PayDay.Services;
 
 namespace PayDay.ViewModels;
 
+public enum AllBillsSortColumn
+{
+    Name,
+    Cost,
+    Owed,
+    Due,
+    Rate,
+}
+
 /// <summary>
 /// View model behind <c>AllBillsPage</c>. Reads every <see cref="Bill"/> from
 /// the DB, groups by <see cref="Bill.Type"/>, and persists per-bill changes
 /// (currently only the Active toggle) through <see cref="IDatabaseService"/>.
+/// Sort state lives here (not per group) so the single column header above
+/// the grouped list controls the order inside every group uniformly.
 /// </summary>
 public sealed partial class AllBillsPageViewModel : ObservableObject
 {
@@ -36,6 +47,31 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
 
     public ObservableCollection<BillGroup> Groups { get; } = new();
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NameIndicator))]
+    [NotifyPropertyChangedFor(nameof(CostIndicator))]
+    [NotifyPropertyChangedFor(nameof(OwedIndicator))]
+    [NotifyPropertyChangedFor(nameof(DueIndicator))]
+    [NotifyPropertyChangedFor(nameof(RateIndicator))]
+    private AllBillsSortColumn _sortColumn = AllBillsSortColumn.Name;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NameIndicator))]
+    [NotifyPropertyChangedFor(nameof(CostIndicator))]
+    [NotifyPropertyChangedFor(nameof(OwedIndicator))]
+    [NotifyPropertyChangedFor(nameof(DueIndicator))]
+    [NotifyPropertyChangedFor(nameof(RateIndicator))]
+    private bool _sortAscending = true;
+
+    public string NameIndicator => IndicatorFor(AllBillsSortColumn.Name);
+    public string CostIndicator => IndicatorFor(AllBillsSortColumn.Cost);
+    public string OwedIndicator => IndicatorFor(AllBillsSortColumn.Owed);
+    public string DueIndicator => IndicatorFor(AllBillsSortColumn.Due);
+    public string RateIndicator => IndicatorFor(AllBillsSortColumn.Rate);
+
+    private string IndicatorFor(AllBillsSortColumn col)
+        => col != SortColumn ? string.Empty : SortAscending ? " ▲" : " ▼";
+
     public AllBillsPageViewModel(IDatabaseService db)
     {
         _db = db;
@@ -56,9 +92,10 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
 
             foreach (var g in grouped)
             {
-                var ordered = g.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase).ToList();
-                Groups.Add(new BillGroup(g.Key, ordered));
+                Groups.Add(new BillGroup(g.Key, g));
             }
+
+            ApplySort();
 
             TotalBills = bills.Count;
             OnPropertyChanged(nameof(TotalBillsLabel));
@@ -74,6 +111,50 @@ public sealed partial class AllBillsPageViewModel : ObservableObject
 
     [RelayCommand]
     private Task RefreshAsync() => LoadAsync();
+
+    /// <summary>
+    /// Sorts every group's bills by the named column. Clicking the same column
+    /// again flips the direction; clicking a new column starts ascending.
+    /// </summary>
+    [RelayCommand]
+    private void SortBy(string? columnName)
+    {
+        if (!Enum.TryParse<AllBillsSortColumn>(columnName, ignoreCase: true, out var col)) return;
+        if (col == SortColumn)
+        {
+            SortAscending = !SortAscending;
+        }
+        else
+        {
+            SortColumn = col;
+            SortAscending = true;
+        }
+        ApplySort();
+    }
+
+    private void ApplySort()
+    {
+        foreach (var group in Groups)
+        {
+            SortInPlace(group.Bills);
+        }
+    }
+
+    private void SortInPlace(ObservableCollection<Bill> bills)
+    {
+        IEnumerable<Bill> ordered = SortColumn switch
+        {
+            AllBillsSortColumn.Cost => bills.OrderBy(b => b.Cost),
+            AllBillsSortColumn.Owed => bills.OrderBy(b => b.Owed),
+            AllBillsSortColumn.Due  => bills.OrderBy(b => b.DueDay),
+            AllBillsSortColumn.Rate => bills.OrderBy(b => b.Rate, StringComparer.OrdinalIgnoreCase),
+            _                       => bills.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
+        };
+        var snapshot = ordered.ToList();
+        if (!SortAscending) snapshot.Reverse();
+        bills.Clear();
+        foreach (var b in snapshot) bills.Add(b);
+    }
 
     private static int OrderKeyFor(string type)
     {
