@@ -80,16 +80,10 @@ public sealed partial class InsightsPage : Page
             .ToArray();
     }
 
-    /// <summary>Maps bill type → SKColor mirroring the pill brushes in TypeBrushes.xaml.</summary>
-    private static SKColor ColorForType(string type) => type switch
+    /// <summary>Maps bill type → SKColor by reading the user-customized hex from <see cref="TypeColorService"/>.</summary>
+    private static SKColor ColorForType(string type)
     {
-        "Cards" => new SKColor(0xFD, 0x79, 0xA8),
-        "Bills" => new SKColor(0xB2, 0x94, 0x5B),
-        "Loans" => new SKColor(0x6C, 0x5C, 0xE7),
-        "Subscriptions" => new SKColor(0xE1, 0x70, 0x55),
-        "Business" => new SKColor(0x74, 0xB9, 0xFF),
-        "People" => new SKColor(0x00, 0xB8, 0x94),
-        "Medical" => new SKColor(0x55, 0xEF, 0xC4),
-        _ => new SKColor(0x8B, 0x8F, 0xA3),
-    };
+        var c = Converters.TypeToBrushConverter.ParseHex(TypeColorService.GetHex(type));
+        return new SKColor(c.R, c.G, c.B);
+    }
 }

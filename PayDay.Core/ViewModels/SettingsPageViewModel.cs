@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -96,6 +97,9 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
     // ------------------------------------------------------------------
 
+    /// <summary>Per-known-type pill color rows bound to the Settings type-colors card.</summary>
+    public ObservableCollection<TypeColorEntry> TypeColorEntries { get; } = new();
+
     public async Task LoadAsync()
     {
         IsLoading = true;
@@ -110,11 +114,48 @@ public sealed partial class SettingsPageViewModel : ObservableObject
             var themeRaw = await _db.GetSettingAsync(ThemeKey).ConfigureAwait(true);
             SelectedTheme = ParseTheme(themeRaw);
 
+            LoadTypeColors();
             await LoadNotionStateAsync().ConfigureAwait(true);
         }
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private void LoadTypeColors()
+    {
+        TypeColorEntries.Clear();
+        foreach (var type in TypeColorService.Defaults.Keys)
+        {
+            TypeColorEntries.Add(new TypeColorEntry(type, TypeColorService.GetHex(type)));
+        }
+    }
+
+    public async Task SetTypeColorAsync(string type, string hex)
+    {
+        await TypeColorService.SetHexAsync(_db, type, hex).ConfigureAwait(true);
+        // Re-read the service in case the input was invalid (service no-ops on bad hex).
+        foreach (var entry in TypeColorEntries)
+        {
+            if (string.Equals(entry.Type, type, StringComparison.OrdinalIgnoreCase))
+            {
+                entry.Hex = TypeColorService.GetHex(type);
+                break;
+            }
+        }
+    }
+
+    public async Task ResetTypeColorAsync(string type)
+    {
+        await TypeColorService.ResetAsync(_db, type).ConfigureAwait(true);
+        foreach (var entry in TypeColorEntries)
+        {
+            if (string.Equals(entry.Type, type, StringComparison.OrdinalIgnoreCase))
+            {
+                entry.Hex = TypeColorService.GetHex(type);
+                break;
+            }
         }
     }
 
@@ -263,4 +304,19 @@ public sealed partial class SettingsPageViewModel : ObservableObject
 
     private static AppTheme ParseTheme(string? raw)
         => Enum.TryParse<AppTheme>(raw, ignoreCase: true, out var t) ? t : AppTheme.System;
+}
+
+/// <summary>One row in the Settings type-colors card. Observable so the swatch updates when the color changes.</summary>
+public sealed partial class TypeColorEntry : ObservableObject
+{
+    public string Type { get; }
+
+    [ObservableProperty]
+    private string _hex;
+
+    public TypeColorEntry(string type, string hex)
+    {
+        Type = type;
+        _hex = hex;
+    }
 }

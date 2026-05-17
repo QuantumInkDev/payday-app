@@ -124,4 +124,39 @@ public sealed partial class SettingsPage : Page
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
     }
+
+    private async void OnChangeTypeColorClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not string type) return;
+        var current = TypeColorService.GetHex(type);
+        var picker = new ColorPicker
+        {
+            IsAlphaEnabled = false,
+            IsColorSliderVisible = true,
+            IsColorChannelTextInputVisible = true,
+            IsHexInputVisible = true,
+            Color = Converters.TypeToBrushConverter.ParseHex(current),
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = this.XamlRoot,
+            Title = $"{type} color",
+            Content = picker,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var c = picker.Color;
+        var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        await ViewModel.SetTypeColorAsync(type, hex);
+        ViewModel.StatusMessage = $"{type} color updated.";
+    }
+
+    private async void OnResetTypeColorClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not string type) return;
+        await ViewModel.ResetTypeColorAsync(type);
+        ViewModel.StatusMessage = $"{type} color reset to default.";
+    }
 }
