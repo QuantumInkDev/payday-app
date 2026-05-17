@@ -336,9 +336,40 @@ Three databases already exist under the "Money Matters" page:
 
 ---
 
-## Phase 7: Build & Ship
+## Phase 7: Polish
 
-### 7.1 Build Commands
+No ship until the rough edges are gone. Scope covers three buckets — known-issue carryovers, the legacy "item 11" list, and a fresh UI/UX consistency sweep.
+
+### 7.1 Known-issue carryovers
+- **Sortable columns on All Bills** — retrofit the Dashboard's sortable-column pattern (same-column click flips asc↔desc, switching columns resets to ascending, ▲/▼ indicator).
+- **Bill editor tweaks** — specifics deferred from chunk 3b smoke test. Capture when raised.
+- **Real app icon** — replace the temporary Segoe Fluent glyph (commit `425be56`, `e825`) with a proper asset set across all required sizes.
+- **Notion archive-on-delete** — needs a tombstone table to distinguish "never existed locally" from "deleted locally last session". TODO sits in `SyncBillsAsync`.
+- **NotionPageId write-back on Payments/Snapshots** — store page IDs at push time so a future push-resume-after-failure flow can pick up where it left off. Add an `is_synced` column.
+
+### 7.2 Original plan-item-11 backlog
+- **Dark theme tuning** — review every page in Dark + HighContrast, fix any low-contrast pairs or untheme'd brushes.
+- **Toast notifications** — mark-paid, mark-all-paid, snapshot saved, Notion sync success/failure, backup created, restore applied.
+- **Early-start sync** — auto-kick a Notion sync on app launch when a token is saved, so the user doesn't have to hit Sync Now manually. Fire-and-forget against the same `NotionSyncService.PendingSync` pattern; status surfaces on the Settings card. Consider gating on a "skip if last sync < N minutes ago" guard to avoid redundant calls on quick relaunches.
+- ~~Auto-backup~~ — shipped in Phase 6.
+
+### 7.3 UI/UX consistency pass
+- **Empty states** — All Bills, PayDay, Insights, Payoff Tracker. Friendly copy + a primary action where it makes sense.
+- **Spacing + alignment** — sweep all pages for inconsistent padding/margin against a single token set.
+- **Focus rings + keyboard nav** — every interactive control reachable by Tab in a sane order, visible focus state in all themes.
+- **Accessibility audit** — `AutomationProperties` names on controls without inline labels, color-only signals get a non-color affordance (e.g., status dot + text label is already correct on Notion card — replicate elsewhere).
+
+### 7.4 Exit criteria
+- All 7.1 / 7.2 / 7.3 items checked off or explicitly deferred with rationale.
+- `dotnet test PayDay.Tests` exits 0 with no regressions.
+- `dotnet build PayDay/PayDay.csproj` exits 0, 0 warnings.
+- Manual smoke pass across every page in both Light and Dark themes.
+
+---
+
+## Phase 8: Build & Ship
+
+### 8.1 Build Commands
 ```bash
 dotnet build
 winapp run                    # dev mode
@@ -347,7 +378,7 @@ winapp sign                   # sign the package
 winapp pack                   # create MSIX installer
 ```
 
-### 7.2 Git
+### 8.2 Git
 - Push to `QuantumInkDev/payday-app`
 - `.gitignore`: bin/, obj/, *.user, *.pfx, AppPackages/
 
@@ -367,7 +398,8 @@ Build in this sequence so you have a working app at each step:
 8. **Backup/Restore** — JSON export/import
 9. **Settings page** — pay anchor config, theme
 10. **Notion sync** — API integration, bidirectional bill sync, payment push
-11. **Polish** — dark theme tuning, toast notifications, early start persistence, auto-backup
+11. **Polish** — known-issue carryovers, dark theme tuning, toast notifications, UI/UX consistency
+12. **Ship** — MSIX packaging, code-sign, sideload/Store distribution
 
 ---
 

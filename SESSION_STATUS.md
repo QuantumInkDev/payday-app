@@ -8,16 +8,19 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 7 — Ship.** Phase 6 closed 2026-05-15 across 6a (`9874397`), 6b (`474b4f3`), 6c (this commit). Auto-rotating backups now run on every mark-paid / mark-all / snapshot save, capped at 10 files in `LocalFolder/backups/`. First-launch restore prompt fires when the Bills table is empty but backups exist. Build 0 warn / 0 err. Tests 150/150 (was 121 at sprint start; +29 across 6a, 6b, 6c).
+**Phase 7 — Polish** (new phase inserted 2026-05-17; Ship is now Phase 8). Phase 6 fully closed 2026-05-17 — 6c smoke test passed (wipe `payday.db`, relaunch, dialog fires, restore round-trips). Code chunks landed 2026-05-15: 6a (`9874397`), 6b (`474b4f3`), 6c (`78b314a`) + temporary icon (`425be56`). Build 0 warn / 0 err. Tests 150/150 (was 121 at Phase 6 start; +29 across 6a, 6b, 6c).
 
-**Manual smoke test for 6c is still pending** — needs the user to delete `payday.db` from `LocalState` and relaunch to confirm the dialog actually fires + restore round-trips. The pure-logic path (`BackupRestorePrompt.GetCandidateAsync` + `ApplyAsync`) is fully unit-tested.
+No ship until Phase 7 polish lands. Three buckets per `PAYDAY_WINUI3_PLAN.md` §7:
 
-Next: Phase 7 — MSIX packaging + Microsoft Store / sideload distribution per `PAYDAY_WINUI3_PLAN.md` §7.
+- **§7.1 Known-issue carryovers** — sortable All Bills columns (retrofit Dashboard pattern), bill editor tweaks (specifics TBD from chunk 3b note), real app icon (replace temporary Segoe Fluent glyph `e825`), Notion archive-on-delete (needs tombstone table), NotionPageId write-back on Payments/Snapshots.
+- **§7.2 Original item-11 backlog** — dark theme tuning across all pages, toast notifications (mark-paid, snapshot saved, sync ok/fail, backup created, restore applied), early-start sync (auto-kick Notion sync on launch when a token is saved, optional "skip if last sync < N min ago" guard). Auto-backup already shipped in Phase 6.
+- **§7.3 UI/UX consistency pass** — empty states on All Bills/PayDay/Insights/Payoff, spacing+alignment sweep, focus rings + keyboard nav order, accessibility audit (AutomationProperties + non-color affordances).
 
-- **Self-signed cert + MSIX** — `winapp cert generate` to produce a code-signing cert, trust it in CurrentUser/TrustedPeople, then `winapp sign` + package via the existing `winapp run` toolchain. The `winui-packaging` skill covers this end to end.
-- **Increment package version** — bump `<Version>` in `PayDay.csproj` from `0.1.0` to `0.1.1` (or pick a Phase 7 milestone number) before packaging.
-- **Decide on distribution** — sideload-only MSIX is the minimum; Store submission is a stretch goal that needs developer-account setup + privacy policy + asset variants.
-- **CI/CD (optional)** — GitHub Actions workflow that builds + signs the MSIX on tag push. Defer unless user wants it before first user-installed build.
+**Exit criteria for Phase 7:** every §7.x item checked or explicitly deferred with rationale, tests still green, 0 warnings, manual smoke pass across every page in Light + Dark.
+
+**Suggested first chunk:** §7.1 sortable All Bills — smallest, cleanest carryover; pattern already proven on Dashboard, retrofit is mostly mechanical. Then the real app icon (independent, satisfying to land before any UI sweep).
+
+After Phase 7: **Phase 8 — Ship** (MSIX packaging + sideload/Store distribution per `PAYDAY_WINUI3_PLAN.md` §8).
 
 ---
 
