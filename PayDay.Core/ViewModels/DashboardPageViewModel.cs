@@ -33,7 +33,7 @@ public sealed partial class DashboardPageViewModel : ObservableObject
     private double _totalMonthlyObligations;
 
     [ObservableProperty]
-    private double _totalOwed;
+    private double _totalRemaining;
 
     /// <summary>Percentage 0..100. Only meaningful when <see cref="HasCreditCards"/> is true.</summary>
     [ObservableProperty]
@@ -59,13 +59,13 @@ public sealed partial class DashboardPageViewModel : ObservableObject
             var active = bills.Where(b => b.Active).ToList();
 
             TotalMonthlyObligations = active.Sum(MonthlyEquivalent);
-            TotalOwed = active.Sum(b => b.Owed);
+            TotalRemaining = active.Sum(b => b.Remaining);
 
             var cards = active.Where(b => b.Type == "Cards" && b.CreditLimit > 0).ToList();
             var totalLimit = cards.Sum(c => c.CreditLimit);
             HasCreditCards = cards.Count > 0 && totalLimit > 0;
             CreditUtilizationPct = HasCreditCards
-                ? Math.Round(cards.Sum(c => c.Owed) / totalLimit * 100.0, 1)
+                ? Math.Round(cards.Sum(c => c.Remaining) / totalLimit * 100.0, 1)
                 : 0;
 
             var periods = await _periodService.GetCurrentPeriodsAsync(today).ConfigureAwait(true);
@@ -85,16 +85,16 @@ public sealed partial class DashboardPageViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Normalizes a bill's cost to a monthly cadence so the headline number is
+    /// Normalizes a bill's payment to a monthly cadence so the headline number is
     /// comparable across rate types. Bi-Weekly bills hit 26 times a year, so
-    /// they contribute (cost × 26 / 12). Yearly bills divide by 12. "Once" and
-    /// unknown rates contribute zero because there's no recurring cadence.
+    /// they contribute (payment × 26 / 12). Yearly bills divide by 12. "Once"
+    /// and unknown rates contribute zero because there's no recurring cadence.
     /// </summary>
     public static double MonthlyEquivalent(Bill b) => b.Rate switch
     {
-        "Monthly" => b.Cost,
-        "Bi-Weekly" => b.Cost * 26.0 / 12.0,
-        "Yearly" => b.Cost / 12.0,
+        "Monthly" => b.Payment,
+        "Bi-Weekly" => b.Payment * 26.0 / 12.0,
+        "Yearly" => b.Payment / 12.0,
         _ => 0,
     };
 }

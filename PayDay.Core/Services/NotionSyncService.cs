@@ -302,7 +302,7 @@ public sealed class NotionSyncService : IDisposable
         {
             ["Name"] = Title($"Snapshot {snapshot.SnapshotDate}"),
             ["Date"] = Date(snapshot.SnapshotDate),
-            ["Total Owed"] = Number(snapshot.TotalOwed),
+            ["Total Remaining"] = Number(snapshot.TotalRemaining),
             ["Details"] = RichText(snapshot.Details ?? string.Empty),
         };
         return await CreatePageAsync(dataSourceId!, properties, token!, ct).ConfigureAwait(false);
@@ -401,8 +401,8 @@ public sealed class NotionSyncService : IDisposable
     {
         ["Name"] = Title(bill.Name),
         ["Type"] = Select(bill.Type),
-        ["Payment"] = Number(bill.Cost),
-        ["Owed"] = Number(bill.Owed),
+        ["Payment"] = Number(bill.Payment),
+        ["Remaining"] = Number(bill.Remaining),
         ["Available"] = Number(bill.Available),
         ["Credit Limit"] = Number(bill.CreditLimit),
         ["Due Day"] = Number(bill.DueDay),
@@ -463,7 +463,7 @@ public sealed class NotionSyncService : IDisposable
         public string? Name { get; init; }
         public string? Type { get; init; }
         public double Payment { get; init; }
-        public double Owed { get; init; }
+        public double Remaining { get; init; }
         public double Available { get; init; }
         public double CreditLimit { get; init; }
         public int DueDay { get; init; }
@@ -480,8 +480,8 @@ public sealed class NotionSyncService : IDisposable
             Id = billId,
             Name = Name ?? string.Empty,
             Type = Type ?? "Other",
-            Cost = Payment,
-            Owed = Owed,
+            Payment = Payment,
+            Remaining = Remaining,
             Available = Available,
             CreditLimit = CreditLimit,
             DueDay = DueDay <= 0 ? 1 : DueDay,
@@ -506,7 +506,12 @@ public sealed class NotionSyncService : IDisposable
                 Name = ReadTitle(props, "Name"),
                 Type = ReadSelect(props, "Type"),
                 Payment = ReadNumber(props, "Payment"),
-                Owed = ReadNumber(props, "Owed"),
+                // Read "Remaining" if present (post-Phase-7c Notion DB), fall back to the
+                // legacy "Owed" column so existing Notion DBs keep pulling correctly until
+                // the user renames their column.
+                Remaining = props.TryGetProperty("Remaining", out _)
+                    ? ReadNumber(props, "Remaining")
+                    : ReadNumber(props, "Owed"),
                 Available = ReadNumber(props, "Available"),
                 CreditLimit = ReadNumber(props, "Credit Limit"),
                 DueDay = (int)Math.Round(ReadNumber(props, "Due Day")),

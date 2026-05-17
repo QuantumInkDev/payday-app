@@ -33,10 +33,10 @@ public sealed partial class BillEditorViewModel : ObservableObject
     private string _type;
 
     [ObservableProperty]
-    private double _cost;
+    private double _payment;
 
     [ObservableProperty]
-    private double _owed;
+    private double _remaining;
 
     [ObservableProperty]
     private double _available;
@@ -74,8 +74,8 @@ public sealed partial class BillEditorViewModel : ObservableObject
 
         _name = bill.Name;
         _type = string.IsNullOrEmpty(bill.Type) ? "Bills" : bill.Type;
-        _cost = bill.Cost;
-        _owed = bill.Owed;
+        _payment = bill.Payment;
+        _remaining = bill.Remaining;
         _available = bill.Available;
         _creditLimit = bill.CreditLimit;
         _dueDay = bill.DueDay;
@@ -92,8 +92,8 @@ public sealed partial class BillEditorViewModel : ObservableObject
     {
         _original.Name = Name?.Trim() ?? string.Empty;
         _original.Type = string.IsNullOrWhiteSpace(Type) ? "Other" : Type.Trim();
-        _original.Cost = Cost;
-        _original.Owed = Owed;
+        _original.Payment = Payment;
+        _original.Remaining = Remaining;
         _original.Available = Available;
         _original.CreditLimit = CreditLimit;
         _original.DueDay = ClampDueDay((int)Math.Round(DueDay));

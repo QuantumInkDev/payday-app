@@ -57,7 +57,7 @@ public class BackupRotationServiceTests
     public async Task CreateAsync_SnapshotsCurrentDbContents()
     {
         var (svc, db, store) = Build();
-        db.Bills.Add(new Bill { Id = "b1", Name = "Amber", Type = "Cards", Cost = 55 });
+        db.Bills.Add(new Bill { Id = "b1", Name = "Amber", Type = "Cards", Payment = 55 });
         db.Settings["Foo"] = "Bar";
 
         var fileName = await svc.CreateAsync();

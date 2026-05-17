@@ -27,7 +27,7 @@ public sealed partial class PayoffTrackerPageViewModel : ObservableObject
     private int _itemCount;
 
     [ObservableProperty]
-    private double _totalOwed;
+    private double _totalRemaining;
 
     public bool IsEmpty => ItemCount == 0;
     public string SummaryLabel => ItemCount == 1
@@ -43,7 +43,7 @@ public sealed partial class PayoffTrackerPageViewModel : ObservableObject
         {
             var bills = await _db.GetAllBillsAsync().ConfigureAwait(true);
             var items = bills
-                .Where(b => b.Active && b.Owed > 0)
+                .Where(b => b.Active && b.Remaining > 0)
                 .Select(b => new PayoffItem(b))
                 .OrderBy(i => i.SortOrder.Bucket)
                 .ThenBy(i => i.SortOrder.Months)
@@ -54,7 +54,7 @@ public sealed partial class PayoffTrackerPageViewModel : ObservableObject
             foreach (var i in items) Items.Add(i);
 
             ItemCount = items.Count;
-            TotalOwed = items.Sum(i => i.Bill.Owed);
+            TotalRemaining = items.Sum(i => i.Bill.Remaining);
         }
         finally
         {

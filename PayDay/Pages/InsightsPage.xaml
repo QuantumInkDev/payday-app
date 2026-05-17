@@ -46,12 +46,12 @@
                 <TextBlock
                     FontSize="11"
                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    Text="CURRENT TOTAL OWED"
+                    Text="CURRENT TOTAL REMAINING"
                     TextAlignment="Right" />
                 <TextBlock
                     FontSize="22"
                     FontWeight="SemiBold"
-                    Text="{x:Bind ViewModel.CurrentTotalOwed, Mode=OneWay, Converter={StaticResource Currency}}"
+                    Text="{x:Bind ViewModel.CurrentTotalRemaining, Mode=OneWay, Converter={StaticResource Currency}}"
                     TextAlignment="Right" />
             </StackPanel>
             <Button
@@ -70,7 +70,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Owed-over-time -->
+            <!-- Remaining-over-time -->
             <Border
                 Grid.Column="0"
                 Padding="16"
@@ -84,7 +84,7 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Spacing="2">
-                        <TextBlock FontWeight="SemiBold" Text="Total Owed Over Time" />
+                        <TextBlock FontWeight="SemiBold" Text="Total Remaining Over Time" />
                         <TextBlock
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -169,7 +169,7 @@
                                         VerticalAlignment="Center"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                        <Run Text="{x:Bind TotalCost, Converter={StaticResource Currency}}" />
+                                        <Run Text="{x:Bind TotalPayment, Converter={StaticResource Currency}}" />
                                         <Run Text="·" />
                                         <Run Text="{x:Bind Percent}" /><Run Text="%" />
                                     </TextBlock>
