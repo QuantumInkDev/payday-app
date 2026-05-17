@@ -157,6 +157,70 @@ public class PayDayPageViewModelTests
     }
 
     [Fact]
+    public async Task MarkPaid_DecrementsBillRemainingBySubmittedAmount()
+    {
+        var bill = MakeBill("amazon", "Amazon", cost: 87, dueDay: 20);
+        bill.Remaining = 1545;
+        var db = MakeDb(bill);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        var row = Assert.Single(vm.UnpaidBills);
+        await vm.MarkPaidCommand.ExecuteAsync(row);
+
+        Assert.Equal(1545 - 87, db.Bills.Single().Remaining);
+    }
+
+    [Fact]
+    public async Task MarkPaid_ClampsRemainingAtZero()
+    {
+        var bill = MakeBill("loan", "Last Payment", cost: 200, dueDay: 20);
+        bill.Remaining = 50; // less than the payment amount
+        var db = MakeDb(bill);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        var row = Assert.Single(vm.UnpaidBills);
+        await vm.MarkPaidCommand.ExecuteAsync(row);
+
+        Assert.Equal(0, db.Bills.Single().Remaining);
+    }
+
+    [Fact]
+    public async Task UnmarkPaid_RestoresBillRemaining()
+    {
+        var bill = MakeBill("amazon", "Amazon", cost: 87, dueDay: 20);
+        bill.Remaining = 1545;
+        var db = MakeDb(bill);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        var row = Assert.Single(vm.UnpaidBills);
+        await vm.MarkPaidCommand.ExecuteAsync(row);
+        Assert.Equal(1545 - 87, db.Bills.Single().Remaining);
+
+        await vm.UnmarkPaidCommand.ExecuteAsync(row);
+        Assert.Equal(1545, db.Bills.Single().Remaining);
+    }
+
+    [Fact]
+    public async Task MarkAllPaid_DecrementsEveryBillRemaining()
+    {
+        var b1 = MakeBill("a", "A", cost: 100, dueDay: 20);
+        b1.Remaining = 500;
+        var b2 = MakeBill("b", "B", cost: 50, dueDay: 20);
+        b2.Remaining = 200;
+        var db = MakeDb(b1, b2);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        await vm.MarkAllPaidCommand.ExecuteAsync(null);
+
+        Assert.Equal(400, db.Bills.Single(b => b.Id == "a").Remaining);
+        Assert.Equal(150, db.Bills.Single(b => b.Id == "b").Remaining);
+    }
+
+    [Fact]
     public async Task LoadAsync_InactiveBill_IsExcluded()
     {
         var bill = MakeBill("electric", "Electric", cost: 400, dueDay: 20);

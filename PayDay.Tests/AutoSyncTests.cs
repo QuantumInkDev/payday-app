@@ -21,7 +21,7 @@ public class AutoSyncTests
         db.Settings[NotionSyncService.BillsDataSourceSetting] = "bills-ds";
         db.Settings[NotionSyncService.PaymentsDataSourceSetting] = "payments-ds";
         db.Settings[NotionSyncService.SnapshotsDataSourceSetting] = "snap-ds";
-        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Payment =400, DueDay = 15, Rate = "Monthly", Active = true });
+        db.Bills.Add(new Bill { Id = "1", Name = "Electric", Type = "Bills", Payment = 400, Remaining = 1000, DueDay = 15, Rate = "Monthly", Active = true, NotionPageId = "page-bill-1" });
         return db;
     }
 
@@ -75,6 +75,8 @@ public class AutoSyncTests
         var db = SeedDb();
         var handler = new RecordingHttpHandler();
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "payment-page" }"""));
+        // Bill is pre-seeded with NotionPageId; PushBillAsync hits the fast PATCH path.
+        handler.OnPatch("v1/pages/page-bill-1", _ => RecordingHttpHandler.Ok("""{ "id": "page-bill-1" }"""));
         using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
         var vm = new PayDayPageViewModel(db, notion);
         await vm.LoadAsync(new System.DateTime(2026, 5, 15));
@@ -87,9 +89,11 @@ public class AutoSyncTests
         Assert.Single(db.Payments);
         Assert.Equal(NotionPushStatus.Ok, vm.LastNotionPushStatus);
         Assert.Empty(vm.LastNotionPushError);
-        var req = Assert.Single(handler.Requests);
-        Assert.Contains("payments-ds", req.Body);
-        Assert.Contains("Electric", req.Body);
+        var paymentReq = Assert.Single(handler.Requests, r => r.Path == "v1/pages");
+        Assert.Contains("payments-ds", paymentReq.Body);
+        Assert.Contains("Electric", paymentReq.Body);
+        // Bill Remaining was 1000, paid 400 → now 600.
+        Assert.Equal(600, db.Bills.Single().Remaining);
     }
 
     [Fact]
@@ -116,9 +120,11 @@ public class AutoSyncTests
     public async Task MarkAllPaid_PushesEveryPayment()
     {
         var db = SeedDb();
-        db.Bills.Add(new Bill { Id = "2", Name = "Phone", Type = "Bills", Payment =100, DueDay = 15, Rate = "Monthly", Active = true });
+        db.Bills.Add(new Bill { Id = "2", Name = "Phone", Type = "Bills", Payment = 100, DueDay = 15, Rate = "Monthly", Active = true, NotionPageId = "page-bill-2" });
         var handler = new RecordingHttpHandler();
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "p" }"""));
+        handler.OnPatch("v1/pages/page-bill-1", _ => RecordingHttpHandler.Ok("""{ "id": "page-bill-1" }"""));
+        handler.OnPatch("v1/pages/page-bill-2", _ => RecordingHttpHandler.Ok("""{ "id": "page-bill-2" }"""));
         using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
         var vm = new PayDayPageViewModel(db, notion);
         await vm.LoadAsync(new System.DateTime(2026, 5, 15));

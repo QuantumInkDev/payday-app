@@ -24,7 +24,55 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
         _ = ApplyPersistedThemeAsync();
+        _ = RefreshLastSyncedLabelAsync();
         Activated += MainWindow_Activated;
+    }
+
+    private async void SyncNowButton_Click(object sender, RoutedEventArgs e)
+    {
+        SyncProgress.IsActive = true;
+        SyncProgress.Visibility = Visibility.Visible;
+        SyncNowButton.IsEnabled = false;
+        try
+        {
+            if (!App.Notion.HasToken())
+            {
+                await ShowSyncErrorAsync("No Notion token saved. Add one in Settings first.");
+                return;
+            }
+            await App.Notion.SyncBillsAsync();
+            await RefreshLastSyncedLabelAsync();
+        }
+        catch (System.Exception ex)
+        {
+            await ShowSyncErrorAsync(ex.Message);
+        }
+        finally
+        {
+            SyncProgress.IsActive = false;
+            SyncProgress.Visibility = Visibility.Collapsed;
+            SyncNowButton.IsEnabled = true;
+        }
+    }
+
+    private async System.Threading.Tasks.Task RefreshLastSyncedLabelAsync()
+    {
+        var last = await App.Notion.GetLastSyncedAsync();
+        LastSyncedLabel.Text = last.HasValue
+            ? $"Synced {last.Value.ToLocalTime():h:mm tt}"
+            : "Never synced";
+    }
+
+    private async System.Threading.Tasks.Task ShowSyncErrorAsync(string message)
+    {
+        var dialog = new ContentDialog
+        {
+            XamlRoot = RootGrid.XamlRoot,
+            Title = "Sync failed",
+            Content = message,
+            CloseButtonText = "OK",
+        };
+        await dialog.ShowAsync();
     }
 
     private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
