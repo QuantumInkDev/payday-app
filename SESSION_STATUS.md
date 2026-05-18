@@ -8,19 +8,76 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 7 — Polish** (new phase inserted 2026-05-17; Ship is now Phase 8). Phase 6 fully closed 2026-05-17 — 6c smoke test passed (wipe `payday.db`, relaunch, dialog fires, restore round-trips). Code chunks landed 2026-05-15: 6a (`9874397`), 6b (`474b4f3`), 6c (`78b314a`) + temporary icon (`425be56`). Build 0 warn / 0 err. Tests 150/150 (was 121 at Phase 6 start; +29 across 6a, 6b, 6c).
+**Phase 7 — Polish** is functionally complete pending smoke test. Nine chunks shipped this session:
 
-No ship until Phase 7 polish lands. Three buckets per `PAYDAY_WINUI3_PLAN.md` §7:
+| Chunk | Commit | What |
+|---|---|---|
+| 7a | `61ebb96` | Sortable All Bills columns |
+| 7b | `3c19932` | Bill auto-sync on edit (PushBillAsync + AllBills wiring) |
+| 7c | `b067460` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
+| 7d | `971e1b9` | Sync Now button at top of nav + Pay decrements Remaining |
+| 7e | `2ce6916` | Dashboard polish (row→editor, bigger subtotals) |
+| 7f | `180b8f4` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types, scrollbar fix) |
+| 7g | `38d08a9` | Type tag color customization (TypeColorService + Settings UI) |
+| 7h | `fd5bcf1` | Installments type |
+| 7i | `9fa95ec` | Insights snapshot delete/clear + Payoff snowball/avalanche |
 
-- **§7.1 Known-issue carryovers** — sortable All Bills columns (retrofit Dashboard pattern), bill editor tweaks (specifics TBD from chunk 3b note), real app icon (replace temporary Segoe Fluent glyph `e825`), Notion archive-on-delete (needs tombstone table), NotionPageId write-back on Payments/Snapshots.
-- **§7.2 Original item-11 backlog** — dark theme tuning across all pages, toast notifications (mark-paid, snapshot saved, sync ok/fail, backup created, restore applied), early-start sync (auto-kick Notion sync on launch when a token is saved, optional "skip if last sync < N min ago" guard). Auto-backup already shipped in Phase 6.
-- **§7.3 UI/UX consistency pass** — empty states on All Bills/PayDay/Insights/Payoff, spacing+alignment sweep, focus rings + keyboard nav order, accessibility audit (AutomationProperties + non-color affordances).
+**Tests:** 187/187 green (was 150 entering Phase 7 — +37). Build 0 warn / 0 err on both projects.
 
-**Exit criteria for Phase 7:** every §7.x item checked or explicitly deferred with rationale, tests still green, 0 warnings, manual smoke pass across every page in Light + Dark.
+**Outstanding from Phase 7 plan (§7.1/§7.2/§7.3):**
 
-**Suggested first chunk:** §7.1 sortable All Bills — smallest, cleanest carryover; pattern already proven on Dashboard, retrofit is mostly mechanical. Then the real app icon (independent, satisfying to land before any UI sweep).
+- **§7.1 carryovers:**
+  - [x] Sortable All Bills (7a) ✅
+  - [ ] Bill editor tweaks — no specifics captured; revisit when user raises
+  - [ ] Real app icon — still the temporary Segoe Fluent glyph (`e825`)
+  - [ ] Notion archive-on-delete — needs tombstone table; TODO in `SyncBillsAsync`
+  - [ ] NotionPageId write-back on Payments/Snapshots — only meaningful when push-resume-after-failure is built
+- **§7.2 backlog:**
+  - [ ] Dark theme tuning across all pages
+  - [ ] Toast notifications (mark-paid, snapshot saved, sync ok/fail, backup created, restore applied)
+  - [ ] Early-start sync (auto-kick on launch when a token is saved)
+  - [x] Auto-backup (Phase 6) ✅
+- **§7.3 UI/UX consistency:**
+  - [ ] Empty states on All Bills / PayDay / Insights / Payoff
+  - [ ] Spacing + alignment sweep
+  - [ ] Focus rings + keyboard nav order review
+  - [ ] Accessibility audit (AutomationProperties + non-color affordances)
 
-After Phase 7: **Phase 8 — Ship** (MSIX packaging + sideload/Store distribution per `PAYDAY_WINUI3_PLAN.md` §8).
+**🔧 User action required after this session (Notion DB schema changes):**
+
+1. **Rename column "Owed" → "Remaining"** in the Bills data source.
+2. **Rename column "Total Owed" → "Total Remaining"** in the Snapshots data source.
+3. **Add "Installments" as a select option** on the Bills "Type" column (only if you plan to use the new type).
+
+Reads still tolerate the legacy "Owed" column (fallback path), but **writes will fail with a Notion validation error** until the column is renamed.
+
+After smoke test passes and the user confirms, the next phase is **Phase 8 — Ship** (MSIX packaging + sideload/Store distribution per `PAYDAY_WINUI3_PLAN.md` §8). The Phase 7 §7.x leftovers above can be picked up alongside Phase 8 or as a Phase 7.5 mini-sprint.
+
+---
+
+## Session — 2026-05-17 (Phase 7 chunks 7a–7i)
+
+Worked through the user's polish list — captured 15 items rapid-fire, confirmed, and shipped them as 7 back-to-back chunks (7c–7i) after 7a + 7b which landed earlier in the session. Every chunk committed and pushed individually so each is independently revertable.
+
+### Key implementation notes
+
+- **Cost→Payment / Owed→Remaining rename (7c)** was the deepest change. Touched the Bill model, Snapshot model, SQLite schema (v1→v2 migration with `ALTER TABLE RENAME COLUMN`), Notion property names, BackupSerializer (with backward-compat for legacy `cost`/`owed` JSON keys), every VM, every XAML, every test. The DB migration is idempotent (checks `PRAGMA table_info` for the old column name before renaming).
+- **Pay decrements Remaining (7d)** — `PayDayPageViewModel.MarkPaidAsync` now also `UpsertBillAsync` after subtracting the paid amount (clamped to zero) and fires a fire-and-forget `PushBillAsync` alongside the existing payment push. `UnmarkPaidAsync` mirrors for the refund case. No APR/interest math — that's on the user.
+- **Sync Now at top of nav (7d)** — `NavigationView.PaneFooter` hosts the button + last-synced label, accessible from every page.
+- **Expander groups on All Bills (7f)** — collapsible per-type; header shows the rounded-square (CornerRadius=4) type pill plus TotalPayment + TotalRemaining subtotals computed on `BillGroup`.
+- **Custom types in editor (7f)** — `BillEditorDialog.ShowAsync` queries distinct `Type` values from existing bills and seeds them into `BillEditorViewModel.TypeOptions` alongside `KnownTypes`. No separate settings table.
+- **TypeColorService (7g)** — process-wide static state, loaded from Settings JSON at app startup. `TypeToBrushConverter` and `InsightsPage.ColorForType` both read through it. Tests use `ResetInMemory()` to isolate state between cases.
+- **Snowball/avalanche (7i)** — `PayoffTrackerPageViewModel` caches the unsorted list and re-sorts in place when `StrategyIndex` changes. A `RadioButtons` group at the top of the page selects between Time-to-payoff (default), Snowball, Avalanche.
+
+### What changed at the surface
+
+- All UI references "Payment" and "Remaining" (was "Cost" and "Owed").
+- All Bills page: collapsible Expander groups, rounded-square type pills, new APR/Available/Limit columns, sync-glyph for auto-pay rows, ordinal Due (1st/2nd/12th).
+- Dashboard: rows are clickable (opens editor); subtotal totals bigger than per-row amounts.
+- Insights: "Manage…" button → delete individual snapshots or clear all.
+- Payoff: sort strategy radio buttons (Time / Snowball / Avalanche).
+- Settings: new "Type Colors" card with per-type ColorPicker.
+- Top nav: Sync Now + last-synced label always visible.
 
 ---
 
@@ -28,65 +85,21 @@ After Phase 7: **Phase 8 — Ship** (MSIX packaging + sideload/Store distributio
 
 Phase 5 (Notion sync) shipped across five chunks (5a–5e). Build 0 warn / 0 err. 121 tests pass (was 84 at start of session). End-to-end smoke test passed: token save → Test → Sync Now → mark-paid pushes to Payments DB → Save Snapshot pushes to Snapshots DB.
 
-### What landed across chunks 5a–5e
-
-- **5a Credential store** (`23f99dc`) — `ICredentialStore` in `PayDay.Core`; `WindowsCredentialStore` (Advapi32 P/Invoke, `CRED_TYPE_GENERIC`, target `PayDay:{key}`, UTF-16LE blob) in the app project. No tests yet — abstraction consumed in 5b.
-- **5b NotionSyncService** (`4beadf5`) — bills bidirectional sync via the 2025-09-03 data-sources API (`POST /v1/data_sources/{id}/query`, `POST /v1/pages` with `parent.type=data_source_id`). Last-write-wins on `UpdatedAt` vs `last_edited_time`. Match by `Bill ID` text property. Push helpers for Payments + Snapshots. Notion-Version header `2025-09-03`. `InternalsVisibleTo PayDay.Tests` added to `PayDay.Core.csproj`. `InMemoryCredentialStore` + `RecordingHttpHandler` test fakes. 13 NotionSyncServiceTests.
-- **5c Auto-sync on payment + snapshot** (`c5a1ef8`) — `NotionPushStatus` enum (NotConfigured/Ok/Failed). `PayDayPageViewModel` + `InsightsPageViewModel` each take an optional `NotionSyncService?`; after a local persist they kick off `PushPayment/SnapshotSafeAsync` (fire-and-forget). Public `PendingNotionPush` Task surfaces the latest push for deterministic tests. `App.Credentials` + `App.Notion` are process-wide singletons. 8 AutoSyncTests.
-- **5d Settings UI** (`341213a`) — Notion card on `SettingsPage.xaml`: PasswordBox + Save/Clear, Test connection + Sync now buttons (disabled until token set), ProgressRing, status row (Ellipse dot + status + last-synced label). `NotionStatusToBrushConverter` for the dot. `SettingsPageViewModel` extended with token + status state and `SaveTokenAsync` / `ClearTokenAsync` / `TestConnectionAsync` / `SyncNowAsync`. 10 SettingsPageNotionTests.
-- **5e Select-property fix + diagnostic tool** (`1b60120`) — first real Sync Now returned 27 "Type is expected to be select" validation errors. Plan §5.2 schema was wrong: `Type` and `Frequency` on the Bills DB are `select`, not `rich_text`. Fixed `BuildBillProperties` (new `Select(...)` helper) + `NotionPage.FromElement` (new `ReadSelect`). Empty values send `{"select": null}` to clear. Added `tools/notion-diagnose.ps1` — P/Invokes `CredReadW` to read the token from Credential Manager, then dumps every seeded data-source's schema including select-option lists. 3 new tests.
-
-### Notable details
+### Notable details (Phase 5)
 
 - **`Notion-Version: 2025-09-03`** is required for the data-sources API. The legacy `databases/{id}/query` endpoint won't accept the data-source IDs in our settings table. `parent` payload uses `{ "type": "data_source_id", "data_source_id": "..." }` — **not** `{ "database_id": "..." }`.
 - **`PasswordBox.Password` is NOT a dependency property in WinUI 3** — two-way binding doesn't work. The page handler reads `TokenBox.Password` on click and calls `ViewModel.SaveTokenAsync(...)`.
-- **Fire-and-forget pushes are deterministically testable via `PendingNotionPush`** — the VM assigns the latest started push task to this public property; tests await it after the VM action. Production code never awaits it (real fire-and-forget feel).
-- **Push failure surfaces but doesn't roll back local state.** `PushPaymentSafeAsync` catches everything, sets `LastNotionPushStatus=Failed` + `LastNotionPushError`, and returns normally. Mark-paid stays applied locally.
-- **Archive-on-delete (plan §5.2 last bullet) is deferred** — needs a tombstone table to distinguish "never existed locally" from "deleted locally last session". A TODO sits in `SyncBillsAsync`.
-- **NotionPageId write-back on Payments/Snapshots is deferred** — they're push-only, and nothing reads the column yet. Add an `is_synced` column when we ever build push-resume-after-failure.
+- **Fire-and-forget pushes are deterministically testable via `PendingNotionPush`** — the VM assigns the latest started push task to this public property; tests await it after the VM action.
+- **Push failure surfaces but doesn't roll back local state.** `PushPaymentSafeAsync` catches everything, sets `LastNotionPushStatus=Failed` + `LastNotionPushError`, and returns normally.
 - **`InternalsVisibleTo PayDay.Tests`** on `PayDay.Core.csproj` lets internal helpers (`ParseSqliteUtc`, `BuildBillProperties`, `NotionPage`) stay internal while remaining test-visible.
-
----
-
-## Session — 2026-05-15 (Phase 4 closed)
-
-Four chunk-4 pages + Settings backup wiring shipped. 84 tests pass, build clean. All Phase 4 §4.x pages are now live.
-
-### What landed across chunks 4a–4d
-
-- **4a Dashboard** (`a4aa445`) — 4 headline stats (monthly obligations rate-normalized, total owed, credit utilization %, bills due this period) + 3 period sections (This/Next/Following). Each section separates auto-pay vs manual and has client-side sortable columns (Type/Name/Due/Cost) — same-column click flips asc↔desc, switching columns resets to ascending. Sort indicator (▲/▼) bound via `[NotifyPropertyChangedFor]`.
-- **4b Payoff Tracker** (`1d010fc`) — Card per active bill with `Owed > 0`. Per-item: type pill, name, payment label (with APR if present), owed, optional limit-utilization progress bar (clamped 0..1), payoff estimate label. Sorted by `(bucket, months)` tuple: concrete months first, "never at this rate" next (when payment ≤ monthly interest), uncomputable last.
-- **4c Insights** (`b3f73b4`) — LiveCharts2 CartesianChart for total-owed-over-time (line + fill, accent purple), PieChart donut for type breakdown using pill-matching SkiaSharp colors, color-coded legend. "Save Snapshot" persists current total + JSON-ish per-bill breakdown and re-loads charts. Empty-state overlay when no snapshots yet. Page code-behind builds `ISeries[]` from VM plain data so `PayDay.Core` stays free of LiveCharts/SkiaSharp.
-- **4d Settings** (`f0cafb9`) — Five cards: Pay Period (DatePicker writes via `PayPeriodService.SetPayAnchorAsync`), Appearance (RadioButtons; applies live via `MainWindow.ApplyTheme` and persists to Settings table), **Backup & Restore (functional JSON export + import using FileSavePicker/FileOpenPicker, with confirmation ContentDialog on import)**, Notion sync placeholder with PHASE 5 tag, About card. Theme applied at startup via `MainWindow.ApplyPersistedThemeAsync`.
-
-### Notable details
-
-- **`App.MainWindow` static** was required so file pickers can call `WinRT.Interop.WindowNative.GetWindowHandle(window)` + `InitializeWithWindow.Initialize`. Made it a public static property on the `App` class. Without it, picker.PickSaveFileAsync throws on WinUI 3.
-- **`DateTimeOffset(dateTime, TimeSpan.Zero)` gotcha** — if `dateTime.Kind == Local` and the machine's UTC offset isn't zero, the ctor throws `ArgumentException`. `PayPeriodService.GetPayAnchorAsync` parses with `DateTimeStyles.AssumeLocal`, so it returns a `Local`-kind DateTime. Fix: construct with `new DateTimeOffset(y, m, d, 0, 0, 0, TimeSpan.Zero)` to strip the Kind. Hit it once in tests; fixed in `SettingsPageViewModel.LoadAsync`.
-- **`RadioButtons.SelectedIndex` is `int`, not `enum`** — bound to a proxy `SelectedThemeIndex` property on the VM that converts to/from `AppTheme`. `[NotifyPropertyChangedFor(nameof(SelectedThemeIndex))]` on the underlying enum field keeps the index in sync.
-- **`BackupSerializer.FromJson` refuses future-version files** — anything with `formatVersion` > 1 throws with a clear message. Forward-compatibility shim for when Phase 5/6 bumps the format.
-- **`ReplaceAllDataAsync` is transactional** in the real DB — single `BeginTransaction → DELETE * → INSERT * → COMMIT`. If parsing the JSON succeeds but a row insert later fails, the DB rolls back. Tests cover the happy path; the bad-JSON test in `SettingsPageViewModelTests.ImportAsync_BadJson_ThrowsBeforeMutating` confirms parse-time failure leaves the DB untouched.
-- **Live theme switching** — set `RequestedTheme` on the named `RootGrid` element. Application-level theme is immutable at runtime in WinUI 3, but `FrameworkElement.RequestedTheme` propagates to descendants.
-- **Stale `PayDay.exe` blocks rebuilds** — `dotnet run` failed mid-session because PID 68368 from a prior smoke test was still holding `AppX\PayDay.exe`. `Get-Process PayDay | Stop-Process -Force` cleared it. Pattern: always make sure the previous smoke-test instance exited before re-running. Easy to miss because the WinUI host doesn't always close cleanly.
-
-### How to re-run the tests / build
-
-```powershell
-$env:PATH = "C:\Program Files\dotnet;$env:PATH"
-dotnet build P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj --nologo
-dotnet test  P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Tests\PayDay.Tests.csproj --nologo
-dotnet run --project P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj
-# If `dotnet run` fails with a file-lock error, kill the stale PayDay process first:
-Get-Process PayDay -ErrorAction SilentlyContinue | Stop-Process -Force
-```
 
 ---
 
 ## Known issues / workarounds
 
-- **Sortable columns on All Bills are still deferred** — the sortable-table pattern shipped on the Dashboard's manual subsection should retrofit cleanly. Not blocking; revisit in a polish pass.
+- **Notion DB column rename (post-7c)** — see "User action required" above.
 - **Bill editor tweaks pending** — user noted "we can make some tweaks later" after the chunk-3b smoke test. No specifics captured; revisit when they raise it.
-- **MVVMTK0045 is no longer a concern** — all `[ObservableProperty]` usages live in `PayDay.Core` (plain net9.0). The WinUI 3 partial-property generator gap (memory [[winui-mvvm-partial-properties]]) still exists upstream but doesn't affect this codebase.
+- **MVVMTK0045 is no longer a concern** — all `[ObservableProperty]` usages live in `PayDay.Core` (plain net9.0).
 - **XAML compiler diagnostics are sometimes empty** under `dotnet build` (known WinUI 3 toolchain issue). The `winui-dev-workflow` skill ships a `BuildAndRun.ps1` helper that prefers MSBuild when available.
 - **`winui-setup` does not check for the Windows App Runtime framework package.** If `winapp run` fails with `0x80073CF3` after a fresh setup, install the matching runtime: `winget install Microsoft.WindowsAppRuntime.2.0`.
 - **`dotnet` is not on `PATH` in this shell.** Use `$env:PATH = "C:\Program Files\dotnet;$env:PATH"` at the top of any PowerShell session before invoking `dotnet`.
