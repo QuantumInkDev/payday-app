@@ -25,7 +25,10 @@ public sealed class BillGroup
         Key = key;
         var list = bills.ToList();
         Bills = new ObservableCollection<Bill>(list);
-        TotalPayment = list.Sum(b => b.Payment);
-        TotalRemaining = list.Sum(b => b.Remaining);
+        // Inactive bills are shown in the list (so the user can toggle them back
+        // on) but excluded from the subtotals — same convention as the Dashboard
+        // and Payoff aggregates.
+        TotalPayment = list.Where(b => b.Active).Sum(b => b.Payment);
+        TotalRemaining = list.Where(b => b.Active).Sum(b => b.Remaining);
     }
 }
