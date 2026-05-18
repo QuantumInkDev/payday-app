@@ -33,6 +33,9 @@ public sealed partial class AllBillsPage : Page
         {
             bill.Active = ts.IsOn;
             await ViewModel.SaveBillAsync(bill);
+            // Reload so the per-group subtotals re-exclude / re-include the
+            // toggled bill. Page state (sort + scroll) is preserved by LoadAsync.
+            await ViewModel.LoadAsync();
         }
     }
 

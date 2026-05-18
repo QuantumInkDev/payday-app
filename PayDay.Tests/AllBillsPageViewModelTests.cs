@@ -295,6 +295,24 @@ public class AllBillsPageViewModelTests
     }
 
     [Fact]
+    public async Task BillGroup_InactiveBills_ExcludedFromSubtotals_StillVisibleInList()
+    {
+        var db = new FakeDatabaseService();
+        db.Bills.Add(MakeBill("a", "Amazon", "Cards", payment: 87, remaining: 1545, active: true));
+        db.Bills.Add(MakeBill("b", "Old Card", "Cards", payment: 999, remaining: 9999, active: false));
+        var vm = new AllBillsPageViewModel(db);
+
+        await vm.LoadAsync();
+
+        var cards = Assert.Single(vm.Groups);
+        // Inactive bill is in the visible list (so it can be toggled back on)…
+        Assert.Equal(2, cards.Bills.Count);
+        // …but excluded from the subtotals.
+        Assert.Equal(87, cards.TotalPayment);
+        Assert.Equal(1545, cards.TotalRemaining);
+    }
+
+    [Fact]
     public async Task LoadAsync_PreservesCurrentSortState()
     {
         var db = new FakeDatabaseService();
