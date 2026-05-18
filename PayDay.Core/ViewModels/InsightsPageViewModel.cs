@@ -70,6 +70,8 @@ public sealed partial class InsightsPageViewModel : ObservableObject
 
     public ObservableCollection<SnapshotPoint> History { get; } = new();
     public ObservableCollection<TypeBreakdownEntry> TypeBreakdown { get; } = new();
+    /// <summary>Full snapshot rows for the management UI (delete-by-id, clear-all).</summary>
+    public ObservableCollection<Snapshot> SnapshotsList { get; } = new();
 
     public async Task LoadAsync()
     {
@@ -81,10 +83,16 @@ public sealed partial class InsightsPageViewModel : ObservableObject
             CurrentTotalRemaining = active.Sum(b => b.Remaining);
 
             History.Clear();
+            SnapshotsList.Clear();
             var snapshots = await _db.GetAllSnapshotsAsync().ConfigureAwait(true);
             foreach (var s in snapshots.OrderBy(s => s.SnapshotDate, StringComparer.Ordinal))
             {
                 History.Add(new SnapshotPoint(ParseDate(s.SnapshotDate), s.TotalRemaining));
+            }
+            // Newest-first for the manage-snapshots list.
+            foreach (var s in snapshots.OrderByDescending(s => s.SnapshotDate, StringComparer.Ordinal))
+            {
+                SnapshotsList.Add(s);
             }
             SnapshotCount = History.Count;
 
@@ -112,8 +120,22 @@ public sealed partial class InsightsPageViewModel : ObservableObject
         }
     }
 
+    /// <summary>Deletes a single snapshot by ID, then reloads so the chart updates.</summary>
+    public async Task DeleteSnapshotAsync(long id)
+    {
+        await _db.DeleteSnapshotAsync(id).ConfigureAwait(true);
+        await LoadAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Deletes every snapshot, then reloads so the chart empties out.</summary>
+    public async Task ClearAllSnapshotsAsync()
+    {
+        await _db.DeleteAllSnapshotsAsync().ConfigureAwait(true);
+        await LoadAsync().ConfigureAwait(true);
+    }
+
     /// <summary>
-    /// Persists a snapshot of the current state (total owed + a JSON breakdown
+    /// Persists a snapshot of the current state (total remaining + a JSON breakdown
     /// of per-bill balances) and re-loads the page so the new point shows up
     /// in the chart immediately.
     /// </summary>

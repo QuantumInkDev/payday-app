@@ -75,6 +75,19 @@ internal sealed class FakeDatabaseService : IDatabaseService
         => Task.FromResult<IReadOnlyList<Snapshot>>(
             Snapshots.OrderBy(s => s.SnapshotDate, System.StringComparer.Ordinal).ToList());
 
+    public Task<int> DeleteSnapshotAsync(long id)
+    {
+        var removed = Snapshots.RemoveAll(s => s.Id == id);
+        return Task.FromResult(removed);
+    }
+
+    public Task<int> DeleteAllSnapshotsAsync()
+    {
+        var count = Snapshots.Count;
+        Snapshots.Clear();
+        return Task.FromResult(count);
+    }
+
     public Task<IReadOnlyList<Payment>> GetAllPaymentsAsync()
         => Task.FromResult<IReadOnlyList<Payment>>(Payments.ToList());
 
