@@ -221,6 +221,58 @@ public class PayDayPageViewModelTests
     }
 
     [Fact]
+    public async Task SortByCommand_SortsAllThreeSectionsTogether()
+    {
+        var unpaidZ = MakeBill("uz", "Zebra", cost: 50, dueDay: 20);
+        var unpaidA = MakeBill("ua", "Amber", cost: 200, dueDay: 20);
+        var autoZ   = MakeBill("az", "Zinnia", cost: 30, dueDay: 20, autoPay: true);
+        var autoA   = MakeBill("aa", "Aspen",  cost: 90, dueDay: 20, autoPay: true);
+        var db = MakeDb(unpaidZ, unpaidA, autoZ, autoA);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        vm.SortByCommand.Execute("Name");
+
+        Assert.Equal(new[] { "Amber", "Zebra" }, vm.UnpaidBills.Select(r => r.Bill.Name));
+        Assert.Equal(new[] { "Aspen", "Zinnia" }, vm.AutoPayBills.Select(r => r.Bill.Name));
+        Assert.Equal(PayDaySortColumn.Name, vm.SortColumn);
+        Assert.True(vm.SortAscending);
+    }
+
+    [Fact]
+    public async Task SortByCommand_FlipsDirectionOnSameColumn()
+    {
+        var a = MakeBill("a", "A", cost: 100, dueDay: 20);
+        var b = MakeBill("b", "B", cost: 200, dueDay: 20);
+        var db = MakeDb(a, b);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        vm.SortByCommand.Execute("Payment");
+        Assert.Equal(new[] { "A", "B" }, vm.UnpaidBills.Select(r => r.Bill.Name));
+
+        vm.SortByCommand.Execute("Payment");
+        Assert.False(vm.SortAscending);
+        Assert.Equal(new[] { "B", "A" }, vm.UnpaidBills.Select(r => r.Bill.Name));
+    }
+
+    [Fact]
+    public async Task SortByCommand_SortPreservedAcrossReload()
+    {
+        var a = MakeBill("a", "Amber", cost: 200, dueDay: 20);
+        var z = MakeBill("z", "Zebra",  cost: 50,  dueDay: 20);
+        var db = MakeDb(z, a);
+        var vm = new PayDayPageViewModel(db);
+        await vm.LoadAsync(DefaultToday);
+
+        vm.SortByCommand.Execute("Payment"); // ascending by payment
+        Assert.Equal(new[] { "Zebra", "Amber" }, vm.UnpaidBills.Select(r => r.Bill.Name));
+
+        await vm.LoadAsync(DefaultToday);
+        Assert.Equal(new[] { "Zebra", "Amber" }, vm.UnpaidBills.Select(r => r.Bill.Name));
+    }
+
+    [Fact]
     public async Task LoadAsync_InactiveBill_IsExcluded()
     {
         var bill = MakeBill("electric", "Electric", cost: 120, dueDay: 20);

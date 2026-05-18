@@ -10,6 +10,14 @@ using PayDay.Services;
 
 namespace PayDay.ViewModels;
 
+public enum PayDaySortColumn
+{
+    DueDate,
+    Name,
+    Type,
+    Payment,
+}
+
 /// <summary>
 /// View model behind <c>PayDayPage</c>. Owns the 3-period assignment, splits the
 /// current period's bills into auto-pay / unpaid / paid lists, and exposes the
@@ -104,6 +112,70 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     public string? CurrentPeriodKey => CurrentPeriod?.Period.Key;
 
     // ------------------------------------------------------------------
+    // Sort state — one global selection applied to all three lists
+    // ------------------------------------------------------------------
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DueDateIndicator))]
+    [NotifyPropertyChangedFor(nameof(NameIndicator))]
+    [NotifyPropertyChangedFor(nameof(TypeIndicator))]
+    [NotifyPropertyChangedFor(nameof(PaymentIndicator))]
+    private PayDaySortColumn _sortColumn = PayDaySortColumn.DueDate;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DueDateIndicator))]
+    [NotifyPropertyChangedFor(nameof(NameIndicator))]
+    [NotifyPropertyChangedFor(nameof(TypeIndicator))]
+    [NotifyPropertyChangedFor(nameof(PaymentIndicator))]
+    private bool _sortAscending = true;
+
+    public string DueDateIndicator => IndicatorFor(PayDaySortColumn.DueDate);
+    public string NameIndicator => IndicatorFor(PayDaySortColumn.Name);
+    public string TypeIndicator => IndicatorFor(PayDaySortColumn.Type);
+    public string PaymentIndicator => IndicatorFor(PayDaySortColumn.Payment);
+
+    private string IndicatorFor(PayDaySortColumn col)
+        => col != SortColumn ? string.Empty : SortAscending ? " ▲" : " ▼";
+
+    [RelayCommand]
+    private void SortBy(string? columnName)
+    {
+        if (!Enum.TryParse<PayDaySortColumn>(columnName, ignoreCase: true, out var col)) return;
+        if (col == SortColumn)
+        {
+            SortAscending = !SortAscending;
+        }
+        else
+        {
+            SortColumn = col;
+            SortAscending = true;
+        }
+        ApplySort();
+    }
+
+    private void ApplySort()
+    {
+        SortInPlace(UnpaidBills);
+        SortInPlace(PaidBills);
+        SortInPlace(AutoPayBills);
+    }
+
+    private void SortInPlace(ObservableCollection<PeriodBillRow> list)
+    {
+        IEnumerable<PeriodBillRow> ordered = SortColumn switch
+        {
+            PayDaySortColumn.Name    => list.OrderBy(r => r.Bill.Name, StringComparer.OrdinalIgnoreCase),
+            PayDaySortColumn.Type    => list.OrderBy(r => r.Bill.Type, StringComparer.OrdinalIgnoreCase),
+            PayDaySortColumn.Payment => list.OrderBy(r => r.Bill.Payment),
+            _                        => list.OrderBy(r => r.DueDate ?? DateTime.MaxValue),
+        };
+        var snapshot = ordered.ToList();
+        if (!SortAscending) snapshot.Reverse();
+        list.Clear();
+        foreach (var r in snapshot) list.Add(r);
+    }
+
+    // ------------------------------------------------------------------
     // Load
     // ------------------------------------------------------------------
 
@@ -164,6 +236,7 @@ public sealed partial class PayDayPageViewModel : ObservableObject
             }
 
             RecalculateTotals();
+            ApplySort();
         }
         finally
         {
