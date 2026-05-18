@@ -147,6 +147,54 @@ public class InsightsPageViewModelTests
     }
 
     [Fact]
+    public async Task DeleteSnapshotAsync_RemovesOneAndReloadsHistory()
+    {
+        var db = new FakeDatabaseService();
+        db.Snapshots.Add(new Snapshot { Id = 1, SnapshotDate = "2026-01-01", TotalRemaining = 100 });
+        db.Snapshots.Add(new Snapshot { Id = 2, SnapshotDate = "2026-02-01", TotalRemaining = 200 });
+        var vm = new InsightsPageViewModel(db);
+        await vm.LoadAsync();
+        Assert.Equal(2, vm.SnapshotCount);
+
+        await vm.DeleteSnapshotAsync(1);
+
+        Assert.Equal(1, vm.SnapshotCount);
+        Assert.Single(vm.History);
+        Assert.Equal(200, vm.History[0].TotalRemaining);
+        Assert.Single(db.Snapshots);
+    }
+
+    [Fact]
+    public async Task ClearAllSnapshotsAsync_EmptiesEverything()
+    {
+        var db = new FakeDatabaseService();
+        db.Snapshots.Add(new Snapshot { Id = 1, SnapshotDate = "2026-01-01", TotalRemaining = 100 });
+        db.Snapshots.Add(new Snapshot { Id = 2, SnapshotDate = "2026-02-01", TotalRemaining = 200 });
+        var vm = new InsightsPageViewModel(db);
+        await vm.LoadAsync();
+
+        await vm.ClearAllSnapshotsAsync();
+
+        Assert.Equal(0, vm.SnapshotCount);
+        Assert.Empty(vm.History);
+        Assert.Empty(db.Snapshots);
+    }
+
+    [Fact]
+    public async Task LoadAsync_SnapshotsList_OrderedNewestFirst()
+    {
+        var db = new FakeDatabaseService();
+        db.Snapshots.Add(new Snapshot { Id = 1, SnapshotDate = "2026-01-01", TotalRemaining = 100 });
+        db.Snapshots.Add(new Snapshot { Id = 2, SnapshotDate = "2026-03-15", TotalRemaining = 50 });
+        db.Snapshots.Add(new Snapshot { Id = 3, SnapshotDate = "2026-02-15", TotalRemaining = 75 });
+        var vm = new InsightsPageViewModel(db);
+
+        await vm.LoadAsync();
+
+        Assert.Equal(new[] { "2026-03-15", "2026-02-15", "2026-01-01" }, vm.SnapshotsList.Select(s => s.SnapshotDate));
+    }
+
+    [Fact]
     public async Task LoadAsync_EmptyDb_LeavesAllListsEmpty()
     {
         var db = new FakeDatabaseService();

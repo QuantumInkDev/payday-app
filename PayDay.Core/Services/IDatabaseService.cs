@@ -24,6 +24,8 @@ public interface IDatabaseService
 
     Task<long> InsertSnapshotAsync(Snapshot snapshot);
     Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync();
+    Task<int> DeleteSnapshotAsync(long id);
+    Task<int> DeleteAllSnapshotsAsync();
 
     Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync();
 

@@ -149,6 +149,47 @@ public class PayoffTrackerPageViewModelTests
     }
 
     [Fact]
+    public async Task Strategy_Snowball_SortsBySmallestBalance()
+    {
+        var db = new FakeDatabaseService();
+        db.Bills.Add(MakeBill("big",  "Big",   owed: 5000, cost: 100, apr: 5));
+        db.Bills.Add(MakeBill("med",  "Med",   owed: 200,  cost: 20,  apr: 25));
+        db.Bills.Add(MakeBill("tiny", "Tiny",  owed: 50,   cost: 10,  apr: 15));
+
+        var vm = new PayoffTrackerPageViewModel(db);
+        await vm.LoadAsync();
+        vm.StrategyIndex = (int)PayoffStrategy.Snowball;
+
+        Assert.Equal(new[] { "Tiny", "Med", "Big" }, vm.Items.Select(i => i.Bill.Name));
+    }
+
+    [Fact]
+    public async Task Strategy_Avalanche_SortsByHighestApr()
+    {
+        var db = new FakeDatabaseService();
+        db.Bills.Add(MakeBill("low",  "LowApr",  owed: 100, cost: 10, apr: 5));
+        db.Bills.Add(MakeBill("hi",   "HighApr", owed: 100, cost: 10, apr: 28));
+        db.Bills.Add(MakeBill("mid",  "MidApr",  owed: 100, cost: 10, apr: 12));
+
+        var vm = new PayoffTrackerPageViewModel(db);
+        await vm.LoadAsync();
+        vm.StrategyIndex = (int)PayoffStrategy.Avalanche;
+
+        Assert.Equal(new[] { "HighApr", "MidApr", "LowApr" }, vm.Items.Select(i => i.Bill.Name));
+    }
+
+    [Fact]
+    public async Task Strategy_DefaultsToPayoffTime()
+    {
+        var db = new FakeDatabaseService();
+        db.Bills.Add(MakeBill("a", "A", owed: 100, cost: 10));
+        var vm = new PayoffTrackerPageViewModel(db);
+
+        await vm.LoadAsync();
+        Assert.Equal(PayoffStrategy.PayoffTime, vm.Strategy);
+    }
+
+    [Fact]
     public void PayoffItem_PayoffLabel_PluralizesMonths()
     {
         var one = new PayoffItem(MakeBill("a", "A", owed: 50, cost: 50));

@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Linq;
 using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using PayDay.Models;
 using PayDay.Services;
 using PayDay.ViewModels;
 using SkiaSharp;
@@ -32,6 +34,61 @@ public sealed partial class InsightsPage : Page
     {
         await ViewModel.SaveSnapshotAsync();
         RebuildCharts();
+    }
+
+    private async void OnManageSnapshotsClick(object sender, RoutedEventArgs e)
+    {
+        // Build the list inline — a ListView-in-a-ContentDialog is simpler than
+        // a dedicated managing page and stays out of the way once dismissed.
+        var listView = new ListView
+        {
+            MaxHeight = 360,
+            SelectionMode = ListViewSelectionMode.None,
+            ItemsSource = ViewModel.SnapshotsList,
+            ItemTemplate = (DataTemplate)Resources["SnapshotRowTemplate"],
+        };
+        var clearAllButton = new Button
+        {
+            Content = "Clear all snapshots",
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        clearAllButton.Click += async (_, _) =>
+        {
+            var confirm = new ContentDialog
+            {
+                XamlRoot = this.XamlRoot,
+                Title = "Clear every snapshot?",
+                Content = $"This will delete all {ViewModel.SnapshotsList.Count} snapshot(s). There is no undo.",
+                PrimaryButtonText = "Clear all",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+            await ViewModel.ClearAllSnapshotsAsync();
+            RebuildCharts();
+        };
+
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(clearAllButton);
+        content.Children.Add(listView);
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = this.XamlRoot,
+            Title = "Manage snapshots",
+            Content = content,
+            CloseButtonText = "Close",
+        };
+        await dialog.ShowAsync();
+        RebuildCharts();
+    }
+
+    private async void OnDeleteSnapshotClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is long id)
+        {
+            await ViewModel.DeleteSnapshotAsync(id);
+        }
     }
 
     private void RebuildCharts()

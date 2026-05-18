@@ -372,6 +372,23 @@ public sealed class DatabaseService : IDatabaseService
         return Convert.ToInt64(result);
     }
 
+    public async Task<int> DeleteSnapshotAsync(long id)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Snapshots WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    public async Task<int> DeleteAllSnapshotsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Snapshots;";
+        return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync()
     {
         await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
