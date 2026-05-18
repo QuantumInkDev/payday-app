@@ -108,6 +108,83 @@
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="16">
 
+                <!-- Sort toolbar — one global selection applied to Unpaid / Paid / Auto-pay -->
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="16"
+                    Visibility="{x:Bind ViewModel.HasCurrentPeriod, Mode=OneWay, Converter={StaticResource BoolToVisible}}">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="SORT BY" />
+                    <HyperlinkButton
+                        Padding="0"
+                        Command="{x:Bind ViewModel.SortByCommand}"
+                        CommandParameter="DueDate">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Due" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Text="{x:Bind ViewModel.DueDateIndicator, Mode=OneWay}" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                    <HyperlinkButton
+                        Padding="0"
+                        Command="{x:Bind ViewModel.SortByCommand}"
+                        CommandParameter="Name">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Name" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Text="{x:Bind ViewModel.NameIndicator, Mode=OneWay}" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                    <HyperlinkButton
+                        Padding="0"
+                        Command="{x:Bind ViewModel.SortByCommand}"
+                        CommandParameter="Type">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Type" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Text="{x:Bind ViewModel.TypeIndicator, Mode=OneWay}" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                    <HyperlinkButton
+                        Padding="0"
+                        Command="{x:Bind ViewModel.SortByCommand}"
+                        CommandParameter="Payment">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Payment" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Text="{x:Bind ViewModel.PaymentIndicator, Mode=OneWay}" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                </StackPanel>
+
                 <!-- "All paid" empty state -->
                 <InfoBar
                     IsClosable="False"

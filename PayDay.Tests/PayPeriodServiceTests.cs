@@ -37,6 +37,48 @@ public class PayPeriodServiceTests
     }
 
     [Fact]
+    public void GetPayPeriods_BeforeThreePm_StaysInCurrentPeriod()
+    {
+        // Anchor 2026-03-20 → with today 2026-05-15 we're on the last day of the
+        // 5/1–5/14… wait no, let me pick a clean boundary.
+        // Periods walk from anchor 3/20 in 14-day steps: 3/20, 4/3, 4/17, 5/1, 5/15, 5/29...
+        // So on 5/14 14:59, today should still be "This Pay Period" = 5/1–5/14.
+        var anchor = new DateTime(2026, 3, 20);
+        var todayBefore3pm = new DateTime(2026, 5, 14, 14, 59, 0);
+
+        var periods = PayPeriodService.GetPayPeriods(anchor, todayBefore3pm);
+
+        Assert.Equal(new DateTime(2026, 5, 1), periods[0].Start);
+        Assert.Equal(new DateTime(2026, 5, 14), periods[0].End);
+    }
+
+    [Fact]
+    public void GetPayPeriods_AfterThreePm_OpensNextPeriodEarly()
+    {
+        // Same setup, but at 15:00 the next period (5/15–5/28) should be "This Pay Period".
+        var anchor = new DateTime(2026, 3, 20);
+        var todayAt3pm = new DateTime(2026, 5, 14, 15, 0, 0);
+
+        var periods = PayPeriodService.GetPayPeriods(anchor, todayAt3pm);
+
+        Assert.Equal(new DateTime(2026, 5, 15), periods[0].Start);
+        Assert.Equal(new DateTime(2026, 5, 28), periods[0].End);
+    }
+
+    [Fact]
+    public void GetPayPeriods_MidnightDates_Unaffected()
+    {
+        // Tests historically pass midnight DateTimes — they should keep working
+        // (the 9-hour shift never crosses a day boundary at 00:00 + 9h = 09:00).
+        var anchor = new DateTime(2026, 3, 20);
+        var midnight = new DateTime(2026, 5, 15);
+
+        var periods = PayPeriodService.GetPayPeriods(anchor, midnight);
+
+        Assert.True(midnight >= periods[0].Start && midnight <= periods[0].End);
+    }
+
+    [Fact]
     public void GetPayPeriods_AnchorInFuture_WalksBackToCurrent()
     {
         // Anchor is months in the future — should walk backwards in 14-day steps until
