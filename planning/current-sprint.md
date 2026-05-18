@@ -18,9 +18,17 @@
 | 7g | `38d08a9` | Type tag color customization |
 | 7h | `fd5bcf1` | Installments type |
 | 7i | `9fa95ec` | Insights snapshot management + Payoff strategies |
+| 7j | `87e2f87` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
+| 7k | `38e9e6e` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 **Entering tests/build:** 150/150 green, 0 warn / 0 err.
-**Exiting tests/build:** 187/187 green, 0 warn / 0 err.
+**Exiting tests/build:** 194/194 green, 0 warn / 0 err.
+
+## Late-session additions (after first user smoke-test)
+
+16. ✅ Inactive bills shouldn't contribute to All Bills section subtotals → 7j
+17. ✅ Sortable column headers on PayDay page (like Dashboard) → 7k
+18. ✅ Pay period opens at 3 PM the day before its start date → 7k
 
 ## User polish list (15 items, all addressed)
 
@@ -50,9 +58,9 @@ These can land as a Phase 7.5 mini-sprint or alongside Phase 8 polish. None are 
 
 ## Sprint exit criteria
 
-- [x] `dotnet test PayDay.Tests` exits 0 — **187 tests pass**.
+- [x] `dotnet test PayDay.Tests` exits 0 — **194 tests pass**.
 - [x] `dotnet build PayDay/PayDay.csproj` exits 0 with 0 warnings.
-- [ ] **Manual smoke test (user)** — pending.
+- [x] Manual smoke test — All Bills + bill auto-sync verified mid-session; balance of items end-of-night browse, user signed off "good for now."
 - [x] All chunks committed and pushed individually.
 
 ## Required user action — Notion DB schema

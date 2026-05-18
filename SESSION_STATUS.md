@@ -8,7 +8,7 @@
 
 ## 🔴 CONTINUE HERE
 
-**Phase 7 — Polish** is functionally complete pending smoke test. Nine chunks shipped this session:
+**Phase 7 — Polish** is functionally complete and user-smoke-tested. Eleven chunks shipped this session:
 
 | Chunk | Commit | What |
 |---|---|---|
@@ -21,8 +21,12 @@
 | 7g | `38d08a9` | Type tag color customization (TypeColorService + Settings UI) |
 | 7h | `fd5bcf1` | Installments type |
 | 7i | `9fa95ec` | Insights snapshot delete/clear + Payoff snowball/avalanche |
+| 7j | `87e2f87` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
+| 7k | `38e9e6e` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
-**Tests:** 187/187 green (was 150 entering Phase 7 — +37). Build 0 warn / 0 err on both projects.
+**Tests:** 194/194 green (was 150 entering Phase 7 — +44). Build 0 warn / 0 err on both projects.
+
+**Smoke-test status:** Sortable All Bills + bill auto-sync verified by user mid-session; Notion DB columns renamed (Owed→Remaining, Total Owed→Total Remaining) and "Installments" select option added by user. Remaining smoke items (Dashboard polish, custom types, type colors, snapshot manager, snowball/avalanche, PayDay sort, 3 PM early-start) not individually walked through this evening — covered by unit tests + brief end-of-night browse; user signed off "good for now."
 
 **Outstanding from Phase 7 plan (§7.1/§7.2/§7.3):**
 
@@ -58,6 +62,11 @@ After smoke test passes and the user confirms, the next phase is **Phase 8 — S
 ## Session — 2026-05-17 (Phase 7 chunks 7a–7i)
 
 Worked through the user's polish list — captured 15 items rapid-fire, confirmed, and shipped them as 7 back-to-back chunks (7c–7i) after 7a + 7b which landed earlier in the session. Every chunk committed and pushed individually so each is independently revertable.
+
+### Late-session additions (after first smoke test)
+
+- **7j** — `BillGroup.TotalPayment` / `TotalRemaining` now filter on `Active`; All Bills code-behind calls `LoadAsync()` after toggling Active so the affected group's header updates live. Inactive bills still appear in the list so they can be toggled back on.
+- **7k** — Sortable column toolbar on PayDay page (single global selection applied to Unpaid / Paid / Auto-Pay), plus `PayPeriodService` shifts `today` forward 9 hours before truncating to `.Date` so a new pay period opens "for paying" at 3 PM the day before its official start. `GetCurrentPeriodsAsync` now reads `DateTime.Now` (not `DateTime.Today`) so the time-of-day component is preserved.
 
 ### Key implementation notes
 
