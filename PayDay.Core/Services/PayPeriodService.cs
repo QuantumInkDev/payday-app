@@ -12,6 +12,12 @@ public sealed class PayPeriodService
     public const int PeriodLengthDays = 14;
     public const string PayAnchorKey = "PayAnchor";
     public const string EarlyStartKey = "EarlyStart";
+    /// <summary>
+    /// A new pay period unlocks at 3 PM the day before its official start date.
+    /// Adding 9 hours to "today" before stripping to a date shifts after-3-PM
+    /// times into the next calendar day — every other time of day is unchanged.
+    /// </summary>
+    public static readonly TimeSpan EarlyStartShift = TimeSpan.FromHours(9);
 
     private static readonly DateTime DefaultAnchor = new DateTime(2026, 3, 20);
 
@@ -30,7 +36,10 @@ public sealed class PayPeriodService
     /// </summary>
     public static IReadOnlyList<PayPeriod> GetPayPeriods(DateTime anchor, DateTime today, int count = 8)
     {
-        var todayDate = today.Date;
+        // Treat any time at or after 3 PM as the next calendar day so the upcoming
+        // pay period opens "for paying" at 3 PM the day prior to its start date.
+        // For times before 3 PM the shift stays on the same day (no observable effect).
+        var todayDate = today.Add(EarlyStartShift).Date;
         var current = anchor.Date;
 
         while (current > todayDate)
@@ -200,7 +209,9 @@ public sealed class PayPeriodService
     {
         var anchor = await GetPayAnchorAsync().ConfigureAwait(false);
         var bills = await _db.GetAllBillsAsync().ConfigureAwait(false);
-        var periods = GetPayPeriods(anchor, today ?? DateTime.Today);
+        // DateTime.Now (not Today) so the time-of-day component drives the
+        // EarlyStartShift in GetPayPeriods. Tests pass an explicit DateTime.
+        var periods = GetPayPeriods(anchor, today ?? DateTime.Now);
         return AssignBillsToPeriods(bills, periods);
     }
 }
