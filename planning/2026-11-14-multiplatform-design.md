@@ -61,8 +61,9 @@ everyone else.
   "Win 11 Arm Dev" on this Mac. `prlctl exec "Win 11 Arm Dev" …` runs commands in it without SSH
   (verified 2026-11-14: .NET SDK 9.0.318, clone at `C:\Projects\PayDayApp`). Those commands run as
   `NT AUTHORITY\SYSTEM`, so build and test work but launching the packaged app does not; that
-  still needs the interactive session (Parallels' `--current-user` option is worth trying). The
-  VM clone must be pulled before each remote build.
+  still needs the interactive session (Parallels' `--current-user` option is worth trying). Remote
+  builds use `tools/vm-build.sh`, which keeps its own checkout at `C:\Builds\payday-app` and never touches
+  the daily clone `C:\Projects\PayDayApp`; push before running it.
 - Hosting is on the paid Vercel plan of the Quantum Ink team, so commercial use is covered.
 - Browsers can erase a site's stored data (Safari after 7 days without a visit unless the site is
   installed). That is how the original `payday.html` lost data, and it shapes the web app (§6.7).
@@ -153,7 +154,7 @@ PayDayApp/
 ### 6.1 Data model changes (all platforms)
 
 - Every synced row gets a globally unique ID. Bills added in the app use GUID strings, but the
-  seeded bills use `"1"`–`"27"` (`PayDay/Services/SeedData.cs`). **Seed IDs are rewritten to GUIDs,
+  seeded bills use `"1"`–`"27"` (`apps/windows/PayDay/Services/SeedData.cs`). **Seed IDs are rewritten to GUIDs,
   and Payments and Snapshots move from `INTEGER AUTOINCREMENT` to string IDs (UUIDv7), Claude's
   call**, so rows created on two devices never collide. The migration rewrites references
   (`Payments.BillId`) to match.
@@ -345,6 +346,10 @@ user is on Windows. Google Drive second (common for Android users). Dropbox thir
      (`futurecheck://`), bundle and package IDs (`dev.quantumink.futurecheck`, Claude's call), and
      the store listings. Until the domain is live, `payday.quantumink.dev` serves for testing. The
      code keeps the PayDay name internally until a rename pass (left to the builder to schedule).
+     The Windows MSIX package identity (`Identity Name` in `Package.appxmanifest`) is NOT changed by the
+     rename pass, because changing it orphans the installed app's LocalState data. The bundle and package
+     IDs `dev.quantumink.futurecheck` apply to the new Apple and Android apps, and any Windows identity
+     change needs a data migration first.
 3. **Scope new features** in their own short design (shortlist below). This runs before the sync
    format is frozen (Claude's call), because features like extra payments, income tracking and
    set-asides add synced data. Deciding them first avoids migrating a live format across devices.

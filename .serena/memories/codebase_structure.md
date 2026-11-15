@@ -37,7 +37,7 @@ PayDayApp/
 
 **Where to add code (Phase 4):**
 - New page → `apps/windows/PayDay/Pages/{Name}Page.xaml` + `.xaml.cs`.
-- ViewModel → `apps/windows/PayDay/ViewModels/{Name}PageViewModel.cs` (folder may need creating). Use `CommunityToolkit.Mvvm` `ObservableObject` + `[ObservableProperty]`/`[RelayCommand]` source generators.
+- ViewModel → `apps/windows/PayDay.Core/ViewModels/{Name}PageViewModel.cs` (all view-models live in Core so they are testable). Use `CommunityToolkit.Mvvm` `ObservableObject` + `[ObservableProperty]`/`[RelayCommand]` source generators.
 - New model or pure logic → put it in `PayDay.Core` so it stays testable.
 
 See [[payday_core_split]] for *why* Core is split from the app, and [[task_completion_checklist]] for the session-close protocol that's mandatory after any change.
