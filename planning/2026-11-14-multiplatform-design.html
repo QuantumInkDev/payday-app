@@ -417,7 +417,7 @@ footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule);
     <ul>
       <li>No Turborepo or Nx, because the apps share no package manager. Each app keeps its native build, and a short <code>README.md</code> lists the build command for each.</li>
       <li>The move must keep <code>git log --follow</code> history and leave the Windows build at 0 warnings and 0 errors with 194/194 tests passing. That gets verified on the arm64 VM, since this Mac can't build WinUI.</li>
-      <li>The VM and rig clones need a <code>git pull</code>, then a rebuild from <code>apps/windows/</code>.</li>
+      <li>The VM daily clone and the rig follow the ordered update steps in <code>SESSION_STATUS.md</code>: back up the data first, and don't just pull and delete.</li>
     </ul>
   </section>
 
@@ -465,7 +465,7 @@ footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule);
     <h3>6.1 Data model changes on all platforms</h3>
     <ul>
       <li>Every synced row gets a globally unique ID. Bills added in the app use GUID strings, but the seeded bills use <code>"1"</code>–<code>"27"</code> (<code>apps/windows/PayDay/Services/SeedData.cs</code>). Seed IDs get rewritten to GUIDs, and Payments and Snapshots move from <code>INTEGER AUTOINCREMENT</code> to string IDs (UUIDv7) <span class="chip call">Claude's call</span>. That way rows created on two devices never collide. The migration rewrites references such as <code>Payments.BillId</code> to match.</li>
-      <li>Fresh installs start empty <span class="chip call">Claude's call</span>. <code>SeedData.cs</code> holds the developer's real bills and Notion database IDs, and that must never ship in a store build. Seed data moves to a dev-only import or a demo mode.</li>
+      <li>Fresh installs start empty <span class="chip call">Claude's call</span>. <code>SeedData.cs</code> held the developer's real bills and Notion database IDs until 2026-11-14, when they were replaced with fictional sample data across the whole git history. Personal data must never ship in a store build or sit in this public repo. Seed data moves to a dev-only import or a demo mode.</li>
       <li>Every synced row records, per field, when it last changed and which device changed it. Times come from a hybrid logical clock (HLC): wall-clock time plus a counter, so the order survives clock skew between devices.</li>
       <li>Deletes become tombstones, a "deleted at" marker, instead of removing the row. This also solves the existing carryover where Notion archive-on-delete needed a tombstone table.</li>
       <li>Settings split into two kinds. Synced settings are the pay anchor date, early start, type colours and custom types. Per-device settings are the theme, window size, Notion token and drive sign-in. The canonical list lives in <code>spec/data-model.md</code>.</li>

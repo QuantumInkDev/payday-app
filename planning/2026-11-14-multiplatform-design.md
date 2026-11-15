@@ -147,7 +147,7 @@ PayDayApp/
   `README.md` lists the build command for each.
 - The move must keep `git log --follow` history and leave the Windows build at 0 warnings / 0
   errors and 194/194 tests (verified on the arm64 VM, since this Mac can't build WinUI).
-- The VM and rig clones need `git pull` and then rebuild from `apps/windows/`.
+- The VM daily clone and the rig follow the ordered update steps in `SESSION_STATUS.md` (back up data first; don't just pull and delete).
 
 ## 6. Sync design
 
@@ -158,8 +158,9 @@ PayDayApp/
   and Payments and Snapshots move from `INTEGER AUTOINCREMENT` to string IDs (UUIDv7), Claude's
   call**, so rows created on two devices never collide. The migration rewrites references
   (`Payments.BillId`) to match.
-- **Fresh installs start empty (Claude's call).** `SeedData.cs` holds the developer's real bills and
-  Notion database IDs; that must never ship in a store build. Seed data moves to a dev-only import
+- **Fresh installs start empty (Claude's call).** `SeedData.cs` held the developer's real bills and
+  Notion database IDs until 2026-11-14, when they were replaced with fictional sample data across the
+  whole git history. Personal data must never ship in a store build or sit in this public repo. Seed data moves to a dev-only import
   or demo mode.
 - Every synced row carries, per field, the time it was last changed and by which device, using a
   hybrid logical clock (HLC: wall-clock time plus a counter, so ordering survives clock skew).
