@@ -310,6 +310,28 @@ public sealed class SyncNotionTests : IDisposable
     }
 
     [Fact]
+    public async Task ANewOwner_NeverPullsANotionOnlyPage_BeforeItsFirstFullPush()
+    {
+        await OnWithPagesAsync();
+        await _service.ConnectAsync("secret_fictional_token");
+        _notion.AddBillPage("page-notion-only", new Bill { Id = "notion-only-1", Name = "Proseware Streaming", Type = "Subscriptions", Payment = 12, DueDay = 9, Rate = "Monthly", Active = true }, NotionEdited);
+        var before = Pending();
+
+        _env.Time.Advance(1000);
+        var first = await _service.SyncBillsAsync();
+
+        Assert.Equal(0, first.Pulled);
+        Assert.DoesNotContain(await _env.Db.GetAllBillsAsync(), b => b.Name == "Proseware Streaming");
+        Assert.DoesNotContain(PendingSince(before), r => r.Field == "name" && r.Value == SyncValue.String("Proseware Streaming"));
+        Assert.Equal(NotionRole.Owner, _service.GetConnectorState().Role);
+
+        // Once it is a full owner, the next sync pulls the page.
+        _env.Time.Advance(1000);
+        await _service.SyncBillsAsync();
+        Assert.Contains(await _env.Db.GetAllBillsAsync(), b => b.Name == "Proseware Streaming");
+    }
+
+    [Fact]
     public async Task SavingTheTokenAgainOnTheOwner_ChangesNothing()
     {
         await OnWithPagesAsync();

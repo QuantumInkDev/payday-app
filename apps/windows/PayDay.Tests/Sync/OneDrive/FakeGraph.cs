@@ -38,6 +38,9 @@ internal sealed class FakeGraph : HttpMessageHandler
     /// <summary>The server's clock (every response's <c>Date</c>, every new file's <c>createdDateTime</c>).</summary>
     public DateTimeOffset Now { get; set; }
 
+    /// <summary>Where next-page links point (a hostile or broken server could point them elsewhere).</summary>
+    public string NextLinkBase { get; set; } = "https://graph.microsoft.com";
+
     /// <summary>Children per listing page.</summary>
     public int PageSize { get; set; } = 200;
 
@@ -263,7 +266,7 @@ internal sealed class FakeGraph : HttpMessageHandler
         if (skip + PageSize < children.Count)
         {
             var address = folder.Length == 0 ? Vault : $"{Vault}/{folder}";
-            result["@odata.nextLink"] = $"https://graph.microsoft.com/v1.0/me/drive/special/approot:/{address}:/children?$top={PageSize}&$skiptoken={skip + PageSize}";
+            result["@odata.nextLink"] = $"{NextLinkBase}/v1.0/me/drive/special/approot:/{address}:/children?$top={PageSize}&$skiptoken={skip + PageSize}";
         }
         return Json(HttpStatusCode.OK, result);
     }

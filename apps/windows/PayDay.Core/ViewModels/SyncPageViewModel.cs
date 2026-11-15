@@ -171,6 +171,16 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _canCreateNewVault;
 
+    /// <summary>This PC created the vault and the user has not confirmed saving its recovery phrase.</summary>
+    [ObservableProperty]
+    private bool _hasUnconfirmedPhrase;
+
+    /// <summary>Shows the unconfirmed recovery phrase again (rebuilt from the keystore).</summary>
+    public void ShowRecoveryPhraseAgain()
+    {
+        if (_coordinator?.GetUnconfirmedRecoveryPhrase() is { } phrase) ShowRecoveryPhrase(phrase, uploadPending: null);
+    }
+
     // ---- Join / unlock inputs ---------------------------------------------------------------------
 
     [ObservableProperty]
@@ -221,6 +231,33 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
             string.Empty,
         });
 
+    /// <summary>Shown before the file picker: the phrase file must not sit next to the vault.</summary>
+    public const string PhraseFileAdvice =
+        "Save the file somewhere OneDrive (or any other cloud service) does not back up, such as a USB drive, or print it and delete the file. "
+        + "A copy in OneDrive sits in the same account as your vault, so anyone who gets into that account would have both.";
+
+    /// <summary>The OneDrive folders on this PC (personal and work), from the environment variables OneDrive sets.</summary>
+    public static IReadOnlyList<string> OneDriveFolders(Func<string, string?> environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        return new[] { "OneDrive", "OneDriveConsumer", "OneDriveCommercial" }
+            .Select(environment)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    /// <summary>True when <paramref name="path"/> is inside one of <paramref name="folders"/> (Windows paths: case-insensitive, either slash).</summary>
+    public static bool IsInFolder(string path, IEnumerable<string> folders)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(folders);
+        static string Norm(string p) => p.Replace('/', '\\').TrimEnd('\\') + "\\";
+        var target = Norm(path);
+        return folders.Any(f => target.StartsWith(Norm(f), StringComparison.OrdinalIgnoreCase));
+    }
+
     // ---- Pairing ----------------------------------------------------------------------------------
 
     [ObservableProperty]
@@ -254,9 +291,31 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         {
             AccountName = null;
         }
-        if (Screen is SyncScreen.RecoveryPhrase or SyncScreen.Pairing && _coordinator!.IsInVault) return;
-        Screen = _coordinator!.IsInVault ? SyncScreen.Status : SyncScreen.Off;
+        if (IsBusy) return; // an operation (for example creating the vault) is still running
+        if (Screen is SyncScreen.Pairing && _coordinator!.IsInVault) return;
+        // The phrase of a vault this PC created stays on offer until the user confirms saving it,
+        // whatever happened meanwhile (another page, a restart, a crash).
+        if (_coordinator!.GetUnconfirmedRecoveryPhrase() is { } phrase)
+        {
+            if (Screen != SyncScreen.RecoveryPhrase) ShowRecoveryPhrase(phrase, uploadPending: null);
+            return;
+        }
+        Screen = _coordinator.IsInVault ? SyncScreen.Status : SyncScreen.Off;
         RefreshStatus();
+    }
+
+    /// <summary>
+    /// What to ask before the window closes, or null when closing is fine: an operation still running,
+    /// or a recovery phrase the user has not confirmed saving.
+    /// </summary>
+    public string? CloseWarning()
+    {
+        if (IsBusy) return $"FutureCheck is still working: {BusyMessage} Closing now stops it; it will finish or be retried next time. Close anyway?";
+        if (_coordinator?.GetUnconfirmedRecoveryPhrase() is not null)
+        {
+            return "You haven't confirmed that you saved your recovery phrase. It will be shown again on the Sync page next time, but without it you can lose your synced data. Close anyway?";
+        }
+        return null;
     }
 
     private void OnStatusChanged(object? sender, SyncStatus status) => _dispatch(RefreshStatus);
@@ -295,6 +354,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         NeedsRejoin = status.Phase is SyncPhase.IdentityClash or SyncPhase.VaultReplaced;
         NeedsSignIn = status.Phase == SyncPhase.SignedOut;
         CanCreateNewVault = status.Phase == SyncPhase.VaultMissing;
+        HasUnconfirmedPhrase = Screen != SyncScreen.RecoveryPhrase && _coordinator.GetUnconfirmedRecoveryPhrase() is not null;
         RefreshNotionLine();
     }
 
@@ -344,15 +404,16 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         await ShowCreateOrJoinAsync().ConfigureAwait(true);
     });
 
-    private async Task<bool> EnsureSignedInAsync()
+    /// <param name="interactive">True when the cached account no longer works (an expired or revoked sign-in): always open the sign-in page.</param>
+    private async Task<bool> EnsureSignedInAsync(bool interactive = false)
     {
-        if (await _account!.GetSignedInUserAsync().ConfigureAwait(true) is { } user)
+        if (!interactive && await _account!.GetSignedInUserAsync().ConfigureAwait(true) is { } user)
         {
             AccountName = user;
             return true;
         }
         BusyMessage = $"Finish signing in to {ProviderName} in your browser…";
-        var result = await _account.SignInAsync().ConfigureAwait(true);
+        var result = await _account!.SignInAsync().ConfigureAwait(true);
         if (!result.SignedIn)
         {
             if (result.Outcome != DriveSignInOutcome.Cancelled) ErrorMessage = result.Message ?? $"Could not sign in to {ProviderName}.";
@@ -363,10 +424,21 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         return true;
     }
 
+    /// <summary>True when the drive refused the sign-in (expired or revoked refresh token, consent withdrawn).</summary>
+    private static bool IsSignedOut(SyncStatus status)
+        => status.Phase == SyncPhase.SignedOut || status.ErrorCode == nameof(DriveErrorKind.Unauthorized);
+
     private async Task ShowCreateOrJoinAsync()
     {
         BusyMessage = $"Looking for your vault on {ProviderName}…";
         var probe = await _coordinator!.ProbeVaultAsync().ConfigureAwait(true);
+        if (probe.Outcome == VaultProbeOutcome.SignedOut)
+        {
+            // The cached account's sign-in no longer works: sign in again, then look once more.
+            if (!await EnsureSignedInAsync(interactive: true).ConfigureAwait(true)) return;
+            BusyMessage = $"Looking for your vault on {ProviderName}…";
+            probe = await _coordinator.ProbeVaultAsync().ConfigureAwait(true);
+        }
         switch (probe.Outcome)
         {
             case VaultProbeOutcome.NoVault:
@@ -394,6 +466,12 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
     public Task CreateVaultAsync() => RunAsync("Backing up this PC's data and creating your vault…", async () =>
     {
         var result = await _coordinator!.CreateVaultAsync().ConfigureAwait(true);
+        if (result.Outcome == CreateVaultOutcome.Failed && IsSignedOut(result.Status))
+        {
+            if (!await EnsureSignedInAsync(interactive: true).ConfigureAwait(true)) return;
+            BusyMessage = "Backing up this PC's data and creating your vault…";
+            result = await _coordinator.CreateVaultAsync().ConfigureAwait(true);
+        }
         switch (result.Outcome)
         {
             case CreateVaultOutcome.Created:
@@ -423,24 +501,33 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         }
     });
 
-    private void ShowRecoveryPhrase(string phrase, bool uploadPending)
+    private void ShowRecoveryPhrase(string phrase, bool? uploadPending)
     {
         _recoveryPhrase = phrase;
         RecoveryWords.Clear();
         var words = phrase.Split(' ');
         for (var i = 0; i < words.Length; i++) RecoveryWords.Add($"{i + 1}. {words[i]}");
         PhraseSaved = false;
-        RecoveryPhraseNote = uploadPending
+        RecoveryPhraseNote = uploadPending is null ? "You haven't confirmed that you saved this phrase yet." : uploadPending.Value
             ? "Your vault is set up on this PC. It will finish uploading to OneDrive on the next sync."
             : "Your vault is on OneDrive.";
         OnPropertyChanged(nameof(RecoveryPhraseFileText));
         Screen = SyncScreen.RecoveryPhrase;
     }
 
-    /// <summary>"I saved it": the phrase leaves the screen and memory for good (it is never shown again).</summary>
-    public void FinishRecoveryPhrase()
+    /// <summary>"I saved it": the phrase leaves the screen and memory for good (it is never offered again).</summary>
+    public async Task FinishRecoveryPhraseAsync()
     {
-        if (!PhraseSaved) return;
+        if (!PhraseSaved || _coordinator is null) return;
+        try
+        {
+            await _coordinator.ConfirmRecoveryPhraseSavedAsync().ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            ErrorMessage = $"Could not record that the phrase was saved: {e.Message}";
+            return;
+        }
         _recoveryPhrase = null;
         RecoveryWords.Clear();
         PhraseSaved = false;
@@ -465,9 +552,22 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         return JoinAsync(replace => _coordinator!.JoinWithPairingCodeAsync(code, replace));
     }
 
+    /// <summary>One join attempt; a refused sign-in leads to the sign-in page and one more attempt.</summary>
+    private async Task<JoinVaultResult?> TryJoinAsync(Func<bool, Task<JoinVaultResult>> join, bool replace)
+    {
+        var result = await join(replace).ConfigureAwait(true);
+        if (result.Outcome == JoinVaultOutcome.Failed && IsSignedOut(result.Status))
+        {
+            if (!await EnsureSignedInAsync(interactive: true).ConfigureAwait(true)) return null;
+            BusyMessage = "Joining your vault…";
+            result = await join(replace).ConfigureAwait(true);
+        }
+        return result;
+    }
+
     private Task JoinAsync(Func<bool, Task<JoinVaultResult>> join) => RunAsync("Joining your vault…", async () =>
     {
-        var result = await join(false).ConfigureAwait(true);
+        if (await TryJoinAsync(join, false).ConfigureAwait(true) is not { } result) return;
         if (result.Outcome == JoinVaultOutcome.NeedsConsent)
         {
             _pendingJoin = join;
@@ -485,7 +585,10 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         IsConsentPending = false;
         if (_pendingJoin is not { } join) return Task.CompletedTask;
         _pendingJoin = null;
-        return RunAsync("Backing up this PC's data and joining your vault…", async () => HandleJoin(await join(true).ConfigureAwait(true)));
+        return RunAsync("Backing up this PC's data and joining your vault…", async () =>
+        {
+            if (await TryJoinAsync(join, true).ConfigureAwait(true) is { } result) HandleJoin(result);
+        });
     }
 
     public void CancelReplace()

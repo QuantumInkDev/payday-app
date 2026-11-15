@@ -29,6 +29,9 @@ public sealed class OneDriveAuth : IOneDriveTokenSource, IDriveAccount
         ArgumentNullException.ThrowIfNull(credentials);
         _cache = new CredentialTokenCacheStore(credentials);
         if (!OneDriveConfig.IsValidClientId(clientId)) return;
+        // The /common authority: personal Microsoft accounts and work or school accounts. The app
+        // registration's supported account types must be "Accounts in any organizational directory
+        // and personal Microsoft accounts" to match.
         _app = PublicClientApplicationBuilder.Create(clientId!.Trim())
             .WithAuthority(AzureCloudInstance.AzurePublic, AadAuthorityAudience.AzureAdAndPersonalMicrosoftAccount)
             .WithRedirectUri(OneDriveConfig.RedirectUri)
@@ -113,6 +116,13 @@ public sealed class OneDriveAuth : IOneDriveTokenSource, IDriveAccount
         lock (_cacheLock) _cache.Clear();
     }
 
+    /// <summary>How a failed silent token request is reported: network errors are transient, everything else needs a new sign-in.</summary>
+    internal static DriveErrorKind ClientErrorKind(string? errorCode) => errorCode switch
+    {
+        MsalError.RequestTimeout or MsalError.ServiceNotAvailable => DriveErrorKind.Transient,
+        _ => DriveErrorKind.Unauthorized,
+    };
+
     public async Task<string> GetAccessTokenAsync(bool forceRefresh, CancellationToken ct = default)
     {
         if (_app is null) throw new DriveException(DriveErrorKind.Unauthorized, OneDriveConfig.NotConfiguredMessage);
@@ -144,7 +154,10 @@ public sealed class OneDriveAuth : IOneDriveTokenSource, IDriveAccount
         }
         catch (MsalClientException e)
         {
-            throw new DriveException(DriveErrorKind.Transient, "The Microsoft sign-in service could not be reached.", e);
+            // Only network trouble is worth retrying; anything else would fail the same way on every
+            // sync, so the user is asked to sign in again instead.
+            var kind = ClientErrorKind(e.ErrorCode);
+            throw new DriveException(kind, kind == DriveErrorKind.Transient ? "The Microsoft sign-in service could not be reached." : $"Sign in to OneDrive again ({e.ErrorCode}).", e);
         }
         catch (HttpRequestException e)
         {

@@ -30,9 +30,10 @@ public interface IOneDriveTokenSource
 ///     <see cref="DriveErrorKind.AlreadyExists"/>), never send <c>fileSystemInfo</c>, create missing
 ///     parent folders, and use an upload session above <see cref="SimpleUploadLimit"/>.</item>
 ///   <item>Deletes are ordinary deletes (OneDrive keeps the file in its recycle bin).</item>
-///   <item>Errors: 401 → <see cref="DriveErrorKind.Unauthorized"/> (after one forced token refresh),
+///   <item>Errors: 401 and 403 → <see cref="DriveErrorKind.Unauthorized"/> (401 after one forced token
+///     refresh; a 401 from an expired pre-authenticated download link is Transient),
 ///     404 → NotFound, 409 → AlreadyExists, 507 → QuotaExceeded, 429 and other 5xx → retried honouring
-///     <c>Retry-After</c>, then Transient; network failures and timeouts are Transient.</item>
+///     <c>Retry-After</c> within <see cref="MaxRetryTime"/>, then Transient; network failures and timeouts are Transient.</item>
 /// </list>
 /// Tests drive it with a fake <see cref="HttpMessageHandler"/>; it never touches the network itself.
 /// </summary>
@@ -49,8 +50,15 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
     /// <summary>Attempts after the first for throttling (429) and server errors (5xx other than 507).</summary>
     public const int MaxRetries = 3;
 
-    /// <summary>A <c>Retry-After</c> longer than this is not waited for inside one call: the call fails as transient and a later sync retries.</summary>
-    public static readonly TimeSpan MaxRetryWait = TimeSpan.FromSeconds(60);
+    /// <summary>
+    /// The most time one operation spends retrying (waits plus the attempts after the first). A longer
+    /// <c>Retry-After</c>, or a call that keeps failing, ends as <see cref="DriveErrorKind.Transient"/>
+    /// and a later sync retries, so a sync never holds the coordinator for minutes.
+    /// </summary>
+    public static readonly TimeSpan MaxRetryTime = TimeSpan.FromSeconds(30);
+
+    /// <summary>One request's timeout.</summary>
+    public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(60);
 
     private const string AppRoot = "me/drive/special/approot";
     private const string ListSelect = "$select=id,name,size,createdDateTime,file,folder&$top=200";
@@ -71,10 +79,12 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
         string vaultFolder = OneDriveConfig.VaultFolder)
     {
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
-        _http = new HttpClient(handler ?? new HttpClientHandler(), disposeHandler: handler is null)
+        // Redirects are followed by this class (DownloadAsync), never by the handler, so the
+        // pre-authenticated download URL is always fetched without the bearer token.
+        _http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: handler is null)
         {
             BaseAddress = new Uri(GraphBase),
-            Timeout = TimeSpan.FromSeconds(100),
+            Timeout = RequestTimeout,
         };
         _delay = delay ?? ((t, ct) => Task.Delay(t, ct));
         _root = string.IsNullOrEmpty(vaultFolder) ? throw new ArgumentException("A vault folder is required.", nameof(vaultFolder)) : vaultFolder;
@@ -122,6 +132,11 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
                 }
             }
             next = root.TryGetProperty("@odata.nextLink", out var link) && link.ValueKind == JsonValueKind.String ? link.GetString() : null;
+            if (next is not null && !IsGraphUrl(next))
+            {
+                // The bearer token goes only to Microsoft Graph.
+                throw new DriveException(DriveErrorKind.Other, $"OneDrive sent a next-page link to another host while listing {Describe(folder)}.");
+            }
         }
         return new DriveFolderListing(files, folders, serverTime);
     }
@@ -139,6 +154,12 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
                 var target = location.IsAbsoluteUri ? location : new Uri(new Uri(GraphBase), location);
                 resp.Dispose();
                 resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, target), authorize: false, ct).ConfigureAwait(false);
+                if (resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    // The pre-authenticated link expired; it says nothing about the sign-in. The next
+                    // sync lists again and gets a fresh link.
+                    throw new DriveException(DriveErrorKind.Transient, $"The download link for {item.Path} expired; sync will retry.");
+                }
             }
             await EnsureSuccessAsync(resp, $"downloading {item.Path}", ct).ConfigureAwait(false);
             return await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
@@ -243,6 +264,10 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
     private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> make, bool authorize, CancellationToken ct)
     {
         var refreshed = false;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var waited = TimeSpan.Zero;
+        // Time spent so far: real time plus the waits (tests' waits return at once).
+        bool CanWait(TimeSpan wait) => started.Elapsed + waited + wait <= MaxRetryTime;
         for (var attempt = 0; ; attempt++)
         {
             using var req = make();
@@ -258,13 +283,15 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
             }
             catch (HttpRequestException e)
             {
-                if (attempt >= MaxRetries) throw new DriveException(DriveErrorKind.Transient, "OneDrive could not be reached.", e);
+                if (attempt >= MaxRetries || !CanWait(Backoff(attempt))) throw new DriveException(DriveErrorKind.Transient, "OneDrive could not be reached.", e);
+                waited += Backoff(attempt);
                 await _delay(Backoff(attempt), ct).ConfigureAwait(false);
                 continue;
             }
             catch (TaskCanceledException e) when (!ct.IsCancellationRequested)
             {
-                if (attempt >= MaxRetries) throw new DriveException(DriveErrorKind.Transient, "OneDrive did not answer in time.", e);
+                if (attempt >= MaxRetries || !CanWait(Backoff(attempt))) throw new DriveException(DriveErrorKind.Transient, "OneDrive did not answer in time.", e);
+                waited += Backoff(attempt);
                 await _delay(Backoff(attempt), ct).ConfigureAwait(false);
                 continue;
             }
@@ -280,9 +307,10 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
             if (IsRetryable(resp.StatusCode) && attempt < MaxRetries)
             {
                 var wait = RetryAfter(resp) ?? Backoff(attempt);
-                if (wait <= MaxRetryWait)
+                if (CanWait(wait))
                 {
                     resp.Dispose();
+                    waited += wait;
                     await _delay(wait, ct).ConfigureAwait(false);
                     continue;
                 }
@@ -293,6 +321,9 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
 
     private static bool IsRetryable(HttpStatusCode status)
         => status == HttpStatusCode.TooManyRequests || ((int)status >= 500 && status != HttpStatusCode.InsufficientStorage);
+
+    internal static bool IsGraphUrl(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps && string.Equals(u.Host, "graph.microsoft.com", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsRedirect(HttpStatusCode status)
         => status is HttpStatusCode.Found or HttpStatusCode.SeeOther or HttpStatusCode.TemporaryRedirect or HttpStatusCode.MovedPermanently;
@@ -322,6 +353,9 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
         var kind = resp.StatusCode switch
         {
             HttpStatusCode.Unauthorized => DriveErrorKind.Unauthorized,
+            // Access refused (consent revoked, or the account cannot use app folders): signing in
+            // again, and granting access, is what the user can do about it.
+            HttpStatusCode.Forbidden => DriveErrorKind.Unauthorized,
             HttpStatusCode.NotFound => DriveErrorKind.NotFound,
             HttpStatusCode.Conflict => DriveErrorKind.AlreadyExists,
             HttpStatusCode.InsufficientStorage => DriveErrorKind.QuotaExceeded,
@@ -331,6 +365,7 @@ public sealed class OneDriveDriveProvider : IDriveProvider, IDisposable
         };
         var text = kind switch
         {
+            DriveErrorKind.Unauthorized when resp.StatusCode == HttpStatusCode.Forbidden => "OneDrive refused access. Sign in again and allow FutureCheck to use its app folder.",
             DriveErrorKind.Unauthorized => "The OneDrive sign-in expired.",
             DriveErrorKind.NotFound => $"Not found on OneDrive while {what}.",
             DriveErrorKind.AlreadyExists => $"A file with that name is already on OneDrive ({what}).",

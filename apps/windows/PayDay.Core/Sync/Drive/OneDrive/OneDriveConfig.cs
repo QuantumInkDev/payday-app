@@ -9,6 +9,12 @@ namespace PayDay.Sync.Drive.OneDrive;
 /// setting <see cref="SettingKey"/> in this device's Settings table. Client IDs are public identifiers,
 /// not secrets, but none is committed until the registration exists.
 /// </para>
+/// <para>
+/// The registration: supported account types "Accounts in any organizational directory and personal
+/// Microsoft accounts" (the app signs in through <c>/common</c>), a "Mobile and desktop applications"
+/// redirect <c>http://localhost</c>, and the delegated Graph permissions <c>Files.ReadWrite.AppFolder</c>
+/// and <c>offline_access</c>.
+/// </para>
 /// </summary>
 public static class OneDriveConfig
 {

@@ -47,7 +47,7 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 **Waiting on the developer, then design step 5's exit test:**
 
-1. **OneDrive app ID.** Register a free app at entra.microsoft.com (App registrations → New registration; personal Microsoft accounts; redirect "Public client/native" `http://localhost`; delegated `Files.ReadWrite.AppFolder` + `offline_access`). Supply it with `setx FUTURECHECK_ONEDRIVE_CLIENT_ID <id>` on each PC. Then run the manual test in the PR for the OneDrive provider (sign in, create vault, phrase, add a device, join from the second PC, lock/unlock, Notion owner, offline, turn off). Exit test: the VM and the rig syncing.
+1. **OneDrive app ID.** Register a free app at entra.microsoft.com (App registrations → New registration; supported account types "Accounts in any organizational directory and personal Microsoft accounts", which matches the app's /common sign-in; redirect "Public client/native" `http://localhost`; delegated `Files.ReadWrite.AppFolder` + `offline_access`). Supply it with `setx FUTURECHECK_ONEDRIVE_CLIENT_ID <id>` on each PC. Then run the manual test in the PR for the OneDrive provider (sign in, create vault, phrase, add a device, join from the second PC, lock/unlock, Notion owner, offline, turn off). Exit test: the VM and the rig syncing.
 2. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
 
 **Before seeding the vault** (design §11): export JSON backups from both the VM and the rig and decide which holds the real data.

@@ -44,6 +44,9 @@ public sealed class SyncCoordinator : IDisposable
     /// <summary><c>sync_device</c> key: "1" once a device-ID clash stopped sync (10.1 step 5).</summary>
     public const string IdentityClashKey = "identityClash";
 
+    /// <summary><c>sync_device</c> key: the ID of the vault this device created while its recovery phrase is not confirmed as saved.</summary>
+    public const string PhraseUnconfirmedKey = "recoveryPhraseUnconfirmed";
+
     /// <summary><c>sync_device</c> key: when each unreadable file or gap was first seen (<see cref="SyncProblemTimers"/>).</summary>
     public const string ProblemsSinceKey = "problemsSince";
 
@@ -67,6 +70,7 @@ public sealed class SyncCoordinator : IDisposable
     private readonly Dictionary<string, IReadOnlyDictionary<string, long>> _snapshotCovers = new(StringComparer.Ordinal);
     private readonly SyncProblemTimers _problems = new();
     private PairingState? _pairing;
+    private CancellationTokenSource? _cycle;
     private SyncStatus _status = SyncStatus.Off;
     private DateTimeOffset? _lastSynced;
 
@@ -222,6 +226,8 @@ public sealed class SyncCoordinator : IDisposable
                         replica.Update(m => m.VaultId = newVaultId);
                     }
                     _keys.Save(newVaultId, 1, key);
+                    // Until the user confirms they saved it, the phrase can be shown again (from the keystore).
+                    _sync.SetDeviceSetting(PhraseUnconfirmedKey, newVaultId);
                     _sync.SetDeviceSetting(VaultCreatedAtKey, Timestamp(_time.GetUtcNow()));
                     _sync.SetDeviceSetting(VaultStateKey, Creating);
                     _sync.SetDeviceSetting(IdentityClashKey, null);
@@ -259,13 +265,50 @@ public sealed class SyncCoordinator : IDisposable
             // Nothing was created (for example the pre-sync backup could not be written).
             var status = IsInVault
                 ? Fail(ex)
-                : SetStatus(SyncStatus.Off with { Message = $"The vault could not be created: {ex.Message}", ErrorCode = (ex as SyncException)?.Code });
+                : SetStatus(SyncStatus.Off with { Message = $"The vault could not be created: {ex.Message}", ErrorCode = (ex as SyncException)?.Code ?? (ex as DriveException)?.Kind.ToString() });
             return new CreateVaultResult(CreateVaultOutcome.Failed, null, null, turnOn, status);
         }
         finally
         {
             if (key is not null) CryptographicOperations.ZeroMemory(key);
             _operation.Release();
+        }
+    }
+
+    /// <summary>
+    /// The recovery phrase of the vault this device created, while the user has not yet confirmed
+    /// saving it (12.1 step 7): rebuilt from the key in the keystore, so leaving the screen, closing the
+    /// app or a crash never loses it. Null once confirmed, when this device did not create its vault, or
+    /// when the key is gone.
+    /// </summary>
+    public string? GetUnconfirmedRecoveryPhrase()
+    {
+        try
+        {
+            if (_sync.Replica?.Read((_, m) => m.VaultId) is not { } vaultId || _sync.GetDeviceSetting(PhraseUnconfirmedKey) != vaultId) return null;
+            var key = _keys.Load(vaultId, 1);
+            if (key is null) return null;
+            try
+            {
+                return RecoveryPhrase.EncodeToString(key);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The user confirmed they saved the recovery phrase: it is never offered again.</summary>
+    public async Task ConfirmRecoveryPhraseSavedAsync(CancellationToken ct = default)
+    {
+        using (await _sync.EnterWriteAsync(ct).ConfigureAwait(false))
+        {
+            if (_sync.IsOn) _sync.SetDeviceSetting(PhraseUnconfirmedKey, null);
         }
     }
 
@@ -600,6 +643,9 @@ public sealed class SyncCoordinator : IDisposable
             var replica = _sync.Replica;
             var read = await ReadVaultAsync(ct).ConfigureAwait(false);
             if (replica is null || read.Vault is not { } vault || vault.VaultId != replica.Read((_, m) => m.VaultId)) return null;
+            // Settle this process's identity first: the next sync would otherwise reset the caches,
+            // the pairing state with them, and the page would think the new device had joined.
+            ResetIdentityCaches(replica.DeviceId);
             using var codec = OpenCodec(vault);
             if (codec is null) return null;
             await DeletePairingFileAsync(ct).ConfigureAwait(false);
@@ -674,6 +720,8 @@ public sealed class SyncCoordinator : IDisposable
     /// </summary>
     public async Task<LeaveVaultResult> LeaveVaultAsync(CancellationToken ct = default)
     {
+        // A sync waiting on a slow or throttled drive must not hold "Turn off sync" up for minutes.
+        CancelRunningSync();
         await _operation.WaitAsync(ct).ConfigureAwait(false);
         var notion = NotionRelease.NotOwner;
         try
@@ -708,6 +756,7 @@ public sealed class SyncCoordinator : IDisposable
                 {
                     _sync.SetDeviceSetting(VaultStateKey, null);
                     _sync.SetDeviceSetting(VaultCreatedAtKey, null);
+                    _sync.SetDeviceSetting(PhraseUnconfirmedKey, null);
                 }
                 await _sync.TurnOffAsync(lease, ct).ConfigureAwait(false);
             }
@@ -790,13 +839,38 @@ public sealed class SyncCoordinator : IDisposable
     public async Task<SyncStatus> SyncAsync(CancellationToken ct = default)
     {
         await _operation.WaitAsync(ct).ConfigureAwait(false);
+        var cycle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (_statusLock) _cycle = cycle;
         try
         {
-            return await SyncCoreAsync(ct).ConfigureAwait(false);
+            return await SyncCoreAsync(cycle.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Stopped by CancelRunningSync (turning sync off): local steps are transactional, so
+            // nothing is half-written; the next sync starts over.
+            return SetStatus(IsInVault ? Status with { Phase = SyncPhase.Idle, Message = "Sync was stopped; it will run again." } : SyncStatus.Off);
         }
         finally
         {
+            lock (_statusLock) _cycle = null;
+            cycle.Dispose();
             _operation.Release();
+        }
+    }
+
+    /// <summary>Cancels the sync cycle running now, if any (Turn off sync calls it so it need not wait for the drive).</summary>
+    public void CancelRunningSync()
+    {
+        lock (_statusLock)
+        {
+            try
+            {
+                _cycle?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
     }
 

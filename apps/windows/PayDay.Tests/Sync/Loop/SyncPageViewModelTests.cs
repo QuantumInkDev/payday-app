@@ -40,7 +40,7 @@ public sealed class SyncPageViewModelTests : IDisposable
         await vm.CreateVaultAsync();
         var phrase = string.Join(' ', vm.RecoveryWords.Select(w => w[(w.IndexOf(' ') + 1)..]));
         vm.PhraseSaved = true;
-        vm.FinishRecoveryPhrase();
+        await vm.FinishRecoveryPhraseAsync();
         return (a, vm, phrase);
     }
 
@@ -105,10 +105,10 @@ public sealed class SyncPageViewModelTests : IDisposable
 
         // The phrase stays until the user confirms they saved it; then it is gone for good.
         Assert.False(vm.CanFinishRecoveryPhrase);
-        vm.FinishRecoveryPhrase();
+        await vm.FinishRecoveryPhraseAsync();
         Assert.Equal(SyncScreen.RecoveryPhrase, vm.Screen);
         vm.PhraseSaved = true;
-        vm.FinishRecoveryPhrase();
+        await vm.FinishRecoveryPhraseAsync();
         Assert.Equal(SyncScreen.Status, vm.Screen);
         Assert.Empty(vm.RecoveryWords);
         Assert.Null(vm.RecoveryPhraseFileText);
@@ -391,6 +391,152 @@ public sealed class SyncPageViewModelTests : IDisposable
         Assert.Equal(SyncPhase.Idle, vm.Phase);
     }
 
+    // ---- PR #7 review --------------------------------------------------------------------------------
+
+    private SyncCoordinator CoordinatorOver(SyncDevice d, IDriveProvider drive)
+        => new(d.Env.Sync, drive, d.Keys, d.Env.Backups, d.Env.Db, new DeviceInfo(d.Name, "windows", "0.0.0-test"), () => false, d.Env.Time);
+
+    [Fact]
+    public async Task TheRecoveryPhrase_SurvivesLeavingThePage_AndARestart_UntilTheUserConfirmsSavingIt()
+    {
+        var a = await _world.AddDeviceAsync("Windows PC");
+        a.Env.InsertLegacyData();
+        var vm = Vm(a);
+        await vm.LoadAsync();
+        await vm.TurnOnAsync();
+        _world.Advance(1000);
+        await vm.CreateVaultAsync();
+        var words = vm.RecoveryWords.ToArray();
+        Assert.Equal(24, words.Length);
+        Assert.NotNull(vm.CloseWarning());
+
+        // Another page, then back: a fresh view model offers the same words again.
+        var again = Vm(a);
+        await again.LoadAsync();
+        Assert.Equal(SyncScreen.RecoveryPhrase, again.Screen);
+        Assert.Equal(words, again.RecoveryWords);
+
+        // A restart (a new coordinator over the same database and keystore) does too.
+        using var restarted = CoordinatorOver(a, _world.Drive);
+        var afterRestart = new SyncPageViewModel(restarted, new FakeDriveAccount(), null, a.Env.Time);
+        await afterRestart.LoadAsync();
+        Assert.Equal(words, afterRestart.RecoveryWords);
+        Assert.Equal("You haven't confirmed that you saved this phrase yet.", afterRestart.RecoveryPhraseNote);
+
+        afterRestart.PhraseSaved = true;
+        await afterRestart.FinishRecoveryPhraseAsync();
+        Assert.Null(a.Coordinator.GetUnconfirmedRecoveryPhrase());
+        Assert.Null(afterRestart.CloseWarning());
+        var later = Vm(a);
+        await later.LoadAsync();
+        Assert.Equal(SyncScreen.Status, later.Screen);
+        Assert.False(later.HasUnconfirmedPhrase);
+    }
+
+    [Fact]
+    public async Task AJoinedDevice_IsNeverOfferedThePhrase_AndLeavingForgetsAnUnconfirmedOne()
+    {
+        var (_, _, phrase) = await CreatedAsync();
+        var b = await _world.AddDeviceAsync("Windows Laptop");
+        _world.Advance(1000);
+        await b.Coordinator.JoinWithRecoveryPhraseAsync(phrase, false);
+        Assert.Null(b.Coordinator.GetUnconfirmedRecoveryPhrase());
+
+        var c = await _world.AddDeviceAsync("Windows Tablet");
+        foreach (var path in _world.Drive.Paths) _world.Drive.Remove(path);
+        _world.Advance(1000);
+        await c.Coordinator.CreateVaultAsync();
+        Assert.NotNull(c.Coordinator.GetUnconfirmedRecoveryPhrase());
+        await c.Coordinator.LeaveVaultAsync();
+        Assert.Null(c.Coordinator.GetUnconfirmedRecoveryPhrase());
+    }
+
+    [Fact]
+    public async Task AnExpiredSignIn_LeadsToTheSignInPage_NotALoop()
+    {
+        var a = await _world.AddDeviceAsync("Windows PC");
+        var drive = new ControlledDrive(_world.Drive) { SignedOut = true };
+        using var coordinator = CoordinatorOver(a, drive);
+        // MSAL still has the account cached, but its refresh token was revoked.
+        var account = new FakeDriveAccount { OnSignIn = () => drive.SignedOut = false };
+        var vm = new SyncPageViewModel(coordinator, account, null, a.Env.Time);
+        await vm.LoadAsync();
+
+        await vm.TurnOnAsync();
+
+        Assert.Equal(1, account.SignIns);
+        Assert.Equal(SyncScreen.Create, vm.Screen);
+        Assert.False(vm.HasError);
+    }
+
+    [Fact]
+    public async Task AnExpiredSignIn_DuringAJoin_SignsInAgainAndRetries()
+    {
+        var (_, _, phrase) = await CreatedAsync();
+        var b = await _world.AddDeviceAsync("Windows Laptop");
+        var drive = new ControlledDrive(_world.Drive);
+        using var coordinator = CoordinatorOver(b, drive);
+        var account = new FakeDriveAccount { OnSignIn = () => drive.SignedOut = false };
+        var vm = new SyncPageViewModel(coordinator, account, null, b.Env.Time);
+        await vm.LoadAsync();
+        await vm.TurnOnAsync();
+        Assert.Equal(SyncScreen.Join, vm.Screen);
+
+        drive.SignedOut = true;
+        vm.PhraseInput = phrase;
+        _world.Advance(1000);
+        await vm.JoinWithPhraseAsync();
+
+        Assert.Equal(1, account.SignIns);
+        Assert.Equal(SyncScreen.Status, vm.Screen);
+        Assert.True(b.Env.Sync.IsOn);
+    }
+
+    [Fact]
+    public async Task ASecondClick_WhileAnOperationRuns_DoesNothing()
+    {
+        var a = await _world.AddDeviceAsync("Windows PC");
+        var drive = new ControlledDrive(_world.Drive);
+        using var coordinator = CoordinatorOver(a, drive);
+        var vm = new SyncPageViewModel(coordinator, new FakeDriveAccount(), null, a.Env.Time);
+        await vm.LoadAsync();
+        drive.Hold();
+
+        var first = vm.TurnOnAsync();
+        await drive.Held.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(vm.IsBusy);
+        var second = vm.TurnOnAsync();
+        Assert.True(second.IsCompleted);
+        await vm.CreateVaultAsync();
+        Assert.Equal(1, drive.ListCalls);
+        Assert.NotNull(vm.CloseWarning());
+
+        drive.Release();
+        await first;
+        Assert.Equal(SyncScreen.Create, vm.Screen);
+        Assert.False(a.Env.Sync.IsOn);
+    }
+
+    [Fact]
+    public void ThePhraseFile_IsCheckedAgainstEveryOneDriveFolder()
+    {
+        var env = new Dictionary<string, string?>
+        {
+            ["OneDrive"] = @"C:\Users\Someone\OneDrive",
+            ["OneDriveConsumer"] = @"C:\Users\Someone\OneDrive",
+            ["OneDriveCommercial"] = @"C:\Users\Someone\OneDrive - Fabrikam",
+        };
+        var folders = SyncPageViewModel.OneDriveFolders(k => env.TryGetValue(k, out var v) ? v : null);
+
+        Assert.Equal(2, folders.Count);
+        Assert.True(SyncPageViewModel.IsInFolder(@"C:\Users\Someone\OneDrive\Documents\phrase.txt", folders));
+        Assert.True(SyncPageViewModel.IsInFolder(@"c:/users/someone/onedrive - fabrikam/phrase.txt", folders));
+        Assert.False(SyncPageViewModel.IsInFolder(@"C:\Users\Someone\OneDriveBackup\phrase.txt", folders));
+        Assert.False(SyncPageViewModel.IsInFolder(@"E:\phrase.txt", folders));
+        Assert.Empty(SyncPageViewModel.OneDriveFolders(_ => null));
+        Assert.Contains("USB drive", SyncPageViewModel.PhraseFileAdvice, StringComparison.Ordinal);
+    }
+
     /// <summary>A drive account that signs in at once as a fictional user.</summary>
     private sealed class FakeDriveAccount : IDriveAccount
     {
@@ -408,9 +554,13 @@ public sealed class SyncPageViewModelTests : IDisposable
 
         public Task<string?> GetSignedInUserAsync(CancellationToken ct = default) => Task.FromResult(SignedInUser);
 
+        /// <summary>Runs on every interactive sign-in (for example to make the drive accept the new sign-in).</summary>
+        public Action? OnSignIn { get; set; }
+
         public Task<DriveSignInResult> SignInAsync(CancellationToken ct = default)
         {
             SignIns++;
+            OnSignIn?.Invoke();
             if (NextSignIn is { } next)
             {
                 NextSignIn = null;

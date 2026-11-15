@@ -274,10 +274,75 @@ public sealed class OneDriveDriveProviderTests : IDisposable
     [Fact]
     public async Task OtherClientErrors_AreOther_WithGraphsErrorCode()
     {
-        _graph.FailNext(HttpStatusCode.Forbidden, errorCode: "accessDenied");
+        _graph.FailNext(HttpStatusCode.BadRequest, errorCode: "invalidRequest");
         var ex = await Assert.ThrowsAsync<DriveException>(() => _drive.ListAsync("devices"));
         Assert.Equal(DriveErrorKind.Other, ex.Kind);
-        Assert.Contains("accessDenied", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("invalidRequest", ex.Message, StringComparison.Ordinal);
         Assert.Empty(_waits);
+    }
+
+    [Fact]
+    public async Task A403_AsksForANewSignIn_NotSomethingUnexplained()
+    {
+        _graph.FailNext(HttpStatusCode.Forbidden, errorCode: "accessDenied");
+        var ex = await Assert.ThrowsAsync<DriveException>(() => _drive.ListAsync("devices"));
+        Assert.Equal(DriveErrorKind.Unauthorized, ex.Kind);
+        Assert.Contains("Sign in again", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("accessDenied", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnExpiredDownloadLink_IsTransient_AndDoesNotTouchTheSignIn()
+    {
+        _graph.Put("vault.json", Bytes("{}"));
+        var item = (await _drive.ListAsync(string.Empty)).Files.Single();
+        _tokens.Calls.Clear();
+        _graph.FailNext(HttpStatusCode.Unauthorized, when: r => r.RequestUri!.Host == "download.fake");
+
+        var ex = await Assert.ThrowsAsync<DriveException>(() => _drive.DownloadAsync(item));
+
+        Assert.Equal(DriveErrorKind.Transient, ex.Kind);
+        Assert.Equal(new[] { false }, _tokens.Calls); // no forced refresh, no sign-in prompt
+        Assert.Equal(new byte[] { (byte)'{', (byte)'}' }, await _drive.DownloadAsync(item)); // the next try works
+    }
+
+    [Fact]
+    public async Task ANextPageLinkToAnotherHost_IsRefused_AndGetsNoToken()
+    {
+        _graph.PageSize = 1;
+        _graph.NextLinkBase = "https://graph.example.invalid";
+        _graph.Put("devices/0a0a0a0a0a0a0a0a/000001.chg", Bytes("1"));
+        _graph.Put("devices/0a0a0a0a0a0a0a0a/000002.chg", Bytes("2"));
+
+        var ex = await Assert.ThrowsAsync<DriveException>(() => _drive.ListAsync("devices/0a0a0a0a0a0a0a0a"));
+
+        Assert.Equal(DriveErrorKind.Other, ex.Kind);
+        Assert.DoesNotContain(_graph.Requests, r => r.Uri.Host != "graph.microsoft.com");
+        Assert.True(OneDriveDriveProvider.IsGraphUrl("https://graph.microsoft.com/v1.0/me"));
+        Assert.False(OneDriveDriveProvider.IsGraphUrl("http://graph.microsoft.com/v1.0/me"));
+        Assert.False(OneDriveDriveProvider.IsGraphUrl("https://graph.microsoft.com.example.invalid/v1.0"));
+    }
+
+    [Fact]
+    public async Task RetriesStopWithinTheTimeBudget()
+    {
+        _graph.FailNext(HttpStatusCode.TooManyRequests, TimeSpan.FromSeconds(20));
+        _graph.FailNext(HttpStatusCode.TooManyRequests, TimeSpan.FromSeconds(20));
+
+        var ex = await Assert.ThrowsAsync<DriveException>(() => _drive.ListAsync("devices"));
+
+        Assert.Equal(DriveErrorKind.Transient, ex.Kind);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(20) }, _waits); // 20 + 20 would pass the 30 s budget
+        Assert.Equal(2, _graph.Requests.Count);
+        Assert.True(OneDriveDriveProvider.MaxRetryTime <= TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void OnlyNetworkErrorsFromTheSignInLibrary_AreRetried()
+    {
+        Assert.Equal(DriveErrorKind.Transient, OneDriveAuth.ClientErrorKind(Microsoft.Identity.Client.MsalError.RequestTimeout));
+        Assert.Equal(DriveErrorKind.Transient, OneDriveAuth.ClientErrorKind(Microsoft.Identity.Client.MsalError.ServiceNotAvailable));
+        Assert.Equal(DriveErrorKind.Unauthorized, OneDriveAuth.ClientErrorKind("invalid_grant"));
+        Assert.Equal(DriveErrorKind.Unauthorized, OneDriveAuth.ClientErrorKind(null));
     }
 }

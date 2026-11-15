@@ -416,6 +416,43 @@ public sealed class SyncReviewFixTests : IDisposable
         Assert.Equal(new[] { "First name", "Second name" }, seen);
     }
 
+    // ---- PR #7 review --------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PairingStartedBeforeTheFirstSyncOfAProcess_SurvivesThatSync()
+    {
+        var (a, _) = await CreatorAsync();
+        // A restart: the new coordinator has not synced yet when the user opens "Add a device".
+        using var restarted = CoordinatorFor(a, _world.Drive, a.Keys);
+        var session = await restarted.StartPairingAsync();
+        Assert.NotNull(session);
+
+        _world.Advance(1000);
+        await restarted.SyncAsync();
+
+        Assert.True(restarted.IsPairing);
+        Assert.True(_world.Drive.Exists(session!.PairingPath));
+    }
+
+    [Fact]
+    public async Task TurningSyncOff_CancelsASyncWaitingOnTheDrive()
+    {
+        var (a, _) = await CreatorAsync();
+        var drive = new ControlledDrive(_world.Drive);
+        using var coordinator = CoordinatorFor(a, drive, a.Keys);
+        drive.Hold();
+
+        var sync = coordinator.SyncAsync();
+        await drive.Held.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var left = await coordinator.LeaveVaultAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(LeaveVaultOutcome.Left, left.Outcome);
+        var status = await sync.WaitAsync(TimeSpan.FromSeconds(10)); // returns, never throws
+        Assert.False(a.Env.Sync.IsOn);
+        Assert.Equal(SyncPhase.Off, coordinator.Status.Phase);
+        _ = status;
+    }
+
     // ---- Test doubles ---------------------------------------------------------------------------------
 
     private sealed class FailingBackupStore : IBackupStore
