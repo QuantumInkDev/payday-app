@@ -50,7 +50,7 @@ public sealed class SyncSafetyTests : IDisposable
     {
         await _env.InitializeAsync();
         _env.InsertLegacyData();
-        SqliteConnection.ClearAllPools();
+        SqliteTestFiles.ClearPoolsFor(_env.Path);
         var before = File.ReadAllBytes(_env.Path);
 
         // Exactly what App.OnLaunched does, then every page's load through the routing write path.
@@ -67,6 +67,30 @@ public sealed class SyncSafetyTests : IDisposable
         await new PayPeriodService(_env.Routed).GetPayAnchorAsync();
         _ = _env.Routed.GetNotionState();
 
+        // The sync loop the app starts at launch: client ID lookup, coordinator, scheduler (a launch
+        // sync), the Sync page and the Notion connector's state. With sync off none of it writes.
+        var credentials = new InMemoryCredentialStore();
+        var clientId = PayDay.Sync.Drive.OneDrive.OneDriveConfig.Resolve(null, await _env.Db.GetSettingAsync(PayDay.Sync.Drive.OneDrive.OneDriveConfig.SettingKey));
+        var auth = new PayDay.Sync.Drive.OneDrive.OneDriveAuth(clientId ?? "00000000-0000-0000-0000-00000000c1d0", credentials);
+        var drive = new PayDay.Sync.Drive.InMemoryDriveProvider(_env.Time);
+        using (var coordinator = new PayDay.Sync.Coordination.SyncCoordinator(_env.Sync, drive, new PayDay.Sync.Keys.CredentialVaultKeyStore(credentials), _env.Backups, _env.Db,
+            new PayDay.Sync.Coordination.DeviceInfo("Windows PC", "windows", null), () => false, _env.Time))
+        using (var scheduler = new PayDay.Sync.Coordination.SyncScheduler(ct => coordinator.SyncAsync(ct), _env.Time))
+        using (var notion = new NotionSyncService(_env.Routed, credentials, new RecordingHttpHandler()))
+        using (var page = new SyncPageViewModel(coordinator, auth, notion, _env.Time))
+        {
+            scheduler.Attach(_env.Sync);
+            scheduler.NotifyLaunch();
+            Assert.True(await scheduler.RunDueAsync());
+            Assert.Equal(PayDay.Sync.Coordination.SyncPhase.Off, coordinator.Status.Phase);
+            await page.LoadAsync();
+            Assert.Equal(SyncScreen.Off, page.Screen);
+            Assert.Equal(NotionRole.SyncOff, (await notion.GetConnectorStateAsync()).Role);
+        }
+        Assert.Empty(drive.Paths);
+        Assert.Equal(0, drive.ListCalls);
+        Assert.Empty(credentials.Items);
+
         // And a second start of the same database.
         using (var again = LocalSync.Open(LocalSync.ConnectionStringFor(_env.Path)))
         {
@@ -74,7 +98,7 @@ public sealed class SyncSafetyTests : IDisposable
         }
         await _env.Db.InitializeAsync();
 
-        SqliteConnection.ClearAllPools();
+        SqliteTestFiles.ClearPoolsFor(_env.Path);
         Assert.Equal(before, File.ReadAllBytes(_env.Path));
         Assert.False(File.Exists(_env.Path + "-journal"));
         Assert.False(File.Exists(_env.Path + "-wal"));
@@ -223,6 +247,51 @@ public sealed class SyncSafetyTests : IDisposable
         await TypeColorService.LoadAsync(_env.Routed);
         Assert.Equal("#112233", TypeColorService.GetHex("Loans"));
         Assert.Equal("#445566", TypeColorService.GetHex("Bills"));
+    }
+
+    [Fact]
+    public async Task TypeColors_AReadAfterAMerge_DoesNotLetAnOlderMapRevertAnotherDevicesColour()
+    {
+        await _env.InitializeAsync();
+        _env.InsertLegacyData();
+        await _env.TurnOnAsync();
+        await TypeColorService.LoadAsync(_env.Routed); // Cards is #FD79A8 in this device's map
+        var replica = _env.Sync.Replica!;
+
+        // Another device changes Cards; then something reads every setting (the backup on mark-paid does).
+        replica.MergeRecords(new[] { Remote(SyncEntities.Setting, "TypeColor/Cards", SyncEntities.ValueField, SyncValue.String("#112233")) });
+        await _env.Routed.GetAllSettingsAsync();
+        await _env.Routed.GetSettingAsync(TypeColorService.SettingKey);
+        var pendingBefore = replica.Read((_, m) => m.PendingRecords.Count);
+
+        // The user changes another colour from the map loaded before the merge.
+        _env.Time.Advance(120_000);
+        await TypeColorService.SetHexAsync(_env.Routed, "Bills", "#445566");
+
+        var written = replica.Read((_, m) => m.PendingRecords.Skip(pendingBefore).ToList());
+        Assert.Equal("TypeColor/Bills", Assert.Single(written).Id);
+        Assert.Equal(SyncValue.String("#112233"), _env.Value(SyncEntities.Setting, "TypeColor/Cards", SyncEntities.ValueField));
+        Assert.Contains("#112233", await _env.Db.GetSettingAsync(TypeColorService.SettingKey), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TypeColors_WithSyncOff_StillSaveTheWholeMapAsBefore()
+    {
+        await _env.InitializeAsync();
+        _env.InsertLegacyData();
+        await TypeColorService.LoadAsync(_env.Routed);
+
+        await TypeColorService.SetHexAsync(_env.Routed, "Bills", "#445566");
+
+        Assert.False(_env.Sync.IsOn);
+        var expected = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["Cards"] = "#fd79a8",
+            ["Fitness"] = "#00B894",
+            ["Bad"] = "red",
+            ["Bills"] = "#445566",
+        });
+        Assert.Equal(expected, await _env.Db.GetSettingAsync(TypeColorService.SettingKey));
     }
 
     // ---- A6: one unmark is one action ------------------------------------------------------------------

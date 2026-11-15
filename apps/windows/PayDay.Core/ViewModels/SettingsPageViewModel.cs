@@ -178,6 +178,11 @@ public sealed partial class SettingsPageViewModel : ObservableObject
             NotionStatus = NotionPushStatus.NotConfigured;
             NotionStatusLabel = "Paste an integration token to enable sync.";
         }
+        else if ((await _notion.GetConnectorStateAsync().ConfigureAwait(true)).Role == NotionRole.ReconnectRequired)
+        {
+            NotionStatus = NotionPushStatus.NotConfigured;
+            NotionStatusLabel = "This PC left its sync vault. Save the token again to use Notion here.";
+        }
         else
         {
             NotionStatus = NotionPushStatus.Ok;

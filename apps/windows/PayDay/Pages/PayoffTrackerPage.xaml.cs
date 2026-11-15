@@ -5,7 +5,7 @@ using PayDay.ViewModels;
 
 namespace PayDay.Pages;
 
-public sealed partial class PayoffTrackerPage : Page
+public sealed partial class PayoffTrackerPage : Page, ISyncReloadable
 {
     public PayoffTrackerPageViewModel ViewModel { get; }
 
@@ -21,4 +21,7 @@ public sealed partial class PayoffTrackerPage : Page
     {
         await ViewModel.LoadAsync();
     }
+
+    /// <summary>Another device's changes were merged: show them.</summary>
+    public Task ReloadAfterSyncAsync(bool settingsChanged) => ViewModel.LoadAsync();
 }

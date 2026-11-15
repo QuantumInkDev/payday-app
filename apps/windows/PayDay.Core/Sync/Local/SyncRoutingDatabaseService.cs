@@ -35,7 +35,7 @@ namespace PayDay.Sync.Local;
 /// only the colours that differ from the map last read are written.
 /// </para>
 /// </summary>
-public sealed class SyncRoutingDatabaseService : IDatabaseService, INotionSyncHost
+public sealed class SyncRoutingDatabaseService : IDatabaseService, INotionSyncHost, ITypeColorWriter
 {
     private readonly IDatabaseService _tables;
     private readonly LocalSync _sync;
@@ -164,6 +164,25 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService, INotionSyncHo
         return ChangeRecord.SortByKey(output);
     }
 
+    /// <summary>
+    /// One type's colour with sync on: only its <c>TypeColor/&lt;type&gt;</c> setting is written
+    /// (<see cref="TypeColorService"/> uses this, so a colour another device changed is never reverted
+    /// by a map loaded earlier). False with sync off: the caller saves the whole map as before.
+    /// </summary>
+    public async Task<bool> TrySetTypeColorAsync(string type, string? hex)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica) return false;
+            var key = SyncSettingKeys.TypeColor(type);
+            var value = hex is null ? SyncValue.Null : BackupSettings.MapOne(key, JsonData.String(hex)) ?? SyncValue.Null;
+            replica.Commit((s, h) => RowWriter.SetSetting(s, key, value, h));
+        }
+        _sync.NotifyLocalEdit();
+        return true;
+    }
+
     private static IReadOnlyDictionary<string, SyncValue> TypeColorRows(string? typeColorsJson)
         => BackupSettings.MapForRestore(JsonData.Object((BackupSettings.LegacyTypeColorsKey, typeColorsJson is null ? JsonData.Null : JsonData.String(typeColorsJson))));
 
@@ -213,6 +232,8 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService, INotionSyncHo
         }
         else if (fromNotion)
         {
+            // A bill deleted on any device stays deleted: a Notion page is never an undelete.
+            if (replica.Read((s, _) => IsTombstoned(s, SyncEntities.Bill, id))) return;
             var lastPushed = _sync.GetNotionLastPushed(id);
             replica.Commit((s, h) => BillEditRecords(s, id, bill, baseline: null, RemainingSource.Notion, lastPushed, h));
         }
@@ -481,19 +502,44 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService, INotionSyncHo
         });
         if (owner is null) return new NotionConnectorState(NotionRole.NoOwner);
         if (owner != replica.DeviceId) return new NotionConnectorState(NotionRole.OtherDevice, owner, name);
-        return new NotionConnectorState(_sync.HasNotionPushes ? NotionRole.Owner : NotionRole.OwnerMustPushFirst, owner, name);
+        return new NotionConnectorState(_sync.NotionFullPushDone ? NotionRole.Owner : NotionRole.OwnerMustPushFirst, owner, name);
     }
 
+    /// <summary>
+    /// Makes this device the owner. Already the owner (the token was saved again): nothing changes, so
+    /// its last-pushed values stay and no forced push overwrites recent Notion edits.
+    /// </summary>
     public async Task ClaimNotionAsync()
     {
         using (await _sync.EnterWriteAsync().ConfigureAwait(false))
         {
             if (_sync.Replica is not { } replica) return;
+            var owner = replica.Read((s, _) => s.Value(SyncEntities.Setting, SyncSettingKeys.NotionOwnerDeviceId, SyncEntities.ValueField) is { IsString: true } v ? v.StringValue : null);
+            if (owner == replica.DeviceId) return;
             replica.SetSetting(SyncSettingKeys.NotionOwnerDeviceId, SyncValue.String(replica.DeviceId));
             _sync.ClearNotionLastPushed();
         }
         _sync.NotifyLocalEdit();
     }
+
+    /// <summary>A push pass over every bill finished without an error: this owner may pull now (12.5).</summary>
+    public void RecordNotionFullPush()
+    {
+        if (GetNotionState().Role == NotionRole.OwnerMustPushFirst) _sync.SetNotionFullPushDone();
+    }
+
+    /// <summary>Every bill whose winning <c>deleted</c> is true, with the Notion page it had (sync on; empty with sync off).</summary>
+    public IReadOnlyList<DeletedNotionBill> GetDeletedBills()
+    {
+        if (_sync.Replica is not { } replica) return Array.Empty<DeletedNotionBill>();
+        return replica.Read((s, _) => s.Ids(SyncEntities.Bill)
+            .Where(id => IsTombstoned(s, SyncEntities.Bill, id))
+            .Select(id => new DeletedNotionBill(id, s.Value(SyncEntities.Bill, id, "notionPageId") is { IsString: true } p && p.StringValue.Length > 0 ? p.StringValue : null))
+            .ToArray());
+    }
+
+    private static bool IsTombstoned(SyncState s, string entity, string id)
+        => s.TryGet(entity, id, SyncEntities.DeletedField, out var cell) && cell.Value.IsTrue;
 
     public async Task SaveBillFromNotionAsync(Bill pulled)
     {

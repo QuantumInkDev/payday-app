@@ -44,6 +44,12 @@ public sealed class SyncCoordinator : IDisposable
     /// <summary><c>sync_device</c> key: "1" once a device-ID clash stopped sync (10.1 step 5).</summary>
     public const string IdentityClashKey = "identityClash";
 
+    /// <summary><c>sync_device</c> key: the ID of the vault this device created while its recovery phrase is not confirmed as saved.</summary>
+    public const string PhraseUnconfirmedKey = "recoveryPhraseUnconfirmed";
+
+    /// <summary><c>sync_device</c> key: when each unreadable file or gap was first seen (<see cref="SyncProblemTimers"/>).</summary>
+    public const string ProblemsSinceKey = "problemsSince";
+
     private const string Creating = "creating";
     private const string Member = "member";
 
@@ -62,8 +68,9 @@ public sealed class SyncCoordinator : IDisposable
     private string? _identity;
     private readonly HashSet<string> _mergedSnapshots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyDictionary<string, long>> _snapshotCovers = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, DateTimeOffset> _problemsSince = new(StringComparer.Ordinal);
+    private readonly SyncProblemTimers _problems = new();
     private PairingState? _pairing;
+    private CancellationTokenSource? _cycle;
     private SyncStatus _status = SyncStatus.Off;
     private DateTimeOffset? _lastSynced;
 
@@ -113,6 +120,52 @@ public sealed class SyncCoordinator : IDisposable
 
     public void Dispose() => _operation.Dispose();
 
+    // ==== Looking before turning sync on ================================================================
+
+    /// <summary>
+    /// Reads vault.json only, to tell "Turn on sync" whether to offer creating a vault (12.1) or joining
+    /// one (12.2). Changes nothing; never throws (except for cancellation).
+    /// </summary>
+    public async Task<VaultProbe> ProbeVaultAsync(CancellationToken ct = default)
+    {
+        await _operation.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var read = await ReadVaultAsync(ct).ConfigureAwait(false);
+            if (read.Vault is { } vault)
+            {
+                var mine = _sync.Replica?.Read((_, m) => m.VaultId) == vault.VaultId && IsInVault;
+                return new VaultProbe(mine ? VaultProbeOutcome.ThisDevicesVault : VaultProbeOutcome.VaultExists, null, null);
+            }
+            return read.Phase switch
+            {
+                null => new VaultProbe(VaultProbeOutcome.NoVault, null, null),
+                SyncPhase.NeedsUpdate => new VaultProbe(VaultProbeOutcome.NeedsUpdate, read.Message, read.Code),
+                _ => new VaultProbe(VaultProbeOutcome.Failed, read.Message, read.Code),
+            };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (DriveException d) when (d.Kind == DriveErrorKind.Unauthorized)
+        {
+            return new VaultProbe(VaultProbeOutcome.SignedOut, $"Sign in to {_drive.Name} again.", d.Kind.ToString());
+        }
+        catch (DriveException d)
+        {
+            return new VaultProbe(VaultProbeOutcome.Failed, $"{_drive.Name} could not be reached. Check the connection and try again.", d.Kind.ToString());
+        }
+        catch (Exception ex)
+        {
+            return new VaultProbe(VaultProbeOutcome.Failed, ex.Message, (ex as SyncException)?.Code);
+        }
+        finally
+        {
+            _operation.Release();
+        }
+    }
+
     // ==== Creating a vault (12.1) =======================================================================
 
     /// <summary>
@@ -125,6 +178,10 @@ public sealed class SyncCoordinator : IDisposable
     public async Task<CreateVaultResult> CreateVaultAsync(CancellationToken ct = default)
     {
         await _operation.WaitAsync(ct).ConfigureAwait(false);
+        string? vaultId = null;
+        byte[]? key = null;
+        var made = false;
+        TurnOnResult? turnOn = null;
         try
         {
             SetStatus(Status with { Phase = SyncPhase.Syncing, Message = "Creating the vault…" });
@@ -137,9 +194,6 @@ public sealed class SyncCoordinator : IDisposable
             }
             if (existing.Phase is { } problem) return new CreateVaultResult(CreateVaultOutcome.VaultExists, null, null, null, Fail(problem, existing.Message!, existing.Code));
 
-            string vaultId;
-            byte[] key;
-            TurnOnResult? turnOn = null;
             using (var lease = await _sync.EnterWriteAsync(ct).ConfigureAwait(false))
             {
                 if (_sync.GetDeviceSetting(VaultStateKey) == Creating && _sync.Replica!.Read((_, m) => m.VaultId) is { } pendingVault
@@ -159,37 +213,43 @@ public sealed class SyncCoordinator : IDisposable
                             return new CreateVaultResult(CreateVaultOutcome.Blocked, null, null, turnOn, Fail(SyncPhase.Off, "Some rows must be fixed before sync can be turned on.", null));
                         }
                     }
-                    vaultId = Uuid.NewV7(_time);
+                    var newVaultId = Uuid.NewV7(_time);
                     key = SyncKeys.NewKey();
                     var replica = _sync.Replica!;
                     if (NeedsNewIdentity(replica))
                     {
-                        _sync.StartNewIdentity(vaultId, lease);
+                        _sync.StartNewIdentity(newVaultId, lease);
                         replica = _sync.Replica!;
                     }
                     else
                     {
-                        replica.Update(m => m.VaultId = vaultId);
+                        replica.Update(m => m.VaultId = newVaultId);
                     }
-                    _keys.Save(vaultId, 1, key);
+                    _keys.Save(newVaultId, 1, key);
+                    // Until the user confirms they saved it, the phrase can be shown again (from the keystore).
+                    _sync.SetDeviceSetting(PhraseUnconfirmedKey, newVaultId);
                     _sync.SetDeviceSetting(VaultCreatedAtKey, Timestamp(_time.GetUtcNow()));
                     _sync.SetDeviceSetting(VaultStateKey, Creating);
                     _sync.SetDeviceSetting(IdentityClashKey, null);
                     WriteDeviceRow(replica);
-                    if (_hasNotionToken()) _sync.ContinueNotionAsCreator();
+                    if (_hasNotionToken())
+                    {
+                        _sync.ContinueNotionAsCreator();
+                    }
+                    else if (NotionOwner(replica) is not null)
+                    {
+                        // A device that synced before keeps its old vault's owner setting; nobody owns
+                        // the connector of the new vault until a device connects Notion (12.5).
+                        replica.SetSetting(SyncSettingKeys.NotionOwnerDeviceId, SyncValue.Null);
+                    }
+                    vaultId = newVaultId;
                 }
+                made = true;
             }
-            try
-            {
-                var phrase = RecoveryPhrase.EncodeToString(key);
-                var status = await SyncCoreAsync(ct).ConfigureAwait(false);
-                var created = _sync.GetDeviceSetting(VaultStateKey) == Member;
-                return new CreateVaultResult(created ? CreateVaultOutcome.Created : CreateVaultOutcome.CreatedUploadPending, vaultId, phrase, turnOn, status);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(key);
-            }
+            var phrase = RecoveryPhrase.EncodeToString(key!);
+            var status = await SyncCoreAsync(ct).ConfigureAwait(false);
+            var created = _sync.GetDeviceSetting(VaultStateKey) == Member;
+            return new CreateVaultResult(created ? CreateVaultOutcome.Created : CreateVaultOutcome.CreatedUploadPending, vaultId, phrase, turnOn, status);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -197,13 +257,63 @@ public sealed class SyncCoordinator : IDisposable
         }
         catch (Exception ex)
         {
-            return new CreateVaultResult(CreateVaultOutcome.CreatedUploadPending, _sync.Replica?.Read((_, m) => m.VaultId), null, null, Fail(ex));
+            if (made && vaultId is not null && key is not null)
+            {
+                // The vault exists on this device; later syncs finish the upload.
+                return new CreateVaultResult(CreateVaultOutcome.CreatedUploadPending, vaultId, RecoveryPhrase.EncodeToString(key), turnOn, Fail(ex));
+            }
+            // Nothing was created (for example the pre-sync backup could not be written).
+            var status = IsInVault
+                ? Fail(ex)
+                : SetStatus(SyncStatus.Off with { Message = $"The vault could not be created: {ex.Message}", ErrorCode = (ex as SyncException)?.Code ?? (ex as DriveException)?.Kind.ToString() });
+            return new CreateVaultResult(CreateVaultOutcome.Failed, null, null, turnOn, status);
         }
         finally
         {
+            if (key is not null) CryptographicOperations.ZeroMemory(key);
             _operation.Release();
         }
     }
+
+    /// <summary>
+    /// The recovery phrase of the vault this device created, while the user has not yet confirmed
+    /// saving it (12.1 step 7): rebuilt from the key in the keystore, so leaving the screen, closing the
+    /// app or a crash never loses it. Null once confirmed, when this device did not create its vault, or
+    /// when the key is gone.
+    /// </summary>
+    public string? GetUnconfirmedRecoveryPhrase()
+    {
+        try
+        {
+            if (_sync.Replica?.Read((_, m) => m.VaultId) is not { } vaultId || _sync.GetDeviceSetting(PhraseUnconfirmedKey) != vaultId) return null;
+            var key = _keys.Load(vaultId, 1);
+            if (key is null) return null;
+            try
+            {
+                return RecoveryPhrase.EncodeToString(key);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The user confirmed they saved the recovery phrase: it is never offered again.</summary>
+    public async Task ConfirmRecoveryPhraseSavedAsync(CancellationToken ct = default)
+    {
+        using (await _sync.EnterWriteAsync(ct).ConfigureAwait(false))
+        {
+            if (_sync.IsOn) _sync.SetDeviceSetting(PhraseUnconfirmedKey, null);
+        }
+    }
+
+    private static string? NotionOwner(SyncReplica replica)
+        => replica.Read((s, _) => s.Value(SyncEntities.Setting, SyncSettingKeys.NotionOwnerDeviceId, SyncEntities.ValueField) is { IsString: true } v ? v.StringValue : null);
 
     /// <summary>
     /// A device that already synced (it uploaded files, or holds other devices' records) needs a new ID
@@ -266,12 +376,21 @@ public sealed class SyncCoordinator : IDisposable
         if (vault.Vault is null) return Creation.NotYet; // not listed yet
         if (vault.Vault.VaultId != codec.VaultId)
         {
-            var mine = await _drive.ListAsync($"{SyncPaths.DevicesFolder}/{replica.DeviceId}", ct).ConfigureAwait(false);
-            foreach (var f in mine.Files) await _drive.DeleteAsync(f, ct).ConfigureAwait(false);
+            await DeleteLostVaultFilesAsync(replica, ct).ConfigureAwait(false);
             return Creation.LostRace;
         }
         await MarkMemberAsync(replica, ct).ConfigureAwait(false);
         return Creation.Done;
+    }
+
+    /// <summary>
+    /// This device lost a creation race: the change files it uploaded for its own vault can never be
+    /// read by anyone (no other device has that key), and other devices would warn about them, so they go.
+    /// </summary>
+    private async Task DeleteLostVaultFilesAsync(SyncReplica replica, CancellationToken ct)
+    {
+        var mine = await _drive.ListAsync($"{SyncPaths.DevicesFolder}/{replica.DeviceId}", ct).ConfigureAwait(false);
+        foreach (var f in mine.Files) await _drive.DeleteAsync(f, ct).ConfigureAwait(false);
     }
 
     private async Task MarkMemberAsync(SyncReplica replica, CancellationToken ct)
@@ -313,7 +432,7 @@ public sealed class SyncCoordinator : IDisposable
     /// Joins the vault on the drive with the text of a pairing QR code shown on another device
     /// (section 9.1, new device): downloads and checks the pairing file, then joins and deletes it.
     /// </summary>
-    public Task<JoinVaultResult> JoinWithPairingCodeAsync(string qrText, bool replaceLocalData, CancellationToken ct = default)
+    public async Task<JoinVaultResult> JoinWithPairingCodeAsync(string qrText, bool replaceLocalData, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(qrText);
         PairingCode code;
@@ -323,8 +442,31 @@ public sealed class SyncCoordinator : IDisposable
         }
         catch (SyncException e)
         {
-            return Task.FromResult(new JoinVaultResult(JoinVaultOutcome.BadPairingCode, null, null, e.Code, Status));
+            return new JoinVaultResult(JoinVaultOutcome.BadPairingCode, null, null, e.Code, Status);
         }
+        return await JoinWithPairingCodeAsync(code, replaceLocalData, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <see cref="JoinWithPairingCodeAsync(string, bool, CancellationToken)"/> for a parsed code. The
+    /// pairing secret in <paramref name="code"/> is zeroed when this returns, however it ends.
+    /// On a device that is in the vault but locked, the code unlocks it in place (<see cref="JoinVaultOutcome.Unlocked"/>).
+    /// </summary>
+    public async Task<JoinVaultResult> JoinWithPairingCodeAsync(PairingCode code, bool replaceLocalData, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(code);
+        try
+        {
+            return await JoinWithPairingAsync(code, replaceLocalData, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(code.PairingSecret);
+        }
+    }
+
+    private Task<JoinVaultResult> JoinWithPairingAsync(PairingCode code, bool replaceLocalData, CancellationToken ct)
+    {
         DriveItem? pairingFile = null;
         return JoinAsync(async vault =>
         {
@@ -371,7 +513,19 @@ public sealed class SyncCoordinator : IDisposable
             }
             if (_sync.Replica?.Read((_, m) => m.VaultId) == vault.VaultId && _sync.GetDeviceSetting(VaultStateKey) == Member)
             {
-                return new JoinVaultResult(JoinVaultOutcome.AlreadyInVault, _sync.Replica!.DeviceId, null, null, Status);
+                using (var held = OpenCodec(vault))
+                {
+                    if (held is not null) return new JoinVaultResult(JoinVaultOutcome.AlreadyInVault, _sync.Replica!.DeviceId, null, null, Status);
+                }
+                // Locked (the keystore lost the key, or the vault was re-keyed): the phrase or a pairing
+                // code unlocks this device in place; its identity and data stay.
+                var (lk, lg, lo, lc) = await unlock(vault).ConfigureAwait(false);
+                key = lk;
+                if (key is null) return new JoinVaultResult(lo, null, null, lc, Status);
+                _keys.Save(vault.VaultId, lg, key);
+                await DeletePairingAfterJoinAsync(deletePairing, ct).ConfigureAwait(false);
+                var unlockedStatus = await SyncCoreAsync(ct).ConfigureAwait(false);
+                return new JoinVaultResult(JoinVaultOutcome.Unlocked, _sync.Replica?.DeviceId, null, null, unlockedStatus);
             }
             var (k, generation, unlocked, code) = await unlock(vault).ConfigureAwait(false);
             key = k;
@@ -397,17 +551,7 @@ public sealed class SyncCoordinator : IDisposable
             }
             _sync.RaiseDataChanged(new SyncDataChangedEventArgs(Array.Empty<RowKey>(), everything: true));
 
-            if (deletePairing?.Invoke() is { } pairingFile)
-            {
-                try
-                {
-                    await _drive.DeleteAsync(pairingFile, ct).ConfigureAwait(false);
-                }
-                catch (DriveException)
-                {
-                    // Every device deletes stale pairing files on sync (9.1).
-                }
-            }
+            await DeletePairingAfterJoinAsync(deletePairing, ct).ConfigureAwait(false);
             var status = await SyncCoreAsync(ct).ConfigureAwait(false);
             return new JoinVaultResult(JoinVaultOutcome.Joined, deviceId, backup, null, status);
         }
@@ -423,6 +567,20 @@ public sealed class SyncCoordinator : IDisposable
         {
             if (key is not null) CryptographicOperations.ZeroMemory(key);
             _operation.Release();
+        }
+    }
+
+    /// <summary>The pairing file a join used is deleted once its key is stored (9.1, new device step 3).</summary>
+    private async Task DeletePairingAfterJoinAsync(Func<DriveItem?>? deletePairing, CancellationToken ct)
+    {
+        if (deletePairing?.Invoke() is not { } pairingFile) return;
+        try
+        {
+            await _drive.DeleteAsync(pairingFile, ct).ConfigureAwait(false);
+        }
+        catch (DriveException)
+        {
+            // Every device deletes stale pairing files on sync (9.1).
         }
     }
 
@@ -485,6 +643,9 @@ public sealed class SyncCoordinator : IDisposable
             var replica = _sync.Replica;
             var read = await ReadVaultAsync(ct).ConfigureAwait(false);
             if (replica is null || read.Vault is not { } vault || vault.VaultId != replica.Read((_, m) => m.VaultId)) return null;
+            // Settle this process's identity first: the next sync would otherwise reset the caches,
+            // the pairing state with them, and the page would think the new device had joined.
+            ResetIdentityCaches(replica.DeviceId);
             using var codec = OpenCodec(vault);
             if (codec is null) return null;
             await DeletePairingFileAsync(ct).ConfigureAwait(false);
@@ -518,17 +679,26 @@ public sealed class SyncCoordinator : IDisposable
         }
     }
 
-    /// <summary>The user closed the pairing screen: delete the pairing file now.</summary>
-    public async Task CancelPairingAsync(CancellationToken ct = default)
+    /// <summary>
+    /// The user closed the pairing screen: delete the pairing file now. Never throws (except for
+    /// cancellation): true when no pairing file of this device's is left, false when deleting it failed
+    /// (every device deletes stale pairing files on later syncs, 9.1).
+    /// </summary>
+    public async Task<bool> CancelPairingAsync(CancellationToken ct = default)
     {
         await _operation.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             await DeletePairingFileAsync(ct).ConfigureAwait(false);
+            return true;
         }
-        catch (DriveException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Stale pairing files are deleted on later syncs by every device.
+            throw;
+        }
+        catch (Exception)
+        {
+            return false;
         }
         finally
         {
@@ -540,40 +710,122 @@ public sealed class SyncCoordinator : IDisposable
     /// "Turn off sync" (12.4): stops syncing and forgets the vault key; local data stays and the
     /// device's files stay in the vault. Turning sync on again is a join with a new device ID.
     /// (Signing out of the drive is the provider's part.)
+    /// <para>
+    /// When this device runs the Notion connector, it first clears <c>NotionOwnerDeviceId</c> and tries
+    /// to upload that, so other devices see the connector is free. A device that leaves with a Notion
+    /// token does not silently keep running the connector on its own against the databases the
+    /// vault's owner uses: Notion waits until the user connects it again on this device.
+    /// </para>
+    /// Never throws (except for cancellation): the outcome says what happened.
     /// </summary>
-    public async Task LeaveVaultAsync(CancellationToken ct = default)
+    public async Task<LeaveVaultResult> LeaveVaultAsync(CancellationToken ct = default)
     {
+        // A sync waiting on a slow or throttled drive must not hold "Turn off sync" up for minutes.
+        CancelRunningSync();
         await _operation.WaitAsync(ct).ConfigureAwait(false);
+        var notion = NotionRelease.NotOwner;
         try
         {
+            var wasInVault = IsInVault;
+            notion = await ReleaseNotionAsync(ct).ConfigureAwait(false);
             try
             {
                 await DeletePairingFileAsync(ct).ConfigureAwait(false);
             }
-            catch (DriveException)
+            catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
             {
+                // Stale pairing files are deleted by every device on later syncs (9.1).
+                _pairing = null;
             }
+            string? keyProblem = null;
             using (var lease = await _sync.EnterWriteAsync(ct).ConfigureAwait(false))
             {
                 if (_sync.Replica is { } replica && replica.Read((_, m) => m.VaultId) is { } vaultId)
                 {
-                    // Format 1 has one generation; leaving may happen offline, so clear a generous range.
-                    _keys.Delete(vaultId, Enumerable.Range(1, 16).Select(g => (long)g));
+                    try
+                    {
+                        // Format 1 has one generation; leaving may happen offline, so clear a generous range.
+                        _keys.Delete(vaultId, Enumerable.Range(1, 16).Select(g => (long)g));
+                    }
+                    catch (Exception e)
+                    {
+                        keyProblem = e.Message;
+                    }
                 }
                 if (_sync.IsOn)
                 {
                     _sync.SetDeviceSetting(VaultStateKey, null);
                     _sync.SetDeviceSetting(VaultCreatedAtKey, null);
+                    _sync.SetDeviceSetting(PhraseUnconfirmedKey, null);
                 }
                 await _sync.TurnOffAsync(lease, ct).ConfigureAwait(false);
             }
             ResetIdentityCaches(null);
             _lastSynced = null;
-            SetStatus(SyncStatus.Off);
+            var status = SetStatus(SyncStatus.Off);
+            if (wasInVault) await RequireNotionReconnectAsync().ConfigureAwait(false);
+            if (keyProblem is not null)
+            {
+                return new LeaveVaultResult(LeaveVaultOutcome.LeftKeyNotRemoved, notion, $"Sync is off, but the vault key could not be removed from this PC: {keyProblem}", status);
+            }
+            return new LeaveVaultResult(LeaveVaultOutcome.Left, notion, "Sync is off. Your data stays on this PC.", status);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var status = _sync.IsOn ? Fail(ex) : SetStatus(SyncStatus.Off);
+            return new LeaveVaultResult(LeaveVaultOutcome.Failed, notion, $"Sync could not be turned off: {ex.Message}", status);
         }
         finally
         {
             _operation.Release();
+        }
+    }
+
+    /// <summary>
+    /// Before leaving: if this device owns the Notion connector, write <c>NotionOwnerDeviceId: null</c>
+    /// and try to upload it (12.5). Offline, the record stays local and other devices keep naming this
+    /// device until Notion is connected on one of them.
+    /// </summary>
+    private async Task<NotionRelease> ReleaseNotionAsync(CancellationToken ct)
+    {
+        var replica = _sync.Replica;
+        var myVault = replica?.Read((_, m) => m.VaultId);
+        if (replica is null || myVault is null || _sync.GetDeviceSetting(VaultStateKey) is not { } state) return NotionRelease.NotOwner;
+        if (NotionOwner(replica) != replica.DeviceId) return NotionRelease.NotOwner;
+        using (await EnterAsync(replica, ct).ConfigureAwait(false)) replica.SetSetting(SyncSettingKeys.NotionOwnerDeviceId, SyncValue.Null);
+        if (state != Member || _sync.GetDeviceSetting(IdentityClashKey) == "1") return NotionRelease.NotUploaded;
+        try
+        {
+            var read = await ReadVaultAsync(ct).ConfigureAwait(false);
+            if (read.Vault is not { } vault || vault.VaultId != myVault) return NotionRelease.NotUploaded;
+            using var codec = OpenCodec(vault);
+            if (codec is null) return NotionRelease.NotUploaded;
+            return await UploadPendingAsync(replica, codec, ct).ConfigureAwait(false) == UploadOutcome.Done ? NotionRelease.Released : NotionRelease.NotUploaded;
+        }
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            return NotionRelease.NotUploaded;
+        }
+    }
+
+    /// <summary>
+    /// After leaving a vault with a Notion token: the per-device setting
+    /// <see cref="NotionSyncService.ReconnectRequiredSetting"/> makes the connector wait for the user to
+    /// connect Notion again instead of resuming on its own (written to the tables: sync is off now).
+    /// </summary>
+    private async Task RequireNotionReconnectAsync()
+    {
+        try
+        {
+            if (_hasNotionToken()) await _tables.SetSettingAsync(NotionSyncService.ReconnectRequiredSetting, "1").ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Best effort: the leave itself is done.
         }
     }
 
@@ -587,19 +839,43 @@ public sealed class SyncCoordinator : IDisposable
     public async Task<SyncStatus> SyncAsync(CancellationToken ct = default)
     {
         await _operation.WaitAsync(ct).ConfigureAwait(false);
+        var cycle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (_statusLock) _cycle = cycle;
         try
         {
-            return await SyncCoreAsync(ct).ConfigureAwait(false);
+            return await SyncCoreAsync(cycle.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Stopped by CancelRunningSync (turning sync off): local steps are transactional, so
+            // nothing is half-written; the next sync starts over.
+            return SetStatus(IsInVault ? Status with { Phase = SyncPhase.Idle, Message = "Sync was stopped; it will run again." } : SyncStatus.Off);
         }
         finally
         {
+            lock (_statusLock) _cycle = null;
+            cycle.Dispose();
             _operation.Release();
+        }
+    }
+
+    /// <summary>Cancels the sync cycle running now, if any (Turn off sync calls it so it need not wait for the drive).</summary>
+    public void CancelRunningSync()
+    {
+        lock (_statusLock)
+        {
+            try
+            {
+                _cycle?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
     }
 
     private async Task<SyncStatus> SyncCoreAsync(CancellationToken ct)
     {
-        var changed = new HashSet<RowKey>();
         try
         {
             var replica = _sync.Replica;
@@ -627,6 +903,12 @@ public sealed class SyncCoordinator : IDisposable
                 vault = read.Vault;
                 if (vault.VaultId != myVault)
                 {
+                    if (vaultState == Creating)
+                    {
+                        // Another device's vault.json won while this device's was not up yet (12.1 step 6).
+                        await DeleteLostVaultFilesAsync(replica, ct).ConfigureAwait(false);
+                        return Fail(SyncPhase.VaultReplaced, "Another device created a vault at the same time. Join it to keep syncing.", null);
+                    }
                     return Fail(SyncPhase.VaultReplaced, "The drive holds a different vault now. Join it to keep syncing.", null);
                 }
                 if (vaultState == Creating) await MarkMemberAsync(replica, ct).ConfigureAwait(false);
@@ -662,7 +944,7 @@ public sealed class SyncCoordinator : IDisposable
             var listing = await ListVaultAsync(ct).ConfigureAwait(false);
             await RecordSnapshotsListedAsync(replica, listing, ct).ConfigureAwait(false);
             var warnings = new List<SyncWarning>();
-            await ReadAsync(replica, codec, listing, changed, warnings, ct).ConfigureAwait(false);
+            await ReadAsync(replica, codec, listing, warnings, ct).ConfigureAwait(false);
 
             // Pairing (9.1): done when the new device's row arrived or the code expired.
             await FinishPairingAsync(replica, ct).ConfigureAwait(false);
@@ -688,10 +970,6 @@ public sealed class SyncCoordinator : IDisposable
         catch (Exception ex)
         {
             return Fail(ex);
-        }
-        finally
-        {
-            if (changed.Count > 0) _sync.RaiseDataChanged(new SyncDataChangedEventArgs(changed.ToArray()));
         }
     }
 
@@ -961,17 +1239,20 @@ public sealed class SyncCoordinator : IDisposable
         return new Opened(OpenStatus.Opened, opened[0]);
     }
 
-    private async Task ReadAsync(SyncReplica replica, VaultCodec codec, VaultListing listing, HashSet<RowKey> changed, List<SyncWarning> warnings, CancellationToken ct)
+    private async Task ReadAsync(SyncReplica replica, VaultCodec codec, VaultListing listing, List<SyncWarning> warnings, CancellationToken ct)
     {
         var me = replica.DeviceId;
         var skewed = new SortedSet<string>(StringComparer.Ordinal);
+        _problems.BeginCycle();
 
         async Task MergeAsync(EnvelopeResult file)
         {
             MergeOutcome outcome;
             using (await EnterAsync(replica, ct).ConfigureAwait(false)) outcome = replica.MergeFile(file);
-            changed.UnionWith(outcome.ChangedRows);
             skewed.UnionWith(outcome.SkewedDevices);
+            // After each committed merge, outside the transaction and the write gate (10.2 step 4), so
+            // pages and the type colours reload before the next file is read.
+            if (outcome.ChangedRows.Count > 0) _sync.RaiseDataChanged(new SyncDataChangedEventArgs(outcome.ChangedRows));
         }
 
         // Every listed snapshot is merged once per process (allowed by 10.2; it also gives its covers).
@@ -988,7 +1269,7 @@ public sealed class SyncCoordinator : IDisposable
             await MergeAsync(opened.File!).ConfigureAwait(false);
             _mergedSnapshots.Add(name);
             _snapshotCovers[name] = opened.File!.Covers;
-            _problemsSince.Remove(path);
+            _problems.Resolve(path);
         }
 
         // Change files of every other device, in plan order; a file that fails to open counts as not listed.
@@ -1021,7 +1302,7 @@ public sealed class SyncCoordinator : IDisposable
                     break;
                 }
                 await MergeAsync(opened.File!).ConfigureAwait(false);
-                _problemsSince.Remove(path);
+                _problems.Resolve(path);
             }
             if (!replan || attempt > listing.ChangeFiles.Values.Sum(v => v.Count)) break;
         }
@@ -1031,8 +1312,7 @@ public sealed class SyncCoordinator : IDisposable
         foreach (var (device, seq) in plan.Gaps)
         {
             if (device == me || unreadable.TryGetValue(device, out var bad) && bad.Contains(seq)) continue;
-            var key = $"gap:{device}:{seq.ToString(CultureInfo.InvariantCulture)}";
-            var since = _problemsSince.TryGetValue(key, out var s) ? s : _problemsSince[key] = now;
+            var since = _problems.Since(SyncProblemTimers.GapKey(device, seq), now);
             if (now - since >= ReportAfter)
             {
                 warnings.Add(new SyncWarning(SyncWarningKind.MissingChanges, device, $"Some changes from {DeviceName(replica, device)} could not be found."));
@@ -1042,13 +1322,21 @@ public sealed class SyncCoordinator : IDisposable
         {
             warnings.Add(new SyncWarning(SyncWarningKind.ClockAhead, device, $"{DeviceName(replica, device)}'s clock is ahead; check its date and time."));
         }
+
+        // The 24-hour timers survive restarts (10.2): keep them with this device's sync state.
+        _problems.EndCycle();
+        if (_problems.Dirty)
+        {
+            var json = _problems.ToJson(me);
+            using (await EnterAsync(replica, ct).ConfigureAwait(false)) _sync.SetDeviceSetting(ProblemsSinceKey, json);
+        }
     }
 
     private void NoteFileProblem(string path, string? device, Opened opened, List<SyncWarning> warnings, SyncReplica replica)
     {
         if (opened.Status == OpenStatus.Missing) return;
         var now = _time.GetUtcNow();
-        var since = _problemsSince.TryGetValue(path, out var s) ? s : _problemsSince[path] = now;
+        var since = _problems.Since(path, now);
         var name = device is null ? "another device" : DeviceName(replica, device);
         if (opened.Status == OpenStatus.Clash)
         {
@@ -1195,7 +1483,8 @@ public sealed class SyncCoordinator : IDisposable
         _identity = deviceId;
         _mergedSnapshots.Clear();
         _snapshotCovers.Clear();
-        _problemsSince.Clear();
+        _problems.Clear();
+        if (deviceId is not null) _problems.Load(_sync.GetDeviceSetting(ProblemsSinceKey), deviceId);
         _pairing = null;
     }
 

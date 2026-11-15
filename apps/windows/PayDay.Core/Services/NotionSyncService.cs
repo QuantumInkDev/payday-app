@@ -72,29 +72,60 @@ public sealed class NotionSyncService : IDisposable
     public async Task ConnectAsync(string token)
     {
         SaveToken(token);
+        // Connecting is the explicit action that lets a device that left a vault run Notion again.
+        if (await ReconnectRequiredAsync().ConfigureAwait(false))
+        {
+            await _db.SetSettingAsync(ReconnectRequiredSetting, null).ConfigureAwait(false);
+        }
         if (Host is { } host) await host.ClaimNotionAsync().ConfigureAwait(false);
     }
+
+    /// <summary>"Run Notion on this device" with the token already saved here. False when there is none.</summary>
+    public async Task<bool> ConnectWithSavedTokenAsync()
+    {
+        var token = _credentials.Get(TokenKey);
+        if (string.IsNullOrWhiteSpace(token)) return false;
+        await ConnectAsync(token).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Per-device setting written when this device leaves a sync vault with a Notion token: the
+    /// connector then waits for <see cref="ConnectAsync"/> instead of resuming on its own against the
+    /// databases the vault's owner uses (<c>sync-protocol.md</c> 12.5). Never present on a device that
+    /// never synced, so it changes nothing there.
+    /// </summary>
+    public const string ReconnectRequiredSetting = "NotionReconnectRequired";
 
     /// <summary>The connector's role on this device (<see cref="NotionRole.SyncOff"/> unless the database is the sync write path).</summary>
     public NotionConnectorState GetConnectorState() => Host?.GetNotionState() ?? NotionConnectorState.SyncOff;
 
-    private INotionSyncHost? Host => _db as INotionSyncHost;
-
-    /// <summary>
-    /// The role this device runs the connector in. A synced vault whose connector has no owner yet is
-    /// claimed by the first device that uses Notion with a token.
-    /// </summary>
-    private async Task<NotionConnectorState> PrepareConnectorAsync()
+    /// <summary><see cref="GetConnectorState"/>, also telling a device that left a vault and must connect Notion again (<see cref="NotionRole.ReconnectRequired"/>).</summary>
+    public async Task<NotionConnectorState> GetConnectorStateAsync()
     {
-        if (Host is not { } host) return NotionConnectorState.SyncOff;
-        var state = host.GetNotionState();
-        if (state.Role == NotionRole.NoOwner)
-        {
-            await host.ClaimNotionAsync().ConfigureAwait(false);
-            state = host.GetNotionState();
-        }
+        var state = GetConnectorState();
+        if (state.Role == NotionRole.SyncOff && await ReconnectRequiredAsync().ConfigureAwait(false)) return NotionConnectorState.ReconnectRequired;
         return state;
     }
+
+    private INotionSyncHost? Host => _db as INotionSyncHost;
+
+    private async Task<bool> ReconnectRequiredAsync()
+        => await _db.GetSettingAsync(ReconnectRequiredSetting).ConfigureAwait(false) == "1";
+
+    /// <summary>
+    /// The role this device runs the connector in. Nothing here claims the connector: only
+    /// <see cref="ConnectAsync"/> (the user saving a token) or creating a vault with a token does, so two
+    /// devices with tokens never both start running it.
+    /// </summary>
+    private Task<NotionConnectorState> PrepareConnectorAsync() => GetConnectorStateAsync();
+
+    private static string Refusal(NotionConnectorState state) => state.Role switch
+    {
+        NotionRole.NoOwner => "Notion isn't connected on any device in this sync vault yet. Save the Notion token in Settings on the device that should run it.",
+        NotionRole.ReconnectRequired => "This device left its sync vault. Save the Notion token again in Settings to use Notion here.",
+        _ => ConnectedElsewhere(state),
+    };
 
     private static string ConnectedElsewhere(NotionConnectorState state)
         => $"Notion: connected on {state.OwnerDeviceName ?? "another device"}. This device does not push to or pull from Notion.";
@@ -152,11 +183,15 @@ public sealed class NotionSyncService : IDisposable
         var connector = await PrepareConnectorAsync().ConfigureAwait(false);
         if (!connector.MayRun)
         {
-            return new NotionSyncResult(0, 0, 0, 0, new[] { ConnectedElsewhere(connector) });
+            return new NotionSyncResult(0, 0, 0, 0, new[] { Refusal(connector) });
         }
         // A device that just became the owner pushes every bill before its first pull (12.5).
         var pushFirst = connector.Role == NotionRole.OwnerMustPushFirst;
         var host = Host;
+        // Bills deleted in the vault (sync on): their pages are archived and never pulled back.
+        var deleted = connector.Role == NotionRole.SyncOff || host is null ? Array.Empty<DeletedNotionBill>() : host.GetDeletedBills();
+        var deletedIds = deleted.Select(d => d.BillId).ToHashSet(StringComparer.Ordinal);
+        var deletedPages = deleted.Where(d => d.NotionPageId is not null).Select(d => d.NotionPageId!).ToHashSet(StringComparer.Ordinal);
 
         var errors = new List<string>();
         int created = 0, updated = 0, pulled = 0, archived = 0;
@@ -236,13 +271,41 @@ public sealed class NotionSyncService : IDisposable
             }
         }
 
-        foreach (var (billId, remote) in remoteByBillId)
+        // Every bill was pushed without an error: from now on this owner's last-pushed values are known.
+        if (pushFirst && errors.Count == 0) host?.RecordNotionFullPush();
+
+        // Archive-on-delete (sync on): the page of a bill deleted on any device goes to Notion's trash,
+        // and is never pulled back as an undelete. The tombstones say which bills are gone.
+        var deletedPagesSeen = new HashSet<string>(StringComparer.Ordinal);
+        if (deleted.Count > 0)
         {
-            if (localByBillId.ContainsKey(billId) || matchedPages.Contains(remote.Id)) continue;
+            foreach (var page in remotePages)
+            {
+                if (string.IsNullOrEmpty(page.Id) || matchedPages.Contains(page.Id) || page.Archived) continue;
+                var ofDeleted = deletedPages.Contains(page.Id)
+                    || (!string.IsNullOrWhiteSpace(page.BillId) && (deletedIds.Contains(page.BillId!) || deletedIds.Contains(host!.MapNotionBillId(page.BillId!))));
+                if (!ofDeleted || !deletedPagesSeen.Add(page.Id)) continue;
+                try
+                {
+                    await ArchivePageAsync(page.Id, token, ct).ConfigureAwait(false);
+                    archived++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Archive Notion page {page.Id}: {ex.Message}");
+                }
+            }
+        }
+
+        // A new owner pulls only after its first full push (12.5); pages it did not match wait for the next sync.
+        foreach (var (billId, remote) in pushFirst ? Enumerable.Empty<KeyValuePair<string, NotionPage>>() : remoteByBillId)
+        {
+            if (localByBillId.ContainsKey(billId) || matchedPages.Contains(remote.Id) || deletedPagesSeen.Contains(remote.Id)) continue;
             try
             {
                 // With sync on a legacy "Bill ID" maps to its synced ID; with sync off it is used as is.
                 var localId = host is not null && connector.Role != NotionRole.SyncOff ? host.MapNotionBillId(billId) : billId;
+                if (deletedIds.Contains(localId)) continue;
                 var pulledBill = remote.ToBill(localId);
                 pulledBill.NotionPageId = remote.Id;
                 await SaveFromNotionAsync(pulledBill).ConfigureAwait(false);
@@ -253,11 +316,6 @@ public sealed class NotionSyncService : IDisposable
                 errors.Add($"Pull Notion page {remote.Id}: {ex.Message}");
             }
         }
-
-        // TODO(phase 5+): archive Notion pages whose Bill IDs are no longer local.
-        // Needs a tombstone table — without it we can't distinguish "never existed locally"
-        // from "deleted locally last session". Tracking this for a future polish chunk.
-        _ = archived;
 
         await SetLastSyncedAsync(DateTimeOffset.UtcNow).ConfigureAwait(false);
         return new NotionSyncResult(created, updated, pulled, archived, errors);
@@ -461,6 +519,16 @@ public sealed class NotionSyncService : IDisposable
         await EnsureSuccessAsync(resp, "Notion update page").ConfigureAwait(false);
     }
 
+    /// <summary>Moves a page to Notion's trash (recoverable there), the way deleting a bill in Notion would.</summary>
+    private async Task ArchivePageAsync(string pageId, string token, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Patch, $"v1/pages/{pageId}");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Content = JsonContent.Create(new Dictionary<string, object?> { ["in_trash"] = true });
+        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(resp, "Notion archive page").ConfigureAwait(false);
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage resp, string opLabel)
     {
         if (resp.IsSuccessStatusCode) return;
@@ -586,7 +654,8 @@ public sealed class NotionSyncService : IDisposable
                 LastEditedTime = page.TryGetProperty("last_edited_time", out var lt) && lt.ValueKind == JsonValueKind.String
                     ? DateTimeOffset.Parse(lt.GetString()!, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
                     : DateTimeOffset.MinValue,
-                Archived = page.TryGetProperty("archived", out var a) && a.ValueKind == JsonValueKind.True,
+                Archived = (page.TryGetProperty("archived", out var a) && a.ValueKind == JsonValueKind.True)
+                    || (page.TryGetProperty("in_trash", out var t) && t.ValueKind == JsonValueKind.True),
                 Name = ReadTitle(props, "Name"),
                 Type = ReadSelect(props, "Type"),
                 Payment = ReadNumber(props, "Payment"),

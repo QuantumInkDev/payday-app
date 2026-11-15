@@ -25,6 +25,17 @@ internal sealed class SqliteTestFiles : IDisposable
         return path;
     }
 
+    /// <summary>
+    /// Closes the pooled connections the app's database service keeps to <paramref name="path"/>, and
+    /// only those. <c>SqliteConnection.ClearAllPools</c> must not be used in tests: tests run in
+    /// parallel, and clearing every pool disposes connections another test is opening.
+    /// </summary>
+    public static void ClearPoolsFor(string path)
+    {
+        using var conn = new SqliteConnection(new PayDay.Services.SqliteDatabaseService(path).ConnectionString);
+        SqliteConnection.ClearPool(conn);
+    }
+
     public static string ConnectionString(string path, SqliteOpenMode mode = SqliteOpenMode.ReadWriteCreate)
         => new SqliteConnectionStringBuilder { DataSource = path, Mode = mode, Pooling = false }.ToString();
 
@@ -49,9 +60,9 @@ internal sealed class SqliteTestFiles : IDisposable
     public void Dispose()
     {
         for (var i = _owned.Count - 1; i >= 0; i--) _owned[i].Dispose();
-        SqliteConnection.ClearAllPools();
         foreach (var path in _files)
         {
+            ClearPoolsFor(path);
             foreach (var file in new[] { path, path + "-journal", path + "-wal", path + "-shm" })
             {
                 try
