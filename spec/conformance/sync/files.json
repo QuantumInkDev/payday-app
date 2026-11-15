@@ -941,6 +941,422 @@
       }
     },
     {
+      "name": "check order: wrong vaultId and wrong deviceId reports vaultMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa02",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "seq": 3,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "vaultMismatch"
+      },
+      "note": "Envelope checks run in table order (sync-protocol.md 6.3): vaultId (4) before deviceId (5)"
+    },
+    {
+      "name": "check order: wrong vaultId and wrong deviceId in a snapshot reports vaultMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa02",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "hlc": "01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a",
+          "covers": {
+            "0a0a0a0a0a0a0a0a": 3,
+            "0b0b0b0b0b0b0b0b": 7
+          },
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            }
+          ]
+        },
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "vaultMismatch"
+      }
+    },
+    {
+      "name": "check order: wrong type and wrong formatVersion reports typeMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 2,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "seq": 3,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "typeMismatch"
+      }
+    },
+    {
+      "name": "check order: wrong formatVersion and wrong vaultId reports unsupportedFormat",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 2,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa02",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "seq": 3,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "unsupportedFormat"
+      }
+    },
+    {
+      "name": "check order: wrong deviceId and wrong seq reports deviceMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "seq": 4,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "deviceMismatch"
+      }
+    },
+    {
+      "name": "check order: wrong seq and records not an array reports seqMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "seq": 4,
+          "records": {}
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "seqMismatch"
+      }
+    },
+    {
+      "name": "check order: snapshot with wrong deviceId and wrong hlc reports deviceMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "hlc": "01a1d9f6eda8-0000-0a0a0a0a0a0a0a0a",
+          "covers": {
+            "0a0a0a0a0a0a0a0a": 3,
+            "0b0b0b0b0b0b0b0b": 7
+          },
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            }
+          ]
+        },
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "deviceMismatch"
+      }
+    },
+    {
+      "name": "check order: snapshot with wrong hlc and bad covers reports hlcMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "hlc": "01a1d9f6eda8-0000-0a0a0a0a0a0a0a0a",
+          "covers": {
+            "0a0a0a0a0a0a0a0a": true
+          },
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            }
+          ]
+        },
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "hlcMismatch"
+      }
+    },
+    {
       "name": "integer field written as 3.0 is accepted",
       "input": {
         "fn": "checkEnvelope",
