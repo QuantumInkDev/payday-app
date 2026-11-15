@@ -10,19 +10,19 @@
 
 - Multi-platform design approved (`planning/2026-11-14-multiplatform-design.md`); product name locked in as **FutureCheck** (code name PayDay stays in the code).
 - Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` unchanged). New root `README.md`.
-- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `01d328e`: 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `ee1f8eb` was a silent no-op caused by a `vm-build.sh` bug that `01d328e` fixed.
+- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `ad169f5`: 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `5f916af` was a silent no-op caused by a `vm-build.sh` bug that `ad169f5` fixed.
 
-- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes and two tests held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind) and placeholder Notion IDs (`00000000-…`). All branches on GitHub were force-pushed. **Every commit ID from before this changed**, so older IDs quoted in these notes (for example the Phase 7 chunk table) no longer resolve; the old-to-new map and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
+- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes, the bill-editor placeholder text and several test fixtures held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` (two passes; the second caught card figures in test fixtures) to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind) and placeholder Notion IDs (`00000000-…`). All branches on GitHub were force-pushed. **Every commit ID from before this changed**, and the IDs quoted in these notes were updated to the rewritten history. The old commits can stay reachable on GitHub by their old IDs until GitHub purges them, so a GitHub Support sensitive-data removal request is needed (owner action). The old-to-new maps and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
 - `tools/notion-diagnose.ps1` now compares against placeholder IDs; pass your real data-source IDs if you use it. Installed apps keep their own Notion settings in their local database, so live sync is unaffected.
 
-**Old clones must not push.** The rig (`P:\Projects-Not-On-Cloud\PayDayApp`), the VM daily clone (`C:\Projects\PayDayApp`) and any other copy still hold the old history with the real data. Pushing any branch from them would put it back on GitHub. Before doing anything else in an old clone, run `git fetch --prune origin`, then for each local branch `git switch <branch> && git reset --hard origin/<branch>` or simply re-clone. If an old clone has uncommitted edits you want to keep, copy those files out by hand first, because the reset discards them.
+**Old clones must not push.** The rig (`P:\Projects-Not-On-Cloud\PayDayApp`), the VM daily clone (`C:\Projects\PayDayApp`) and any other copy still hold the old history with the real data. Pushing any branch from them would put it back on GitHub. (The VM's build checkout `C:\Builds\payday-app` was deleted on 2026-11-14; `tools/vm-build.sh` re-clones it.) Before doing anything else in an old clone, run `git fetch --prune origin`, then for each local branch `git switch <branch> && git reset --hard origin/<branch>` or simply re-clone. If an old clone has uncommitted edits you want to keep, copy those files out by hand first, because the reset discards them.
 
 **On the rig and the VM daily clone** (these hold live data, so follow the steps in order):
 
 1. Export a JSON backup from Settings, and copy `LocalState\payday.db` and `LocalState\backups\` somewhere outside the package folder (path pattern is in `CLAUDE.md`, "Inspecting the SQLite DB").
-2. After this branch is merged: `git switch main && git pull`. A plain pull on the current branch won't bring the move, because it lives on `feature/multiplatform` until merged.
+2. After this branch is merged: `git fetch --prune origin`, `git switch main`, `git reset --hard origin/main`. Don't use `git pull`: the history was rewritten, and a pull would merge the old history (with the real data) back in.
 3. Move `PayDay\Properties\PublishProfiles\` (untracked, ignored `*.pubxml`) into `apps\windows\PayDay\Properties\`.
-4. Build and run from `apps\windows\` and confirm your bills show.
+4. Build and run from `apps\windows\` and confirm your bills show. If the app opens with sample bills (Woodgrove, Contoso, Northwind…), it didn't find your database and seeded a fresh one: stop, restore your backup, and don't connect Notion from that install.
 5. Only then delete the old root `PayDay`, `PayDay.Core` and `PayDay.Tests` folders. They hold only `bin/` and `obj/` plus any untracked files such as publish profiles.
 6. If registration fails ("already installed from a different location"), do NOT uninstall the app, because that deletes LocalState. Stop and ask, or use `Remove-AppxPackage -PreserveApplicationData` only if you know what it does.
 
@@ -42,17 +42,17 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 | Chunk | Commit | What |
 |---|---|---|
-| 7a | `61ebb96` | Sortable All Bills columns |
-| 7b | `3c19932` | Bill auto-sync on edit (PushBillAsync + AllBills wiring) |
-| 7c | `b067460` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
-| 7d | `971e1b9` | Sync Now button at top of nav + Pay decrements Remaining |
-| 7e | `2ce6916` | Dashboard polish (row→editor, bigger subtotals) |
-| 7f | `180b8f4` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types, scrollbar fix) |
-| 7g | `38d08a9` | Type tag color customization (TypeColorService + Settings UI) |
-| 7h | `fd5bcf1` | Installments type |
-| 7i | `9fa95ec` | Insights snapshot delete/clear + Payoff snowball/avalanche |
-| 7j | `87e2f87` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
-| 7k | `38e9e6e` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
+| 7a | `ea494f8` | Sortable All Bills columns |
+| 7b | `cc66e23` | Bill auto-sync on edit (PushBillAsync + AllBills wiring) |
+| 7c | `d6da8af` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
+| 7d | `59b2e39` | Sync Now button at top of nav + Pay decrements Remaining |
+| 7e | `4197e71` | Dashboard polish (row→editor, bigger subtotals) |
+| 7f | `be38509` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types, scrollbar fix) |
+| 7g | `d6fa2d5` | Type tag color customization (TypeColorService + Settings UI) |
+| 7h | `5ea5bfc` | Installments type |
+| 7i | `9f778d2` | Insights snapshot delete/clear + Payoff snowball/avalanche |
+| 7j | `0784767` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
+| 7k | `9ef945d` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 **Tests:** 194/194 green (was 150 entering Phase 7 — +44). Build 0 warn / 0 err on both projects.
 

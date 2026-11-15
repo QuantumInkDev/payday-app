@@ -101,7 +101,7 @@ winapp pack
 ## 💻 Where This Runs
 
 - The app is used **daily on the arm64 Windows VM**.
-- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at `01d328e`: 194/194, 0 warnings.
+- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at `ad169f5`: 194/194, 0 warnings.
 - The **packaged (appx) launch requires an INTERACTIVE Windows session**. Over SSH or from a service
   context, appx registration fails with `0x80070005`. This is a session constraint, not an app bug.
 - Clones:
@@ -117,24 +117,24 @@ revertable:
 
 | Chunk | Commit | What |
 |---|---|---|
-| 7a | `61ebb96` | Sortable All Bills columns |
-| 7b | `3c19932` | Bill auto-sync on edit |
-| 7c | `b067460` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
-| 7d | `971e1b9` | Sync Now at top of nav + Pay decrements Remaining |
-| 7e | `2ce6916` | Dashboard polish |
-| 7f | `180b8f4` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types) |
-| 7g | `38d08a9` | Type tag color customization |
-| 7h | `fd5bcf1` | Installments type |
-| 7i | `9fa95ec` | Insights snapshot delete/clear + Payoff snowball/avalanche |
-| 7j | `87e2f87` | Exclude inactive bills from BillGroup subtotals |
-| 7k | `38e9e6e` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
+| 7a | `ea494f8` | Sortable All Bills columns |
+| 7b | `cc66e23` | Bill auto-sync on edit |
+| 7c | `d6da8af` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
+| 7d | `59b2e39` | Sync Now at top of nav + Pay decrements Remaining |
+| 7e | `4197e71` | Dashboard polish |
+| 7f | `be38509` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types) |
+| 7g | `d6fa2d5` | Type tag color customization |
+| 7h | `5ea5bfc` | Installments type |
+| 7i | `9f778d2` | Insights snapshot delete/clear + Payoff snowball/avalanche |
+| 7j | `0784767` | Exclude inactive bills from BillGroup subtotals |
+| 7k | `9ef945d` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 Tests went 150 → **194** across Phase 7. Phase 5 (Notion sync) and Phase 6 (backup/restore,
 auto-backup) are closed.
 
 **In flight:** nothing is mid-implementation. Work for the multi-platform design happens on
 `feature/multiplatform` until merged to `main` (repo restructure done: Windows projects moved to
-`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `d9943c9`
+`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `188fb88`
 (the 2026-05-17 end-of-night status commit that closed Phase 7). The next step is design §9 step 3
 (`planning/2026-11-14-multiplatform-design.md`): scope the new features. **Phase 8 — Ship** (MSIX
 packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8) is now design §9 step 12.
