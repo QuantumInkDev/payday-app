@@ -22,10 +22,7 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <!-- Shared conformance fixtures (spec/conformance/**), copied to <output>/conformance/ so the
-       tests find them on every OS. Only core/ is loaded today; other folders just come along. -->
-  <ItemGroup>
-    <None Include="..\..\..\spec\conformance\**\*.json" LinkBase="conformance" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+  <!-- Conformance fixtures are read from spec/conformance/ in the source tree at test time
+       (ConformanceFixtures.cs), not copied to the output, so a deleted fixture cannot linger in bin/. -->
 
 </Project>

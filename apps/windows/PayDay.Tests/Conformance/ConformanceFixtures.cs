@@ -9,10 +9,12 @@ using System.Text.Json.Nodes;
 namespace PayDay.Tests.Conformance;
 
 /// <summary>
-/// Loads the shared conformance fixtures from <c>spec/conformance/</c>. The csproj copies every
-/// <c>spec/conformance/**/*.json</c> file into <c>conformance/</c> under the test output directory,
-/// so the same lookup works on the Mac and on the Windows VM. Only the <c>core/</c> folder is read
-/// here; other folders (for example <c>sync/</c>) are ignored until a test class claims them.
+/// Loads the shared conformance fixtures straight from the repository's <c>spec/conformance/</c>
+/// folder, found by walking up from the test output directory. Fixtures are deliberately not copied
+/// into the build output: a copy goes stale (with <c>PreserveNewest</c>, a deleted or renamed
+/// fixture stays in <c>bin/</c> until a clean build). The Mac and the VM both run the tests from
+/// a full checkout. Only the <c>core/</c> folder is read here; other folders (for example
+/// <c>sync/</c>) are ignored until a test class claims them.
 /// </summary>
 internal static class ConformanceFixtures
 {
@@ -31,8 +33,10 @@ internal static class ConformanceFixtures
     private static readonly Dictionary<string, JsonObject> Cache = new(StringComparer.Ordinal);
     private static readonly object CacheLock = new();
 
-    public static string OutputCoreDirectory =>
-        Path.Combine(AppContext.BaseDirectory, "conformance", CoreFolder);
+    private static readonly Lazy<string> SourceCoreDirectory = new(FindSourceCoreDirectory);
+
+    /// <summary>The <c>spec/conformance/core</c> folder in the source tree.</summary>
+    public static string CoreDirectory => SourceCoreDirectory.Value;
 
     public static JsonObject LoadFile(string fileName)
     {
@@ -40,7 +44,7 @@ internal static class ConformanceFixtures
         {
             if (!Cache.TryGetValue(fileName, out var root))
             {
-                var path = Path.Combine(OutputCoreDirectory, fileName);
+                var path = Path.Combine(CoreDirectory, fileName);
                 root = ParseFile(path);
                 Cache[fileName] = root;
             }
@@ -75,7 +79,7 @@ internal static class ConformanceFixtures
 
     /// <summary>
     /// Walks up from the test output directory to the repository's <c>spec/conformance/core</c>
-    /// folder (the source files, not the copies). Used only when regenerating expected values.
+    /// folder. Used for loading and for regenerating expected values.
     /// </summary>
     public static string FindSourceCoreDirectory()
     {

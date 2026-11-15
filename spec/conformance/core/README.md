@@ -47,12 +47,21 @@ Build your result in the same shape as `expected`, then compare the two structur
   present with the value `null` is not the same as a key that is missing.
 - **Arrays:** same length, same order.
 - **Strings, booleans, null:** must match exactly.
-- **Numbers:** if the property name ends in `Fraction`, they must agree within **0.0001**. Every
-  other number must agree within **0.005** (half a cent). Integers such as months and counts are
-  covered by the same rule, which makes them effectively exact.
+- **Numbers:** round both numbers with the spec's rounding rule (`spec/data-model.md` section 3.1:
+  multiply the absolute value by the scale, truncate, add one if the remainder is at least 0.5,
+  restore the sign), then the two integers must be **equal**. The scale is 10,000 (4 decimals) when
+  the property name ends in `Fraction`, and 100 (cents) for every other number. Integers such as
+  months and counts compare exactly under the same rule.
 
-The tolerance covers floating-point noise (the C# code uses `double`). It does not cover a
-different rule. If your platform only passes when you round differently, open an issue.
+There is no tolerance. Comparing within half a cent would let an app pass while rounding
+differently from the spec (for example, a value of exactly 0.005 more than expected is within half a
+cent of it but rounds to the next cent). An app that rounds the way the spec says, from the same
+`double` arithmetic as the C# reference, always passes; if yours only passes with a different rule,
+open an issue. The C# implementation is `JsonCompare.RoundScaled` in
+`apps/windows/PayDay.Tests/Conformance/JsonCompare.cs`.
+
+Load these files from the source tree at test time (see `spec/README.md`, "Loading fixtures"); do
+not copy them into the build output.
 
 ### Shared input: Bill
 

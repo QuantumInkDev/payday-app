@@ -25,6 +25,7 @@ sys.dont_write_bytecode = True  # keep __pycache__ out of the repo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fc_bip39 as B  # noqa: E402
+import fc_compact as K  # noqa: E402
 import fc_files as FL  # noqa: E402
 import fc_frame as F  # noqa: E402
 import fc_hlc as H  # noqa: E402
@@ -158,6 +159,18 @@ def check_ids_case(c):
         if v is not None:
             check_equal(v, str(uuid.uuid5(uuid.UUID(I.NAMESPACE), e["name"])), "uuid.uuid5 cross-check")
             check_equal(uuid.UUID(v).version, 5, "version")
+    elif fn == "paycheckIdKind":
+        check_equal({"kind": I.paycheck_id_kind(i["cadence"])}, e, "paycheck id kind")
+    elif fn in ("legacyPaymentId", "legacySnapshotId"):
+        if fn == "legacyPaymentId":
+            args = [i["billId"], i["periodKey"], i["amountCents"], i["paidAt"], i["occurrence"]]
+            idf, namef = I.legacy_payment_id, I.name_legacy_payment
+        else:
+            args = [i["snapshotDate"], i["totalCents"], i["occurrence"]]
+            idf, namef = I.legacy_snapshot_id, I.name_legacy_snapshot
+        v = check_result_or_error(e, idf, *args, shape=lambda s: {"name": namef(*args), "id": s})
+        if v is not None:
+            check_equal(v, str(uuid.uuid5(uuid.UUID(I.NAMESPACE), e["name"])), "uuid.uuid5 cross-check")
     elif fn == "migrateBillId":
         got = I.migrate_bill_id(i["id"])
         check_equal(got, e["id"], "migrated id")
@@ -246,9 +259,18 @@ def check_files_case(c):
     elif fn == "parsePath":
         check_result_or_error(e, FL.parse_path, i["path"])
     elif fn == "checkEnvelope":
-        check_result_or_error(e, FL.check_envelope, i["payload"], i["path"], i["vaultId"])
+        given = [k for k in ("payload", "payloadText", "payloadHex") if k in i]
+        expect(len(given) == 1, "exactly one of payload, payloadText, payloadHex")
+        if given[0] == "payload":
+            check_result_or_error(e, FL.check_envelope, i["payload"], i["path"], i["vaultId"])
+        else:
+            data = i["payloadText"].encode("utf-8") if given[0] == "payloadText" else bytes.fromhex(i["payloadHex"])
+            check_result_or_error(e, lambda: FL.check_envelope(FL.parse_json_bytes(data), i["path"], i["vaultId"]))
     elif fn == "checkVault":
-        check_result_or_error(e, FL.check_vault, i["vault"])
+        if "vaultText" in i:
+            check_result_or_error(e, lambda: FL.check_vault(FL.parse_json_bytes(i["vaultText"].encode("utf-8"))))
+        else:
+            check_result_or_error(e, FL.check_vault, i["vault"])
     else:
         raise Failure(f"unknown fn {fn}")
 
@@ -317,6 +339,42 @@ def check_merge_case(c, stats):
     stats["orders"] += count
 
 
+def check_compaction_case(c):
+    i, e = c["input"], c["expected"]
+    fn = i["fn"]
+    if fn == "readPlan":
+        got = K.read_plan(i["cursors"], i["files"], i["snapshots"])
+        check_equal(got, e, "read plan")
+        # Optional extra snapshot merges must not change the resulting cursors.
+        cur = dict(i["cursors"])
+        for snap in i["snapshots"]:
+            for d, v in snap["covers"].items():
+                cur[d] = max(cur.get(d, 0), v)
+        extra = K.read_plan(cur, i["files"], i["snapshots"])
+        expect(all(extra["cursorsAfter"].get(d, 0) == v for d, v in e["cursorsAfter"].items()),
+               "merging every snapshot up front must reach the same cursors")
+    elif fn == "snapshotAgeOk":
+        check_equal({"ok": K.snapshot_age_ok(i["snapshotWallMs"], i["localNowMs"], i["serverCreatedMs"],
+                                             i["serverNowMs"])}, e, "age")
+    elif fn == "deletableChangeFiles":
+        got = K.deletable_change_files(i["deviceId"], i["seqs"], i["snapshots"])
+        check_equal({"deletable": got}, e, "deletable files")
+        # Invariant: every deletable file stays covered by a snapshot that is not itself deletable.
+        survivors = [x for x in i["snapshots"] if x["hlc"] not in K.deletable_snapshots(i["snapshots"])]
+        for n in got:
+            expect(any(x["covers"].get(i["deviceId"], 0) >= n for x in survivors), f"file {n} would be lost")
+    elif fn == "deletableSnapshots":
+        got = K.deletable_snapshots(i["snapshots"])
+        check_equal({"deletable": got}, e, "deletable snapshots")
+        kept = [x for x in i["snapshots"] if x["hlc"] not in got]
+        for x in i["snapshots"]:
+            if x["hlc"] in got:
+                expect(any(all(k["covers"].get(d, 0) >= v for d, v in x["covers"].items()) for k in kept),
+                       f"deleting {x['hlc']} loses coverage")
+    else:
+        raise Failure(f"unknown fn {fn}")
+
+
 # ---------------------------------------------------------------------------
 
 CHECKERS = {
@@ -325,6 +383,7 @@ CHECKERS = {
     "crypto.json": check_crypto_case,
     "recovery-phrase.json": check_phrase_case,
     "files.json": check_files_case,
+    "compaction.json": check_compaction_case,
     "merge.json": None,  # needs stats
 }
 

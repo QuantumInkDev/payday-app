@@ -2,6 +2,8 @@
 Spec: spec/sync-protocol.md sections 6, 7 and 9.
 """
 
+import json
+import math
 import re
 
 import fc_frame
@@ -65,8 +67,69 @@ def parse_path(path):
     raise FileError("badPath")
 
 
-def _is_int(x):
-    return isinstance(x, int) and not isinstance(x, bool)
+MAX_SAFE_INT = (1 << 53) - 1
+_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+
+
+def as_int(x):
+    """Integer-typed protocol fields: any JSON number with an integral value (3, 3.0, 3e0) within
+    +/-(2^53 - 1) reads as that integer. Booleans, strings, null and fractions are not integers."""
+    if isinstance(x, bool):
+        return None
+    if isinstance(x, int):
+        return x if abs(x) <= MAX_SAFE_INT else None
+    if isinstance(x, float) and math.isfinite(x) and x.is_integer() and abs(x) <= MAX_SAFE_INT:
+        return int(x)
+    return None
+
+
+def _no_duplicates(pairs):
+    out = {}
+    for k, v in pairs:
+        if k in out:
+            raise FileError("malformed")
+        out[k] = v
+    return out
+
+
+def _reject_constant(name):
+    raise FileError("malformed")  # NaN, Infinity, -Infinity are not JSON
+
+
+def _has_lone_surrogate(v):
+    if isinstance(v, str):
+        return any(0xD800 <= ord(c) <= 0xDFFF for c in v)
+    if isinstance(v, dict):
+        return any(_has_lone_surrogate(k) or _has_lone_surrogate(x) for k, x in v.items())
+    if isinstance(v, list):
+        return any(_has_lone_surrogate(x) for x in v)
+    return False
+
+
+def parse_json_bytes(data):
+    """Strict parse of a decrypted payload or vault.json: UTF-8 without BOM, valid JSON, no
+    duplicate object keys, no unpaired surrogate escapes. Anything else is `malformed`."""
+    if data.startswith(b"\xef\xbb\xbf"):
+        raise FileError("malformed")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise FileError("malformed")
+    try:
+        value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant)
+    except ValueError:
+        raise FileError("malformed")
+    if _has_lone_surrogate(value):
+        raise FileError("malformed")
+    return value
+
+
+def _check_format_version(obj):
+    v = as_int(obj.get("formatVersion"))
+    if v is None:
+        raise FileError("malformed")
+    if v != 1:
+        raise FileError("unsupportedFormat")
 
 
 def check_envelope(payload, path, vault_id):
@@ -76,25 +139,32 @@ def check_envelope(payload, path, vault_id):
         raise FileError("malformed")
     if payload.get("type") != where["kind"]:
         raise FileError("typeMismatch")
-    if payload.get("formatVersion") != 1:
-        raise FileError("unsupportedFormat")
+    _check_format_version(payload)
     if payload.get("vaultId") != vault_id:
         raise FileError("vaultMismatch")
     if where["kind"] == "pairing":
+        gen = as_int(payload.get("generation"))
+        key = payload.get("vaultKey")
+        if (gen is None or gen < 1
+                or not isinstance(key, str) or not re.match(r"^[0-9a-f]{64}$", key)
+                or not fc_hlc.is_device_id(payload.get("deviceId"))
+                or not isinstance(payload.get("expiresAt"), str) or not _TS_RE.match(payload["expiresAt"])):
+            raise FileError("malformed")
         return {"ignoredRecords": []}
     if payload.get("deviceId") != where["deviceId"]:
         raise FileError("deviceMismatch")
     if where["kind"] == "changes":
-        if not _is_int(payload.get("seq")):
+        seq = as_int(payload.get("seq"))
+        if seq is None:
             raise FileError("malformed")
-        if payload["seq"] != where["seq"]:
+        if seq != where["seq"]:
             raise FileError("seqMismatch")
     else:
         if payload.get("hlc") != where["hlc"]:
             raise FileError("hlcMismatch")
         covers = payload.get("covers")
         if not isinstance(covers, dict) or not all(
-            fc_hlc.is_device_id(k) and _is_int(v) and v >= 0 for k, v in covers.items()
+            fc_hlc.is_device_id(k) and as_int(v) is not None and as_int(v) >= 0 for k, v in covers.items()
         ):
             raise FileError("malformed")
     records = payload.get("records")
@@ -112,22 +182,23 @@ def check_envelope(payload, path, vault_id):
 def check_vault(vault):
     if not isinstance(vault, dict) or vault.get("type") != "futurecheck-vault":
         raise FileError("malformed")
-    if vault.get("formatVersion") != 1:
-        raise FileError("unsupportedFormat")
+    _check_format_version(vault)
     gens = vault.get("generations")
     if not isinstance(gens, list) or not gens:
         raise FileError("malformed")
     ids = []
     for g in gens:
-        if not isinstance(g, dict) or not _is_int(g.get("id")) or g["id"] < 1:
+        gid = as_int(g.get("id")) if isinstance(g, dict) else None
+        if gid is None or gid < 1:
             raise FileError("malformed")
         kc = g.get("keyCheck")
         if not isinstance(kc, str) or not re.match(r"^[0-9a-f]{32}$", kc):
             raise FileError("malformed")
-        ids.append(g["id"])
-    if len(set(ids)) != len(ids) or vault.get("currentGeneration") not in ids:
+        ids.append(gid)
+    current = as_int(vault.get("currentGeneration"))
+    if len(set(ids)) != len(ids) or current not in ids:
         raise FileError("malformed")
-    return {"currentGeneration": vault["currentGeneration"], "generations": sorted(ids)}
+    return {"currentGeneration": current, "generations": sorted(ids)}
 
 
 def match_generation(vault, vault_key):
@@ -135,7 +206,7 @@ def match_generation(vault, vault_key):
     kc = fc_frame.key_check(vault_key).hex()
     for g in vault["generations"]:
         if g["keyCheck"] == kc:
-            return g["id"]
+            return as_int(g["id"])
     return None
 
 

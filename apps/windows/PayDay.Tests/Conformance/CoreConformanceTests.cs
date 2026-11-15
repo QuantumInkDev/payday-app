@@ -60,8 +60,8 @@ public class CoreConformanceTests
     [Fact]
     public void CoreFolder_HasExactlyTheKnownFiles_WithWellFormedCases()
     {
-        var dir = ConformanceFixtures.OutputCoreDirectory;
-        Assert.True(Directory.Exists(dir), $"Fixture folder not copied to test output: {dir}");
+        var dir = ConformanceFixtures.CoreDirectory;
+        Assert.True(Directory.Exists(dir), $"Fixture folder not found: {dir}");
 
         var present = Directory.GetFiles(dir, "*.json").Select(Path.GetFileName).OrderBy(n => n).ToArray();
         Assert.Equal(ConformanceFixtures.CoreFiles.OrderBy(n => n).ToArray(), present);

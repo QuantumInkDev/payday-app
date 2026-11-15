@@ -167,6 +167,226 @@
       }
     },
     {
+      "name": "paycheck ID kind for cadence 'Weekly'",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": "Weekly"
+      },
+      "expected": {
+        "kind": "uuidv5"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "paycheck ID kind for cadence 'Bi-Weekly'",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": "Bi-Weekly"
+      },
+      "expected": {
+        "kind": "uuidv5"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "paycheck ID kind for cadence 'Semi-Monthly'",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": "Semi-Monthly"
+      },
+      "expected": {
+        "kind": "uuidv5"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "paycheck ID kind for cadence 'Monthly'",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": "Monthly"
+      },
+      "expected": {
+        "kind": "uuidv5"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "paycheck ID kind for cadence 'Irregular'",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": "Irregular"
+      },
+      "expected": {
+        "kind": "uuidv7"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "paycheck ID kind for cadence 'Quarterly'",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": "Quarterly"
+      },
+      "expected": {
+        "kind": "uuidv7"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "paycheck ID kind for cadence ''",
+      "input": {
+        "fn": "paycheckIdKind",
+        "cadence": ""
+      },
+      "expected": {
+        "kind": "uuidv7"
+      },
+      "note": "Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use a random UUIDv7 so two payouts on one day stay two rows"
+    },
+    {
+      "name": "legacy payment ID ('019a0000-0000-7000-8000-0000000000b1', '2026-10-29', 5500, '2026-10-30T15:04:05.000Z', 1)",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "2026-10-30T15:04:05.000Z",
+        "occurrence": 1
+      },
+      "expected": {
+        "name": "legacy-payment/019a0000-0000-7000-8000-0000000000b1/2026-10-29/5500/2026-10-30T15:04:05.000Z/1",
+        "id": "3bc5dea2-1f1e-5a8b-90a6-48a846488a8e"
+      },
+      "note": "Used only for extra payments created by the migration (data-model.md 8.3)"
+    },
+    {
+      "name": "legacy payment ID ('019a0000-0000-7000-8000-0000000000b1', '2026-10-29', 5500, '2026-10-30T15:04:05.000Z', 2)",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "2026-10-30T15:04:05.000Z",
+        "occurrence": 2
+      },
+      "expected": {
+        "name": "legacy-payment/019a0000-0000-7000-8000-0000000000b1/2026-10-29/5500/2026-10-30T15:04:05.000Z/2",
+        "id": "c47e884c-31ab-57d2-bac6-f13041ee53ca"
+      },
+      "note": "Used only for extra payments created by the migration (data-model.md 8.3)"
+    },
+    {
+      "name": "legacy payment ID ('019a0000-0000-7000-8000-0000000000b1', '2026-10-29', 5500, '', 1)",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "",
+        "occurrence": 1
+      },
+      "expected": {
+        "name": "legacy-payment/019a0000-0000-7000-8000-0000000000b1/2026-10-29/5500//1",
+        "id": "b46c165f-0ca4-55ae-8f56-47ad5d7f528b"
+      },
+      "note": "Used only for extra payments created by the migration (data-model.md 8.3)"
+    },
+    {
+      "name": "legacy payment ID ('019a0000-0000-7000-8000-0000000000b2', '2026-11-12', 4000, '2026-11-13T09:00:00.000Z', 1)",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b2",
+        "periodKey": "2026-11-12",
+        "amountCents": 4000,
+        "paidAt": "2026-11-13T09:00:00.000Z",
+        "occurrence": 1
+      },
+      "expected": {
+        "name": "legacy-payment/019a0000-0000-7000-8000-0000000000b2/2026-11-12/4000/2026-11-13T09:00:00.000Z/1",
+        "id": "8abe4ef6-87c0-5eab-9bc1-bf31a51e6a60"
+      },
+      "note": "Used only for extra payments created by the migration (data-model.md 8.3)"
+    },
+    {
+      "name": "legacy payment ID rejects a paidAt that is not normalized",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "2026-10-30 15:04:05",
+        "occurrence": 1
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "legacy payment ID rejects occurrence 0",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "",
+        "occurrence": 0
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "legacy balance snapshot ID ('2026-10-29', 812345, 1)",
+      "input": {
+        "fn": "legacySnapshotId",
+        "snapshotDate": "2026-10-29",
+        "totalCents": 812345,
+        "occurrence": 1
+      },
+      "expected": {
+        "name": "legacy-snapshot/2026-10-29/812345/1",
+        "id": "5315fa02-281f-5445-8d09-a0a76cf87e1f"
+      }
+    },
+    {
+      "name": "legacy balance snapshot ID ('2026-10-29', 812345, 2)",
+      "input": {
+        "fn": "legacySnapshotId",
+        "snapshotDate": "2026-10-29",
+        "totalCents": 812345,
+        "occurrence": 2
+      },
+      "expected": {
+        "name": "legacy-snapshot/2026-10-29/812345/2",
+        "id": "c98adb25-70ad-5739-b4ce-8537b95598c0"
+      }
+    },
+    {
+      "name": "legacy balance snapshot ID ('2026-11-12', 0, 1)",
+      "input": {
+        "fn": "legacySnapshotId",
+        "snapshotDate": "2026-11-12",
+        "totalCents": 0,
+        "occurrence": 1
+      },
+      "expected": {
+        "name": "legacy-snapshot/2026-11-12/0/1",
+        "id": "9e9ff573-17b0-5330-96ae-76d878b7485f"
+      }
+    },
+    {
+      "name": "legacy balance snapshot ID rejects a bad date",
+      "input": {
+        "fn": "legacySnapshotId",
+        "snapshotDate": "2026-10-32",
+        "totalCents": 1,
+        "occurrence": 1
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
       "name": "migrate legacy bill ID '1'",
       "input": {
         "fn": "migrateBillId",

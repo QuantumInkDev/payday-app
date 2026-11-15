@@ -335,6 +335,100 @@
       }
     },
     {
+      "name": "decode accepts tab between words",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant\ttail\tshell\tvague\tacross\tcall\tstone\thalf\tfoot\tviolin\troom\tflat\tdepart\tmystery\tpulp\ttwice\tjelly\telite\tventure\tjoke\ttrim\tfragile\tdamage\tpromote"
+      },
+      "expected": {
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      }
+    },
+    {
+      "name": "decode accepts CR LF between words",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant\r\ntail\r\nshell\r\nvague\r\nacross\r\ncall\r\nstone\r\nhalf\r\nfoot\r\nviolin\r\nroom\r\nflat\r\ndepart\r\nmystery\r\npulp\r\ntwice\r\njelly\r\nelite\r\nventure\r\njoke\r\ntrim\r\nfragile\r\ndamage\r\npromote"
+      },
+      "expected": {
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      }
+    },
+    {
+      "name": "decode accepts no-break space U+00A0 between words",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      }
+    },
+    {
+      "name": "decode accepts mixed separators between words",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant \t \n tail \t \n shell \t \n vague \t \n across \t \n call \t \n stone \t \n half \t \n foot \t \n violin \t \n room \t \n flat \t \n depart \t \n mystery \t \n pulp \t \n twice \t \n jelly \t \n elite \t \n venture \t \n joke \t \n trim \t \n fragile \t \n damage \t \n promote"
+      },
+      "expected": {
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      }
+    },
+    {
+      "name": "decode does not treat em space U+2003 as a separator",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      },
+      "note": "Only space, tab, CR, LF and U+00A0 separate words; anything else is part of a word"
+    },
+    {
+      "name": "decode does not treat ideographic space U+3000 as a separator",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room　flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      },
+      "note": "Only space, tab, CR, LF and U+00A0 separate words; anything else is part of a word"
+    },
+    {
+      "name": "decode does not treat vertical tab as a separator",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room\u000bflat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      },
+      "note": "Only space, tab, CR, LF and U+00A0 separate words; anything else is part of a word"
+    },
+    {
+      "name": "decode does not treat form feed as a separator",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room\fflat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      },
+      "note": "Only space, tab, CR, LF and U+00A0 separate words; anything else is part of a word"
+    },
+    {
+      "name": "decode lowercases only A-Z (non-ASCII capitals are not folded)",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across calİ stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "unknownWord"
+      }
+    },
+    {
       "name": "decode rejects a wrong final word (checksum)",
       "input": {
         "fn": "decode",

@@ -13,14 +13,16 @@ namespace PayDay.Tests.Conformance;
 ///   <item>objects must have exactly the same keys (order ignored);</item>
 ///   <item>arrays must have the same length and order;</item>
 ///   <item>strings, booleans and null compare exactly;</item>
-///   <item>numbers compare within 0.0001 when the property name ends in <c>Fraction</c>,
-///     otherwise within 0.005 (half a cent).</item>
+///   <item>numbers are rounded with the spec's rule (<c>spec/data-model.md</c> section 3.1: scale,
+///     truncate, add one if the fraction is at least 0.5) to 4 decimals when the property name ends
+///     in <c>Fraction</c> and to 2 decimals (cents) otherwise, and the rounded integers must be equal.
+///     There is no tolerance: an app that does not round the way the spec says fails.</item>
 /// </list>
 /// </summary>
 internal static class JsonCompare
 {
-    public const double MoneyTolerance = 0.005;
-    public const double FractionTolerance = 0.0001;
+    public const double MoneyScale = 100;
+    public const double FractionScale = 10_000;
 
     public static IReadOnlyList<string> Differences(JsonNode? expected, JsonNode? actual)
     {
@@ -37,10 +39,10 @@ internal static class JsonCompare
         {
             var e = Number(expected!);
             var a = Number(actual!);
-            var tolerance = IsFraction(propertyName) ? FractionTolerance : MoneyTolerance;
-            if (Math.Abs(e - a) > tolerance)
+            var scale = IsFraction(propertyName) ? FractionScale : MoneyScale;
+            if (RoundScaled(e, scale) != RoundScaled(a, scale))
             {
-                diffs.Add($"{path}: expected {Format(e)}, got {Format(a)}");
+                diffs.Add($"{path}: expected {Format(e)}, got {Format(a)} (rounded: {RoundScaled(e, scale)} vs {RoundScaled(a, scale)} at scale {scale})");
             }
             return;
         }
@@ -94,6 +96,19 @@ internal static class JsonCompare
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// The spec's rounding (<c>spec/data-model.md</c> section 3.1) at any scale: <c>cents(x)</c> is
+    /// <c>RoundScaled(x, 100)</c>. Round half away from zero, computed literally in binary64.
+    /// </summary>
+    public static long RoundScaled(double x, double scale)
+    {
+        if (double.IsNaN(x) || double.IsInfinity(x)) throw new ArgumentOutOfRangeException(nameof(x), x, "not finite");
+        var s = Math.Abs(x) * scale;
+        var i = Math.Truncate(s);
+        if (s - i >= 0.5) i += 1;
+        return (long)(x < 0 ? -i : i);
     }
 
     public static bool IsFraction(string? propertyName)

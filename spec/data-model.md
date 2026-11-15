@@ -23,7 +23,7 @@ types used below:
 | `string` | string | UTF-8. Any length. Apps do not trim or case-fold on write. |
 | `string?` | string or `null` | `null` means "not set". An empty string is a value, not "not set". |
 | `bool` | `true` / `false` | Never `0`/`1`. |
-| `int` | number with an integer value | `3` and `3.0` are the same value. |
+| `int` | number with an integer value | Writers write plain digits (`3`). Readers accept any integral number (`3`, `3.0`, `3e0` are all 3). `true`/`false` are booleans, never ints: a boolean in an `int` field is the wrong type (1.2). |
 | `number` | number | Finite. Used for non-money quantities (APR). Not rounded. |
 | `money` | number | See section 3. |
 | `date` | string `YYYY-MM-DD` | A calendar date with no time or zone, for example `2026-11-12`. Always zero-padded. |
@@ -69,10 +69,11 @@ purpose: `remainingCheckpoint` (was `Remaining`/`Owed`) and `apr` (was `APR`).
 | `bill` | `id` | UUIDv7 (random). Legacy IDs are migrated (section 8.2). |
 | `payment`, kind `Regular` | `id` | UUIDv5 from (billId, periodKey) |
 | `payment`, kind `SetAside` | `id` | UUIDv5 from (billId, periodKey) |
-| `payment`, kind `Extra` | `id` | UUIDv7 (random) |
-| `balanceSnapshot` | `id` | UUIDv7 (random) |
+| `payment`, kind `Extra` | `id` | UUIDv7 (random). Extras created by the migration: UUIDv5 from their content (section 8.3). |
+| `balanceSnapshot` | `id` | UUIDv7 (random). Migrated rows: UUIDv5 from their content (section 8.4). |
 | `incomeSource` | `id` | UUIDv7 (random) |
-| `paycheck` | `id` | UUIDv5 from (incomeSourceId, payDate) |
+| `paycheck`, scheduled source | `id` | UUIDv5 from (incomeSourceId, payDate), when the source's cadence is `Weekly`, `Bi-Weekly`, `Semi-Monthly` or `Monthly` |
+| `paycheck`, `Irregular` source | `id` | UUIDv7 (random), so two payouts on one day are two rows (decided here) |
 | `device` | device ID | 16 lowercase hex characters, random (not a UUID) |
 | `setting` | key | The setting's name, for example `PayAnchor` |
 
@@ -188,7 +189,7 @@ its own row.
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `billId` | id | (required) | The bill. Written at create and never changed. |
-| `kind` | enum | `Regular` | `Regular`: the "mark paid" payment for this bill in this period. `Extra`: an extra or one-time payment (v1 feature 4). `SetAside`: money put aside toward a future bill (v1 feature 3). Written at create and never changed. An unknown kind does not count against Remaining and is not shown (decided here). |
+| `kind` | enum | `Regular` | `Regular`: the "mark paid" payment for this bill in this period. `Extra`: an extra or one-time payment (v1 feature 4). `SetAside`: money put aside toward a future bill (v1 feature 3). Written at create and never changed. A missing kind, or one of the wrong JSON type (`null`, a number), reads as the default `Regular` like any wrong-type field (1.2) and counts. An unknown string (written by a newer version) does not count against Remaining and is not shown (decided here). |
 | `periodKey` | date | (required) | Start date of the pay period the payment belongs to (the `PayPeriod.Key` today). For `Extra`, the period containing the day it was made. Written at create and never changed. |
 | `amountPaid` | money | `0` | Amount. Legacy name `AmountPaid`. |
 | `paidAt` | timestamp? | `null` | Wall-clock time of the latest mark. Display only: ordering against checkpoints uses HLCs, never `paidAt`. |
@@ -201,8 +202,11 @@ Rules:
 
 - Only `Regular` and `Extra` lower Remaining. `SetAside` never does.
 - At most one `Regular` and one `SetAside` row exists per (bill, period), because their IDs are
-  derived from (billId, periodKey). Unmark writes `deleted: true`; marking again writes
-  `deleted: false` (and `amountPaid`, `paidAt`) on the same row.
+  derived from (billId, periodKey). Unmark writes `deleted: true` (and, if a checkpoint already
+  absorbed the payment, raises the checkpoint by its amount); marking again after an unmark writes
+  `deleted: false` with `amountPaid`, `paidAt` and the fixed fields on the same row; "mark paid" on
+  a payment that is still live writes only `amountPaid` and `paidAt`. Exact writer rules:
+  `sync-protocol.md` section 5.3.
 - `Extra` rows get random IDs, so two extra payments always add up.
 - Payments of a deleted bill stay as rows. Apps hide them; they do not cascade-delete (decided
   here).
@@ -249,13 +253,17 @@ An actual paycheck that arrived. Only actuals are stored; expected paychecks are
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `incomeSourceId` | id | (required) | The source. Written at create and never changed. |
-| `payDate` | date | (required) | The scheduled pay date this actual replaces. For an `Irregular` source, the day it arrived. Part of the ID; written at create and never changed. |
+| `payDate` | date | (required) | The scheduled pay date this actual replaces (part of the ID for scheduled sources). For an `Irregular` source, the day it arrived (not part of the ID). Written at create and never changed. |
 | `amount` | money | `0` | Amount that actually arrived. Overrides `expectedAmount` for that pay date. |
 | `note` | string? | `null` | Free text. |
 | `deleted` | bool | (required) | Tombstone. Deleting an actual brings back the estimate. |
 
-Recording the same paycheck on two devices gives one row because the ID is derived from
-(incomeSourceId, payDate).
+For a scheduled source, recording the same paycheck on two devices gives one row because the ID is
+derived from (incomeSourceId, payDate). For an `Irregular` source each recorded payout is its own
+row with a random ID, so two payouts on one day both count; the same payout recorded on two devices
+becomes two rows, and the user deletes one. The ID kind is chosen from the source's cadence when the
+paycheck is recorded and never changes afterwards. Fixtures: `ids.json` (`paycheckIdKind`),
+`merge.json` ("two payouts on one day...").
 
 ### 4.6 `device`
 
@@ -296,7 +304,7 @@ cpCents = cents(cp.value) if cp exists and is a number, else 0
 paid    = sum of cents(p.amountPaid) over payments p where
             p is live,
             p.billId == b,
-            p.kind is "Regular" or "Extra",
+            kind(p) is "Regular" or "Extra"      # missing or wrong-type kind = "Regular"
             and (cp is none, or markHlc(p) > cp.hlc)        # strictly greater
 Remaining(b) = max(0, cpCents - paid) / 100
 
@@ -305,7 +313,9 @@ markHlc(p) = the HLC of p's winning `deleted` record (which is `false`, since p 
 
 What the user sees does not change from today: marking a bill paid lowers Remaining, unmarking
 raises it back, typing a new Remaining sets it. What changes is how it is stored (design section
-6.2; writer rules in `sync-protocol.md` section 5).
+6.2). "Unmarking raises it back" holds even for a payment made before the latest checkpoint because
+of the writer rules in `sync-protocol.md` section 5.3; the cases where concurrent offline edits on
+two devices still leave Remaining off are listed in `sync-protocol.md` section 5.4.
 
 ### 5.2 Set-aside balance
 
@@ -315,10 +325,16 @@ field or other rates can be added later without breaking the format.
 For a live bill `b`:
 
 ```
-last    = the greatest periodKey among live Regular payments of b, or none
+valid(p) = p.periodKey is a string holding a valid YYYY-MM-DD date
+last    = the greatest periodKey among live Regular payments p of b with valid(p), or none
 balance = sum of cents(p.amountPaid) over live SetAside payments p of b
-          with a valid periodKey and (last is none, or p.periodKey > last)   # string order = date order
+          with valid(p) and (last is none, or p.periodKey > last)   # string order = date order
 ```
+
+A payment whose `periodKey` is missing, of the wrong type or not a valid date is ignored here: a
+Regular one does not reset the balance and a SetAside one is not counted (decided here). It still
+counts toward Remaining if its kind does, since Remaining does not depend on periods. Fixture:
+`merge.json`, "set-aside balance ignores payments whose periodKey is not a valid date".
 
 So set-asides made in the same period as the regular payment, or before it, are consumed by it
 (decided here: the feature scope says "since its last Regular payment"; this pins "since" to
@@ -443,7 +459,7 @@ keys inside `Snapshots.Details`.
 
 | Today | Spec | Rule |
 |---|---|---|
-| `Id` INTEGER AUTOINCREMENT | `payment` row ID | Group by (new billId, `PeriodKey`). The row with the lowest old `Id` becomes `kind: Regular` with the deterministic ID. Any further rows for the same pair (possible only through old imports) become `kind: Extra` with a UUIDv7 whose time is their `PaidAt` (decided here). |
+| `Id` INTEGER AUTOINCREMENT | `payment` row ID | Group by (new billId, `PeriodKey`). The row with the lowest old `Id` becomes `kind: Regular` with the deterministic ID. Any further rows for the same pair (possible only through old imports) become `kind: Extra` with ID `UUIDv5(namespace, "legacy-payment/<billId>/<periodKey>/<amountCents>/<paidAt>/<n>")` (decided here; format in `sync-protocol.md` section 3.2). The ID comes from the row's content, so two devices migrating or restoring the same legacy backup produce the same rows instead of duplicates. |
 | `BillId` | `billId` | Mapped (8.2). |
 | `PeriodKey` | `periodKey` | Already `YYYY-MM-DD`. |
 | `AmountPaid` | `amountPaid` | `round2`. |
@@ -457,7 +473,7 @@ keys inside `Snapshots.Details`.
 | Today | Spec | Rule |
 |---|---|---|
 | `Snapshots` table | `balanceSnapshot` | Renamed entity. |
-| `Id` INTEGER | row ID | UUIDv7 whose time is `SnapshotDate` at 00:00 UTC (decided here). |
+| `Id` INTEGER | row ID | `UUIDv5(namespace, "legacy-snapshot/<snapshotDate>/<totalCents>/<n>")`, from the row's content for the same reason as 8.3 (decided here). `<n>` numbers rows with the same date and total in old `Id` order. |
 | `SnapshotDate`, `TotalRemaining` (renamed from `TotalOwed`), `Details`, `NotionPageId` | `snapshotDate`, `totalRemaining`, `details`, `notionPageId` | `details` keys rewritten (8.2). |
 
 ### 8.5 Settings table

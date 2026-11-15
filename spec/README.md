@@ -10,7 +10,7 @@ these documents and pass the same test fixtures.
 | `sync-protocol.md` | Clocks, IDs, change records, merge rules, balance checkpoints, drive layout, file encryption, vault.json, recovery phrase, QR pairing, reading and writing, snapshots and compaction, setup flows. |
 | `bip39-english.txt` | The BIP39 English wordlist used by the recovery phrase (see "Third-party files" below). |
 | `conformance/core/` | Fixtures for pay periods, bill-to-period assignment, totals, payoff and the backup JSON format. Owned by the core-rules work; see the files there. |
-| `conformance/sync/` | Fixtures for the sync layer: `hlc.json`, `ids.json`, `merge.json`, `crypto.json`, `recovery-phrase.json`, `files.json`. |
+| `conformance/sync/` | Fixtures for the sync layer: `hlc.json`, `ids.json`, `merge.json`, `crypto.json`, `recovery-phrase.json`, `files.json`, `compaction.json`. |
 
 The design these documents implement is `planning/2026-11-14-multiplatform-design.md` (sections 6
 to 8) with the v1 features from `planning/2026-11-14-feature-scope.md`. Where the design left a
@@ -77,11 +77,19 @@ Every fixture file has the same top-level shape:
 | File | `input.fn` values |
 |---|---|
 | `hlc.json` | `encode`, `decode`, `compare`, `tick`, `observe`, `sequence`, `skewWarning` |
-| `ids.json` | `regularPaymentId`, `setAsideId`, `paycheckId`, `migrateBillId`, `uuid7`, `inspectUuid`, `isDeviceId` |
+| `ids.json` | `regularPaymentId`, `setAsideId`, `paycheckId`, `paycheckIdKind`, `legacyPaymentId`, `legacySnapshotId`, `migrateBillId`, `uuid7`, `inspectUuid`, `isDeviceId` |
 | `crypto.json` | `deriveKeys`, `derivePairingKey`, `seal`, `open`, `matchGeneration`, `pairingQr`, `parsePairingQr` |
 | `recovery-phrase.json` | `encode`, `decode` |
 | `files.json` | `changeFileName`, `parsePath`, `checkEnvelope`, `checkVault` |
 | `merge.json` | `merge` |
+| `compaction.json` | `readPlan`, `snapshotAgeOk`, `deletableChangeFiles`, `deletableSnapshots` |
+
+`checkEnvelope` gives the decrypted payload in exactly one of three forms: `payload` (an already
+parsed JSON object), `payloadText` (the exact JSON text, as a string) or `payloadHex` (the exact
+bytes, for cases that are not valid UTF-8 or start with a byte-order mark). `payloadText` and
+`payloadHex` MUST go through the app's strict JSON parsing (`sync-protocol.md` section 6.3) before the
+envelope checks; that is how the duplicate-key, lone-surrogate, BOM and `3e0` cases are tested.
+`checkVault` likewise takes `vault` (object) or `vaultText` (string).
 
 `merge.json` cases have `input.records` (change records) and, for writer-side rules, an
 `input.edit`:
@@ -96,8 +104,10 @@ Every fixture file has the same top-level shape:
 
 `seen` lists the indexes of `input.records` the editing device had merged when the user acted. The
 app runs `op` against that state; the records it writes must equal `expected.emitted` exactly
-(order: sorted by entity, then id, then field). `op` values are `markPaid`, `unmarkPaid` and
-`setRemaining` (`sync-protocol.md` section 5.3).
+(order: sorted by entity, then id, then field). `op` values are `markPaid`, `unmarkPaid`,
+`deletePayment`, `setRemaining` (`sync-protocol.md` section 5.3) and `restore` (section 12.3).
+`restore` carries the backup as `rows` (`{entity: {id: {field: value}}}`, IDs already migrated,
+each bill's Remaining already mapped to `remainingCheckpoint`) and `settings` (`{key: value}`).
 
 `expected` in a merge case is the state after merging `input.records` plus `expected.emitted`:
 
@@ -138,8 +148,11 @@ python3 -m venv ~/.venvs/futurecheck-spec
 
 ## Loading fixtures from an app's tests
 
-Read the files from the repository at test time (path relative to the repo root,
-`spec/conformance/...`). Do not copy them into an app folder; a copy can go stale. Iterate over
+Read the files from the repository at test time: find `spec/conformance/` by walking up from the
+test binary's directory, as `apps/windows/PayDay.Tests/Conformance/ConformanceFixtures.cs` does.
+Do not copy them into an app folder or the build output. A copy goes stale: MSBuild's
+`CopyToOutputDirectory="PreserveNewest"`, for example, leaves a deleted or renamed fixture in
+`bin/` until a clean build, so the tests keep passing on a file that no longer exists. Iterate over
 `cases`, dispatch on `input.fn`, and report each case by `name`. A new case added to a file should
 be picked up without changing the test code.
 

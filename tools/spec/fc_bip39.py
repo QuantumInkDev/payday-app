@@ -41,9 +41,23 @@ def encode(key):
     return [WORDS[(bits >> (11 * (23 - i))) & 0x7FF] for i in range(24)]
 
 
+SEPARATORS = " \t\r\n\u00a0"  # space, tab, CR, LF, no-break space; nothing else
+
+
 def normalize(phrase):
-    """ASCII-lowercase, split on any run of whitespace."""
-    return phrase.lower().split()
+    """Lowercase A-Z only, split on runs of SEPARATORS. Other characters stay in the word."""
+    lowered = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in phrase)
+    words, cur = [], []
+    for c in lowered:
+        if c in SEPARATORS:
+            if cur:
+                words.append("".join(cur))
+                cur = []
+        else:
+            cur.append(c)
+    if cur:
+        words.append("".join(cur))
+    return words
 
 
 def decode(phrase):

@@ -80,6 +80,53 @@ def name_legacy_bill(old_id):
     return f"legacy-bill/{old_id}"
 
 
+_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+
+
+def _require_occurrence(n):
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+        raise IdError("badInput")
+
+
+def _require_cents(c):
+    if isinstance(c, bool) or not isinstance(c, int):
+        raise IdError("badInput")
+
+
+def name_legacy_payment(bill_id, period_key, amount_cents, paid_at, n):
+    """Extra payments made by the migration (duplicate legacy rows for one bill and period)."""
+    _require_uuid(bill_id)
+    _require_date(period_key)
+    _require_cents(amount_cents)
+    if paid_at != "" and not (isinstance(paid_at, str) and _TS_RE.match(paid_at)):
+        raise IdError("badInput")
+    _require_occurrence(n)
+    return f"legacy-payment/{bill_id}/{period_key}/{amount_cents}/{paid_at}/{n}"
+
+
+def name_legacy_snapshot(snapshot_date, total_cents, n):
+    _require_date(snapshot_date)
+    _require_cents(total_cents)
+    _require_occurrence(n)
+    return f"legacy-snapshot/{snapshot_date}/{total_cents}/{n}"
+
+
+def legacy_payment_id(bill_id, period_key, amount_cents, paid_at, n):
+    return uuid5(NAMESPACE, name_legacy_payment(bill_id, period_key, amount_cents, paid_at, n))
+
+
+def legacy_snapshot_id(snapshot_date, total_cents, n):
+    return uuid5(NAMESPACE, name_legacy_snapshot(snapshot_date, total_cents, n))
+
+
+SCHEDULED_CADENCES = ("Weekly", "Bi-Weekly", "Semi-Monthly", "Monthly")
+
+
+def paycheck_id_kind(cadence):
+    """Scheduled cadences get the deterministic paycheck ID; Irregular (or unknown) gets UUIDv7."""
+    return "uuidv5" if cadence in SCHEDULED_CADENCES else "uuidv7"
+
+
 def regular_payment_id(bill_id, period_key):
     return uuid5(NAMESPACE, name_regular_payment(bill_id, period_key))
 

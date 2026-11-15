@@ -130,10 +130,20 @@ class Store:
                 yield pid
 
     def _kind(self, pid):
-        k = self.value("payment", pid, "kind", "Regular")
-        return k if isinstance(k, str) else None
+        """Missing or wrong-type kind reads as the default, Regular (data-model.md 1.2)."""
+        k = self.value("payment", pid, "kind")
+        return k if isinstance(k, str) else "Regular"
 
-    def remaining_cents(self, bill_id):
+    def mark_hlc(self, pid):
+        return self.get("payment", pid, "deleted")[1]
+
+    def is_absorbed(self, pid):
+        """A live payment whose mark HLC is at or before its bill's checkpoint HLC."""
+        bill = self.value("payment", pid, "billId")
+        cp = self.get("bill", bill, "remainingCheckpoint") if isinstance(bill, str) else None
+        return cp is not None and fc_hlc.compare(self.mark_hlc(pid), cp[1]) <= 0
+
+    def remaining_unclamped_cents(self, bill_id):
         cp = self.get("bill", bill_id, "remainingCheckpoint")
         cp_cents = self._money_cents("bill", bill_id, "remainingCheckpoint")
         cp_hlc = cp[1] if cp is not None else None
@@ -141,10 +151,12 @@ class Store:
         for pid in self._live_payments_for(bill_id):
             if self._kind(pid) not in COUNTS_AGAINST_REMAINING:
                 continue
-            mark_hlc = self.get("payment", pid, "deleted")[1]
-            if cp_hlc is None or fc_hlc.compare(mark_hlc, cp_hlc) > 0:
+            if cp_hlc is None or fc_hlc.compare(self.mark_hlc(pid), cp_hlc) > 0:
                 paid += self._money_cents("payment", pid, "amountPaid")
-        return max(0, cp_cents - paid)
+        return cp_cents - paid
+
+    def remaining_cents(self, bill_id):
+        return max(0, self.remaining_unclamped_cents(bill_id))
 
     def set_aside_balance_cents(self, bill_id):
         regular_periods, set_asides = [], []
@@ -187,28 +199,52 @@ def payment_id_for(kind, bill_id, period_key):
     raise ValueError("deterministic IDs exist only for Regular and SetAside")
 
 
+def _sorted(recs):
+    return sorted(recs, key=lambda r: (r["entity"], r["id"], r["field"]))
+
+
 def op_mark_paid(store, op):
+    """Mark a Regular or SetAside payment paid. `store` is the editing device's state (None = empty)."""
     kind = op.get("kind", "Regular")
     pid = payment_id_for(kind, op["billId"], op["periodKey"])
     h = op["hlc"]
-    return sorted(
-        [
+    if store is not None and store.is_live("payment", pid):
+        # Already paid on this device: only the amount and time change. Rewriting `deleted`
+        # would move the mark HLC past a checkpoint that already absorbed this payment.
+        return _sorted([
             _rec("payment", pid, "amountPaid", fc_money.round2(op["amount"]), h),
-            _rec("payment", pid, "billId", op["billId"], h),
-            _rec("payment", pid, "deleted", False, h),
-            _rec("payment", pid, "kind", kind, h),
             _rec("payment", pid, "paidAt", op["paidAt"], h),
-            _rec("payment", pid, "periodKey", op["periodKey"], h),
-        ],
-        key=lambda r: r["field"],
-    )
+        ])
+    return _sorted([
+        _rec("payment", pid, "amountPaid", fc_money.round2(op["amount"]), h),
+        _rec("payment", pid, "billId", op["billId"], h),
+        _rec("payment", pid, "deleted", False, h),
+        _rec("payment", pid, "kind", kind, h),
+        _rec("payment", pid, "paidAt", op["paidAt"], h),
+        _rec("payment", pid, "periodKey", op["periodKey"], h),
+    ])
+
+
+def _delete_payment(store, pid, h):
+    if not store.is_live("payment", pid):
+        return []
+    out = [_rec("payment", pid, "deleted", True, h)]
+    bill = store.value("payment", pid, "billId")
+    if (store._kind(pid) in COUNTS_AGAINST_REMAINING and isinstance(bill, str)
+            and store.is_live("bill", bill) and store.is_absorbed(pid)):
+        # The checkpoint already reflects this payment; raise it back by the amount.
+        new = max(0, store.remaining_unclamped_cents(bill) + store._money_cents("payment", pid, "amountPaid"))
+        out.append(_rec("bill", bill, "remainingCheckpoint", new / 100.0, h))
+    return _sorted(out)
 
 
 def op_unmark_paid(store, op):
     pid = payment_id_for(op.get("kind", "Regular"), op["billId"], op["periodKey"])
-    if not store.is_live("payment", pid):
-        return []
-    return [_rec("payment", pid, "deleted", True, op["hlc"])]
+    return _delete_payment(store, pid, op["hlc"])
+
+
+def op_delete_payment(store, op):
+    return _delete_payment(store, op["paymentId"], op["hlc"])
 
 
 def op_set_remaining(store, op):
@@ -226,10 +262,50 @@ def op_set_remaining(store, op):
     return [_rec("bill", bill, "remainingCheckpoint", new / 100.0, op["hlc"])]
 
 
+RESTORABLE = ("bill", "payment", "balanceSnapshot", "incomeSource", "paycheck")
+KNOWN_SETTINGS = {"PayAnchor", "EarlyStart", "SafeToSpendBuffer", "ReminderDaysBefore"}
+SETTING_PREFIXES = ("TypeColor/",)
+# Connector state, not plan data: a restore never clears these (sync-protocol.md 12.3).
+RESTORE_KEEPS = {"NotionOwnerDeviceId", "NotionBillsDb", "NotionPaymentsDb", "NotionSnapshotsDb"}
+
+
+def _nulls_on_restore(key):
+    return key not in RESTORE_KEEPS and (key in KNOWN_SETTINGS or key.startswith(SETTING_PREFIXES))
+
+
+def op_restore(store, op):
+    """Restore a backup with sync on. op.rows: {entity: {id: {field: value}}} (IDs already
+    migrated, bill Remaining already mapped to remainingCheckpoint); op.settings: {key: value}."""
+    h = op["hlc"]
+    rows, settings = op.get("rows", {}), op.get("settings", {})
+    for entity in rows:
+        if entity not in RESTORABLE:
+            raise ValueError(f"restore does not write {entity} rows")
+    out = []
+    for entity in RESTORABLE:
+        backup = rows.get(entity, {})
+        for id_, fields in backup.items():
+            for f, v in fields.items():
+                if f != "deleted":
+                    out.append(_rec(entity, id_, f, v, h))
+            out.append(_rec(entity, id_, "deleted", False, h))
+        for id_ in store.ids(entity):
+            if id_ not in backup and store.value(entity, id_, "deleted") is not True:
+                out.append(_rec(entity, id_, "deleted", True, h))
+    for key, v in settings.items():
+        out.append(_rec("setting", key, "value", v, h))
+    for key in store.ids("setting"):
+        if key not in settings and _nulls_on_restore(key) and store.value("setting", key, "value") is not None:
+            out.append(_rec("setting", key, "value", None, h))
+    return _sorted(out)
+
+
 OPS = {
     "markPaid": op_mark_paid,
     "unmarkPaid": op_unmark_paid,
+    "deletePayment": op_delete_payment,
     "setRemaining": op_set_remaining,
+    "restore": op_restore,
 }
 
 

@@ -20,6 +20,7 @@ sys.dont_write_bytecode = True  # keep __pycache__ out of the repo
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fc_bip39 as B  # noqa: E402
+import fc_compact as K  # noqa: E402
 import fc_files as FL  # noqa: E402
 import fc_frame as F  # noqa: E402
 import fc_hlc as H  # noqa: E402
@@ -87,6 +88,39 @@ def extra(pid, bid, period, amount, hlc):
         r("payment", pid, "paidAt", iso(sec), hlc),
         r("payment", pid, "periodKey", period, hlc),
     ]
+
+
+def play(records, ops):
+    """Run ops in order on one device that has merged `records`. Returns the records the ops emitted."""
+    store = G.Store().apply_all(records)
+    out = []
+    for op in ops:
+        emitted = G.run_op(store, op)
+        store.apply_all(emitted)
+        out.extend(emitted)
+    return out
+
+
+def op_mark(bid, period, amount, hlc, kind="Regular"):
+    sec = (H.decode(hlc)[0] - T0) // 1000
+    return {"op": "markPaid", "billId": bid, "periodKey": period, "kind": kind, "amount": amount,
+            "paidAt": iso(sec), "hlc": hlc}
+
+
+def op_unmark(bid, period, hlc, kind="Regular"):
+    return {"op": "unmarkPaid", "billId": bid, "periodKey": period, "kind": kind, "hlc": hlc}
+
+
+def op_remaining(bid, value, hlc, source="app", last_pushed=None):
+    op = {"op": "setRemaining", "billId": bid, "value": value, "source": source, "hlc": hlc}
+    if last_pushed is not None:
+        op["lastPushed"] = last_pushed
+    return op
+
+
+def edit_case(name, records, op, expect, note):
+    """A merge case whose edit runs on a device that has seen every record in `records`."""
+    return merge_case(name, records, expect, note, edit={"seen": list(range(len(records))), "op": op})
 
 
 def rid(bid, period):
@@ -267,6 +301,36 @@ def gen_ids():
     ]:
         f = {"regularPaymentId": I.regular_payment_id, "setAsideId": I.set_aside_id, "paycheckId": I.paycheck_id}[fn]
         add(name, dict({"fn": fn}, **args), expect_error(f, *args.values()))
+
+    for cad in ["Weekly", "Bi-Weekly", "Semi-Monthly", "Monthly", "Irregular", "Quarterly", ""]:
+        add(f"paycheck ID kind for cadence {cad!r}", {"fn": "paycheckIdKind", "cadence": cad},
+            {"kind": I.paycheck_id_kind(cad)},
+            note="Scheduled cadences derive the ID from (source, pay date); Irregular and unknown cadences use "
+                 "a random UUIDv7 so two payouts on one day stay two rows")
+
+    for args in [
+        (BILL_1, P1, 5500, "2026-10-30T15:04:05.000Z", 1),
+        (BILL_1, P1, 5500, "2026-10-30T15:04:05.000Z", 2),
+        (BILL_1, P1, 5500, "", 1),
+        (BILL_2, P2, 4000, "2026-11-13T09:00:00.000Z", 1),
+    ]:
+        add(f"legacy payment ID {args}", {"fn": "legacyPaymentId", "billId": args[0], "periodKey": args[1],
+                                          "amountCents": args[2], "paidAt": args[3], "occurrence": args[4]},
+            {"name": I.name_legacy_payment(*args), "id": I.legacy_payment_id(*args)},
+            note="Used only for extra payments created by the migration (data-model.md 8.3)")
+    for name, args in [
+        ("legacy payment ID rejects a paidAt that is not normalized", (BILL_1, P1, 5500, "2026-10-30 15:04:05", 1)),
+        ("legacy payment ID rejects occurrence 0", (BILL_1, P1, 5500, "", 0)),
+    ]:
+        add(name, {"fn": "legacyPaymentId", "billId": args[0], "periodKey": args[1], "amountCents": args[2],
+                   "paidAt": args[3], "occurrence": args[4]}, expect_error(I.legacy_payment_id, *args))
+    for args in [("2026-10-29", 812345, 1), ("2026-10-29", 812345, 2), ("2026-11-12", 0, 1)]:
+        add(f"legacy balance snapshot ID {args}", {"fn": "legacySnapshotId", "snapshotDate": args[0],
+                                                   "totalCents": args[1], "occurrence": args[2]},
+            {"name": I.name_legacy_snapshot(*args), "id": I.legacy_snapshot_id(*args)})
+    add("legacy balance snapshot ID rejects a bad date",
+        {"fn": "legacySnapshotId", "snapshotDate": "2026-10-32", "totalCents": 1, "occurrence": 1},
+        expect_error(I.legacy_snapshot_id, "2026-10-32", 1, 1))
 
     for old in ["1", "13", "27", "Legacy Bill"]:
         add(f"migrate legacy bill ID {old!r}", {"fn": "migrateBillId", "id": old},
@@ -483,6 +547,19 @@ def gen_phrase():
     messy = "  " + "\n".join(" ".join(x.upper() if i % 2 else x for x in w[j:j + 6]) for i, j in enumerate(range(0, 24, 6))) + "\t"
     cases.append({"name": "decode accepts any case and any whitespace between words",
                   "input": {"fn": "decode", "phrase": messy}, "expected": {"keyHex": K1.hex()}})
+    for name, sep in [("tab", "\t"), ("CR LF", "\r\n"), ("no-break space U+00A0", "\u00a0"),
+                      ("mixed separators", " \t\u00a0\n ")]:
+        cases.append({"name": f"decode accepts {name} between words",
+                      "input": {"fn": "decode", "phrase": sep.join(w)}, "expected": {"keyHex": K1.hex()}})
+    for name, sep in [("em space U+2003", "\u2003"), ("ideographic space U+3000", "\u3000"),
+                      ("vertical tab", "\u000b"), ("form feed", "\u000c")]:
+        p = " ".join(w[:11]) + sep + " ".join(w[11:])
+        cases.append({"name": f"decode does not treat {name} as a separator",
+                      "input": {"fn": "decode", "phrase": p}, "expected": expect_error(B.decode, p),
+                      "note": "Only space, tab, CR, LF and U+00A0 separate words; anything else is part of a word"})
+    p = " ".join(w[:5] + [w[5][:-1] + "\u0130"] + w[6:])
+    cases.append({"name": "decode lowercases only A-Z (non-ASCII capitals are not folded)",
+                  "input": {"fn": "decode", "phrase": p}, "expected": expect_error(B.decode, p)})
     bad_checksum = w[:23] + [B.WORDS[(B.INDEX[w[23]] + 1) % 2048]]
     bad = [
         ("decode rejects a wrong final word (checksum)", " ".join(bad_checksum)),
@@ -564,6 +641,58 @@ def gen_files():
     env("snapshot device must match the hlc's device", dict(good_snap, deviceId=DEV_B), snap_path)
     env("snapshot covers must map device IDs to sequence numbers", dict(good_snap, covers={DEV_A: "3"}), snap_path)
 
+    def raw_env(name, data, path, as_text=True, note=None):
+        """Payload given as bytes: goes through the strict JSON parser first."""
+        try:
+            exp = FL.check_envelope(FL.parse_json_bytes(data), path, VAULT_ID)
+        except FL.FileError as e:
+            exp = {"error": e.code}
+        inp = {"fn": "checkEnvelope", "path": path, "vaultId": VAULT_ID}
+        if as_text:
+            inp["payloadText"] = data.decode("utf-8")
+        else:
+            inp["payloadHex"] = data.hex()
+        add(name, inp, exp, note)
+
+    def chg_text(seq_text="3", extra=""):
+        return ('{"type":"changes","formatVersion":1,"vaultId":"%s","deviceId":"%s","seq":%s,"records":[]%s}'
+                % (VAULT_ID, DEV_A, seq_text, extra)).encode()
+
+    env("integer field written as 3.0 is accepted", dict(good_chg, seq=3.0), chg_path,
+        note="Writers write plain digits; readers accept any number with an integral value")
+    raw_env("integer field written as 3e0 is accepted", chg_text("3e0"), chg_path)
+    raw_env("integer field written as 30e-1 is accepted", chg_text("30e-1"), chg_path)
+    env("boolean in an integer field is malformed", dict(good_chg, seq=True), chg_path)
+    env("string in an integer field is malformed", dict(good_chg, seq="3"), chg_path)
+    env("fraction in an integer field is malformed", dict(good_chg, seq=3.5), chg_path)
+    env("formatVersion 1.0 is accepted", dict(good_chg, formatVersion=1.0), chg_path)
+    env("formatVersion true is malformed, not version 1", dict(good_chg, formatVersion=True), chg_path)
+    env("missing formatVersion is malformed", {k: v for k, v in good_chg.items() if k != "formatVersion"}, chg_path)
+    env("snapshot covers value 7.0 is accepted", dict(good_snap, covers={DEV_A: 3, DEV_B: 7.0}), snap_path)
+    env("snapshot covers value true is malformed", dict(good_snap, covers={DEV_A: 3, DEV_B: True}), snap_path)
+    env("snapshot covers value -1 is malformed", dict(good_snap, covers={DEV_A: -1}), snap_path)
+    raw_env("duplicate object keys are malformed", chg_text("3", ',"seq":3'), chg_path,
+            note="Many parsers keep the last duplicate silently; a reader must detect duplicates")
+    raw_env("duplicate keys inside a record are malformed",
+            chg_text("3").replace(b'"records":[]', b'"records":[{"entity":"bill","entity":"payment"}]'), chg_path)
+    raw_env("an unpaired surrogate escape is malformed", chg_text("3", ',"note":"\\ud800"'), chg_path)
+    raw_env("a paired surrogate escape is fine", chg_text("3", ',"note":"\\ud83d\\ude00"'), chg_path)
+    raw_env("a byte-order mark is malformed", b"\xef\xbb\xbf" + chg_text("3"), chg_path, as_text=False)
+    raw_env("invalid UTF-8 is malformed", chg_text("3").replace(b'"records":[]', b'"records":[],"note":"\xff"'),
+            chg_path, as_text=False)
+    raw_env("NaN is not JSON", chg_text("NaN"), chg_path)
+    raw_env("trailing text after the object is malformed", chg_text("3") + b" x", chg_path)
+    raw_env("whitespace around the object is fine", b" \n" + chg_text("3") + b"\n", chg_path)
+
+    pair_path = "pairing/" + "ab" * 16 + ".pair"
+    good_pair = {"type": "pairing", "formatVersion": 1, "vaultId": VAULT_ID, "generation": 1,
+                 "vaultKey": K1.hex(), "deviceId": DEV_A, "expiresAt": iso(600)}
+    env("valid pairing envelope", good_pair, pair_path)
+    env("pairing generation 1.0 is accepted", dict(good_pair, generation=1.0), pair_path)
+    env("pairing generation true is malformed", dict(good_pair, generation=True), pair_path)
+    env("pairing vault key must be 64 lowercase hex digits", dict(good_pair, vaultKey=K1.hex().upper()), pair_path)
+    env("pairing expiresAt must be a timestamp", dict(good_pair, expiresAt="in ten minutes"), pair_path)
+
     vault = {
         "type": "futurecheck-vault", "formatVersion": 1, "vaultId": VAULT_ID, "createdAt": iso(0),
         "createdBy": DEV_A, "currentGeneration": 1,
@@ -576,6 +705,23 @@ def gen_files():
         except FL.FileError as e:
             exp = {"error": e.code}
         add(name, {"fn": "checkVault", "vault": v}, exp)
+
+    def vlt_text(name, text):
+        try:
+            exp = FL.check_vault(FL.parse_json_bytes(text.encode()))
+        except FL.FileError as e:
+            exp = {"error": e.code}
+        add(name, {"fn": "checkVault", "vaultText": text}, exp)
+
+    gen1 = {"id": 1, "createdAt": iso(0), "keyCheck": F.key_check(K1).hex()}
+    vlt("vault.json formatVersion 1.0 is accepted", dict(vault, formatVersion=1.0))
+    vlt("vault.json formatVersion true is malformed", dict(vault, formatVersion=True))
+    vlt("vault.json currentGeneration 1.0 is accepted", dict(vault, currentGeneration=1.0))
+    vlt("vault.json currentGeneration true is malformed", dict(vault, currentGeneration=True))
+    vlt("vault.json generation id true is malformed", dict(vault, generations=[dict(gen1, id=True)]))
+    vlt("vault.json generation id 1.0 is accepted", dict(vault, generations=[dict(gen1, id=1.0)]))
+    vlt_text("vault.json with a duplicate key is malformed",
+             json.dumps(vault, separators=(",", ":"))[:-1] + ',"currentGeneration":1}')
 
     vlt("valid vault.json", vault)
     vlt("vault.json with an unknown extra field is valid", dict(vault, futureField=True))
@@ -794,15 +940,102 @@ def gen_merge():
         {"remaining": {BILL_1: 850.0}},
         "B's wall clock said 11:00 (before the checkpoint), but its HLC is later, so the payment counts."))
 
+    # ---- checkpoint vs unmark/remark (writer rules, sync-protocol.md 5.3) ----
+    base1000 = bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1000.0)
+    paid_then_statement = base1000 + play(base1000, [op_mark(BILL_1, P2, 100.0, h(100)),
+                                                     op_remaining(BILL_1, 880.0, h(200))])
+    C.append(edit_case(
+        "unmark after a statement balance raises Remaining back", paid_then_statement,
+        op_unmark(BILL_1, P2, h(300)),
+        {"emitted": [r("bill", BILL_1, "remainingCheckpoint", 980.0, h(300)),
+                     r("payment", rid(BILL_1, P2), "deleted", True, h(300))],
+         "remaining": {BILL_1: 980.0}},
+        "Remaining 1000, mark paid 100 (900), statement balance 880 typed (checkpoint absorbs the payment), "
+        "unmark. The payment is at or before the checkpoint, so unmark also raises the checkpoint by its "
+        "amount: 880 + 100 = 980."))
+
+    unmarked = paid_then_statement + play(paid_then_statement, [op_unmark(BILL_1, P2, h(300))])
+    C.append(edit_case(
+        "remark after that unmark subtracts once", unmarked, op_mark(BILL_1, P2, 100.0, h(400)),
+        {"emittedCount": 6, "remaining": {BILL_1: 880.0}},
+        "The re-mark is after the new checkpoint (+300s), so it subtracts: 980 - 100 = 880. Before this rule "
+        "the result was 780 (subtracted twice)."))
+
+    C.append(edit_case(
+        "markPaid on a payment already live writes only amountPaid and paidAt", paid_then_statement,
+        op_mark(BILL_1, P2, 120.0, h(300)),
+        {"emitted": [r("payment", rid(BILL_1, P2), "amountPaid", 120.0, h(300)),
+                     r("payment", rid(BILL_1, P2), "paidAt", iso(300), h(300))],
+         "remaining": {BILL_1: 880.0}},
+        "Writing deleted=false again would move the mark HLC past the checkpoint and subtract a payment the "
+        "checkpoint already includes. The payment stays absorbed, so the amount change does not move Remaining."))
+
+    paid_only = base1000 + play(base1000, [op_mark(BILL_1, P2, 100.0, h(100))])
+    C.append(edit_case(
+        "markPaid on a live payment after the checkpoint changes the amount it subtracts", paid_only,
+        op_mark(BILL_1, P2, 120.0, h(200)),
+        {"emittedCount": 2, "remaining": {BILL_1: 880.0}},
+        "The payment is after the checkpoint, so its new amount counts: 1000 - 120."))
+
+    migrated = bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1145.0) + mark(BILL_1, P1, 55.0, h(0))
+    C.append(edit_case(
+        "unmarking a migrated payment raises Remaining back", migrated, op_unmark(BILL_1, P1, h(100)),
+        {"emitted": [r("bill", BILL_1, "remainingCheckpoint", 1200.0, h(100)),
+                     r("payment", rid(BILL_1, P1), "deleted", True, h(100))],
+         "remaining": {BILL_1: 1200.0}},
+        "Migration stamps the checkpoint and the payment with one HLC, so the payment is absorbed (equal HLC). "
+        "Unmark gives it back: 1145 + 55."))
+
+    clamped_base = bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 100.0)
+    clamped = clamped_base + play(clamped_base, [op_mark(BILL_1, P1, 30.0, h(10)),
+                                                 op_remaining(BILL_1, 50.0, h(20)),
+                                                 op_mark(BILL_1, P2, 60.0, h(30))])
+    C.append(edit_case(
+        "unmark while Remaining is clamped at zero uses the unclamped value", clamped,
+        op_unmark(BILL_1, P1, h(40)),
+        {"emitted": [r("bill", BILL_1, "remainingCheckpoint", 20.0, h(40)),
+                     r("payment", rid(BILL_1, P1), "deleted", True, h(40))],
+         "remaining": {BILL_1: 20.0}},
+        "Checkpoint 50 absorbs the 30 payment; a later 60 payment shows Remaining 0 (unclamped -10). Unmarking "
+        "the 30 gives -10 + 30 = 20, not 0 + 30."))
+
+    with_extra = base1000 + extra(EXTRA_1, BILL_1, P2, 100.0, h(100)) 
+    with_extra = with_extra + play(with_extra, [op_remaining(BILL_1, 850.0, h(200))])
+    C.append(edit_case(
+        "deleting an extra payment absorbed by a checkpoint raises Remaining back", with_extra,
+        {"op": "deletePayment", "paymentId": EXTRA_1, "hlc": h(300)},
+        {"emitted": [r("bill", BILL_1, "remainingCheckpoint", 950.0, h(300)),
+                     r("payment", EXTRA_1, "deleted", True, h(300))],
+         "remaining": {BILL_1: 950.0}},
+        "Same rule for Extra payments."))
+
+    ins_base = bill(BILL_3, h(0), "Home Insurance", 480.0, 600.0, type_="Bills")
+    set_aside_then_cp = ins_base + play(ins_base, [op_mark(BILL_3, P1, 40.0, h(10), kind="SetAside"),
+                                                   op_remaining(BILL_3, 500.0, h(20))])
+    C.append(edit_case(
+        "unmarking a set-aside never writes a checkpoint", set_aside_then_cp,
+        op_unmark(BILL_3, P1, h(30), kind="SetAside"),
+        {"emitted": [r("payment", sid(BILL_3, P1), "deleted", True, h(30))], "remaining": {BILL_3: 500.0}},
+        "Set-asides never count against Remaining, so there is nothing to give back."))
+
+    a_side = base1000 + play(base1000, [op_mark(BILL_1, P2, 100.0, h(100)), op_remaining(BILL_1, 880.0, h(200))])
+    b_side = play(base1000, [{**op_mark(BILL_1, P2, 100.0, h(300, 0, DEV_B))}])
     C.append(merge_case(
-        "a payment remarked after the checkpoint counts again",
-        bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1000.0)
-        + mark(BILL_1, P2, 100.0, h(50))
-        + [r("bill", BILL_1, "remainingCheckpoint", 900.0, h(100))]
-        + [r("payment", rid(BILL_1, P2), "deleted", True, h(150))]
-        + mark(BILL_1, P2, 100.0, h(200)),
-        {"remaining": {BILL_1: 800.0}},
-        "Ordering uses the HLC of the latest mark (the winning deleted=false write), here +200s."))
+        "known limitation: a device that missed the mark re-marks after a checkpoint", a_side + b_side,
+        {"remaining": {BILL_1: 780.0}},
+        "A marks 100 and types statement 880. B, offline and not having seen A's mark, marks the same bill and "
+        "period paid (+300s). B's deleted=false is the latest mark and is after the checkpoint, so the payment "
+        "counts on top of the checkpoint that already includes it: 780, not 880. No per-field rule can tell this "
+        "from a real re-mark; the user corrects it by typing Remaining (sync-protocol.md 5.4)."))
+
+    b_unmark = play(base1000 + mark(BILL_1, P2, 100.0, h(100)), [op_unmark(BILL_1, P2, h(300, 0, DEV_B))])
+    C.append(merge_case(
+        "known limitation: a device that missed the checkpoint unmarks an absorbed payment",
+        a_side + b_unmark,
+        {"remaining": {BILL_1: 880.0}, "live": {"payment": []}},
+        "B saw A's mark but not A's statement 880, so to B the payment is after its checkpoint and unmark writes "
+        "only deleted=true. Merged: the payment is gone but the checkpoint still includes it, so Remaining stays "
+        "880 instead of 980 (sync-protocol.md 5.4)."))
 
     C.append(merge_case(
         "an amount edit after the checkpoint does not move a pre-checkpoint payment",
@@ -880,24 +1113,49 @@ def gen_merge():
         "Payments are not cascaded; apps hide payments of deleted bills."))
 
     restore = h(1000)
-    C.append(merge_case(
-        "restore re-stamps the backup and tombstones rows missing from it",
+    known_to_a = (
         W1
         + bill(BILL_2, h(10, 0, DEV_B), "Contoso Card", 40.0, 900.0)
         + [r("bill", BILL_1, "name", "Woodgrove (renamed)", h(20, 0, DEV_B))]
         + mark(BILL_1, P1, 55.0, h(30))
-        + mark(BILL_1, P2, 60.0, h(900, 0, DEV_B))
-        # Device A restores a backup containing BILL_1 (Remaining 1145) and its P1 payment:
-        + bill(BILL_1, restore, "Woodgrove Rewards", 55.0, 1145.0)
-        + mark(BILL_1, P1, 55.0, restore, paid_at=iso(30))
-        + [r("bill", BILL_2, "deleted", True, restore)]
-        + mark(BILL_1, P3, 60.0, h(1100, 0, DEV_B)),
-        {"live": {"bill": [BILL_1], "payment": sorted([rid(BILL_1, P1), rid(BILL_1, P2), rid(BILL_1, P3)])},
+        + [r("setting", "PayAnchor", "value", "2025-03-27", h(31)),
+           r("setting", "SafeToSpendBuffer", "value", 100.0, h(32)),
+           r("setting", "TypeColor/Cards", "value", "#123456", h(33)),
+           r("setting", "NotionOwnerDeviceId", "value", DEV_A, h(34)),
+           r("setting", "FutureSetting", "value", "kept", h(35, 0, DEV_B)),
+           r("device", DEV_A, "deleted", False, h(1)), r("device", DEV_A, "name", "Windows PC", h(1)),
+           r("device", DEV_B, "deleted", False, h(2, 0, DEV_B)), r("device", DEV_B, "name", "Phone", h(2, 0, DEV_B)),
+           r("budgetGoal", "019a0000-0000-7000-8000-0000000000d1", "deleted", False, h(36, 0, DEV_B))]
+    )
+    later = mark(BILL_1, P2, 60.0, h(900, 0, DEV_B)) + mark(BILL_1, P3, 60.0, h(1100, 0, DEV_B))
+    restore_op = {
+        "op": "restore", "hlc": restore,
+        "rows": {
+            "bill": {BILL_1: {"name": "Woodgrove Rewards", "type": "Cards", "payment": 55.0,
+                              "remainingCheckpoint": 1145.0}},
+            "payment": {rid(BILL_1, P1): {"billId": BILL_1, "kind": "Regular", "periodKey": P1,
+                                          "amountPaid": 55.0, "paidAt": iso(30)}},
+        },
+        "settings": {"PayAnchor": "2025-03-20"},
+    }
+    C.append(merge_case(
+        "restore re-stamps the backup and tombstones rows missing from it",
+        known_to_a + later,
+        {"live": {"bill": [BILL_1], "payment": sorted([rid(BILL_1, P1), rid(BILL_1, P2), rid(BILL_1, P3)]),
+                  "device": sorted([DEV_A, DEV_B]), "budgetGoal": ["019a0000-0000-7000-8000-0000000000d1"]},
          "remaining": {BILL_1: 1085.0},
-         "fields": {("bill", BILL_1): {"name": "Woodgrove Rewards"}}},
-        "A restores at +1000s. BILL_2 is not in the backup, so it is tombstoned. B's offline P2 payment "
-        "(+900s, unknown to A) survives as a row but is before the restore checkpoint, so it does not lower "
-        "Remaining. B's P3 payment after the restore (+1100s) does: 1145 - 60 = 1085."))
+         "fields": {("bill", BILL_1): {"name": "Woodgrove Rewards"},
+                    ("setting", "PayAnchor"): {"value": "2025-03-20"},
+                    ("setting", "SafeToSpendBuffer"): {"value": None},
+                    ("setting", "TypeColor/Cards"): {"value": None},
+                    ("setting", "NotionOwnerDeviceId"): {"value": DEV_A},
+                    ("setting", "FutureSetting"): {"value": "kept"}}},
+        "A restores at +1000s a backup with BILL_1 (Remaining 1145), its P1 payment and PayAnchor. BILL_2 is "
+        "tombstoned. Synced settings missing from the backup are set to null (defaults); Notion connector "
+        "settings, unknown setting keys, device rows and unknown entities are never touched. B's offline P2 "
+        "payment (+900s, unknown to A) survives as a row but is before the restore checkpoint, so it does not "
+        "lower Remaining; B's P3 payment after the restore does: 1145 - 60 = 1085.",
+        edit={"seen": list(range(len(known_to_a))), "op": restore_op}))
 
     C.append(merge_case(
         "settings: last write wins per key, keys are independent", [
@@ -960,6 +1218,52 @@ def gen_merge():
          "live": {"bill": [BILL_1]}},
         "A record needs string entity, id, field and hlc (valid HLC), and a value that is null, boolean, number or "
         "string. Unknown extra keys are ignored. A missing value key is invalid; null must be explicit."))
+
+    odd = ["019a0000-0000-7000-8000-0000000000f1", "019a0000-0000-7000-8000-0000000000f2",
+           "019a0000-0000-7000-8000-0000000000f3"]
+
+    def pay(pid, bid, period, amount, hlc, kind):
+        recs = [r("payment", pid, "amountPaid", amount, hlc), r("payment", pid, "billId", bid, hlc),
+                r("payment", pid, "deleted", False, hlc), r("payment", pid, "periodKey", period, hlc)]
+        if kind != "<absent>":
+            recs.append(r("payment", pid, "kind", kind, hlc))
+        return recs
+
+    C.append(merge_case(
+        "payment kind: missing or wrong type reads as Regular, an unknown string does not count", W1
+        + pay(odd[0], BILL_1, P2, 10.0, h(10), None)
+        + pay(odd[1], BILL_1, P2, 20.0, h(11), 5)
+        + pay(odd[2], BILL_1, P2, 40.0, h(12), "Refund")
+        + pay(EXTRA_1, BILL_1, P2, 80.0, h(13), "<absent>"),
+        {"remaining": {BILL_1: 1090.0}},
+        "kind null, kind 5 and a missing kind are the default Regular (data-model.md 1.2) and count: "
+        "1200 - 10 - 20 - 80 = 1090. kind \"Refund\" is an unknown value and does not count."))
+
+    C.append(merge_case(
+        "set-aside balance ignores payments whose periodKey is not a valid date", INS
+        + mark(BILL_3, P1, 40.0, h(10), kind="SetAside") + mark(BILL_3, P2, 40.0, h(20), kind="SetAside")
+        + pay(odd[0], BILL_3, "2026-13-01", 100.0, h(30), "Regular")
+        + pay(odd[1], BILL_3, 20261112, 50.0, h(31), "Regular")
+        + pay(odd[2], BILL_3, "someday", 40.0, h(32), "SetAside"),
+        {"remaining": {BILL_3: 450.0}, "setAsideBalance": {BILL_3: 80.0}},
+        "Regular payments with an invalid periodKey do not reset the balance and set-asides with one are not "
+        "counted. They still lower Remaining (Regular): 600 - 100 - 50 = 450."))
+
+    irr = [
+        r("incomeSource", INCOME_1, "cadence", "Irregular", h(0)),
+        r("incomeSource", INCOME_1, "deleted", False, h(0)),
+        r("incomeSource", INCOME_1, "name", "Side job", h(0)),
+    ]
+    pc1 = I.uuid7(T0 + 100000, bytes.fromhex("11111111111111111111"))
+    pc2 = I.uuid7(T0 + 105000, bytes.fromhex("22222222222222222222"))
+    for pc, hh, amt in [(pc1, h(100), 120.0), (pc2, h(105, 0, DEV_B), 80.0)]:
+        irr += [r("paycheck", pc, "amount", amt, hh), r("paycheck", pc, "deleted", False, hh),
+                r("paycheck", pc, "incomeSourceId", INCOME_1, hh), r("paycheck", pc, "payDate", "2026-11-20", hh)]
+    C.append(merge_case(
+        "two payouts on one day from an Irregular source stay two rows", irr,
+        {"live": {"incomeSource": [INCOME_1], "paycheck": sorted([pc1, pc2])}},
+        "Irregular actuals use random UUIDv7 IDs (like Extra payments); only scheduled cadences derive the ID "
+        "from (source, pay date)."))
 
     # ---- writer-side rules ---------------------------------------------
     base = bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1000.0)
@@ -1053,6 +1357,90 @@ def gen_merge():
           "for every delivery order of input.records (plus the emitted records, for cases with an edit).", C)
 
 
+def gen_compaction():
+    cases = []
+
+    def add(name, inp, exp, note=None):
+        c = {"name": name, "input": inp, "expected": exp}
+        if note:
+            c["note"] = note
+        cases.append(c)
+
+    def snap(sec, dev, covers, age_ok=True):
+        return {"hlc": h(sec, 0, dev), "covers": covers, "ageOk": age_ok}
+
+    def plan(name, cursors, files, snaps, note=None):
+        add(name, {"fn": "readPlan", "cursors": cursors, "files": files,
+                   "snapshots": [{"hlc": x["hlc"], "covers": x["covers"]} for x in snaps]},
+            K.read_plan(cursors, files, snaps), note)
+
+    rng = lambda a, b: list(range(a, b + 1))  # noqa: E731
+    plan("fresh join with no snapshots reads every file", {}, {DEV_A: rng(1, 3), DEV_B: rng(1, 2)}, [])
+    plan("join after compaction merges the snapshot that covers the missing files", {},
+         {DEV_A: rng(41, 42), DEV_B: rng(1, 5)}, [snap(500, DEV_B, {DEV_A: 40, DEV_B: 3})])
+    plan("a device that compacted and went quiet: the snapshot is merged although no higher file exists",
+         {DEV_B: 10}, {DEV_B: []}, [snap(500, DEV_A, {DEV_A: 7, DEV_B: 40})],
+         note="B deleted files 11-40 after a snapshot covered them and wrote nothing since. A reader at "
+              "cursor 10 finds no file 11 and no higher file; it must still merge the snapshot.")
+    plan("concurrent snapshots: the older one is the one that covers the gap",
+         {DEV_A: 12, DEV_B: 5}, {DEV_A: rng(13, 20), DEV_B: rng(11, 12)},
+         [snap(600, DEV_A, {DEV_A: 20, DEV_B: 5}), snap(590, DEV_B, {DEV_A: 12, DEV_B: 10})],
+         note="Reading only the newest snapshot would never fill B's gap 6-10; readers consider every listed "
+              "snapshot.")
+    plan("a gap no snapshot covers is reported", {DEV_A: 0}, {DEV_A: [1, 2, 4]}, [])
+    plan("two snapshots fill two gaps", {DEV_A: 0}, {DEV_A: rng(1, 3) + rng(11, 13) + [21, 22]},
+         [snap(300, DEV_A, {DEV_A: 10}), snap(400, DEV_A, {DEV_A: 20})])
+    plan("a snapshot is not required when every file is present", {DEV_A: 0}, {DEV_A: rng(1, 3)},
+         [snap(300, DEV_B, {DEV_A: 3})],
+         note="A reader MAY merge it anyway; cursorsAfter is the same either way.")
+
+    day = K.DAY_MS
+    for name, args in [
+        ("snapshot age: both clocks agree it is 8 days old", (T0, T0 + 8 * day, T0, T0 + 8 * day)),
+        ("snapshot age: exactly 7 days by both clocks", (T0, T0 + 7 * day, T0, T0 + 7 * day)),
+        ("snapshot age: the local clock is 6 days ahead, the provider says 2 days", (T0, T0 + 8 * day, T0, T0 + 2 * day)),
+        ("snapshot age: provider time unavailable", (T0, T0 + 30 * day, None, None)),
+        ("snapshot age: the local clock is behind", (T0, T0 + 1 * day, T0, T0 + 9 * day)),
+    ]:
+        add(name, {"fn": "snapshotAgeOk", "snapshotWallMs": args[0], "localNowMs": args[1],
+                   "serverCreatedMs": args[2], "serverNowMs": args[3]}, {"ok": K.snapshot_age_ok(*args)})
+
+    def del_files(name, me, seqs, snaps, note=None):
+        add(name, {"fn": "deletableChangeFiles", "deviceId": me, "seqs": seqs, "snapshots": snaps},
+            {"deletable": K.deletable_change_files(me, seqs, snaps)}, note)
+
+    del_files("own files covered by an old enough snapshot", DEV_A, rng(1, 5), [snap(100, DEV_B, {DEV_A: 3})])
+    del_files("nothing is deleted while the covering snapshot is too young", DEV_A, rng(1, 5),
+              [snap(100, DEV_B, {DEV_A: 3}, age_ok=False)])
+    s_x = snap(600, DEV_A, {DEV_A: 20, DEV_B: 5})
+    s_y = snap(590, DEV_B, {DEV_A: 12, DEV_B: 10})
+    del_files("a newer snapshot that covers less blocks deletion", DEV_B, rng(1, 12), [s_x, s_y],
+              note="S_Y covers B's 6-10 but the newer S_X does not, so 6-10 stay; 1-5 are covered by both.")
+    s_z = snap(700, DEV_C, {DEV_A: 20, DEV_B: 12}, age_ok=False)
+    del_files("once only dominating snapshots remain, the files can go", DEV_B, rng(1, 12), [s_y, s_z],
+              note="11-12 are covered only by S_Z, which is not old enough yet.")
+
+    def del_snaps(name, snaps, note=None):
+        add(name, {"fn": "deletableSnapshots", "snapshots": snaps}, {"deletable": K.deletable_snapshots(snaps)}, note)
+
+    del_snaps("the two newest snapshots are never deleted", [s_x, s_y])
+    del_snaps("an older snapshot dominated by a kept one can be deleted",
+              [snap(100, DEV_A, {DEV_A: 3, DEV_B: 2}), snap(200, DEV_A, {DEV_A: 5, DEV_B: 4}),
+               snap(300, DEV_B, {DEV_A: 6, DEV_B: 9})])
+    del_snaps("an older snapshot that covers more for some device is kept",
+              [snap(100, DEV_A, {DEV_A: 3, DEV_C: 8}), snap(200, DEV_A, {DEV_A: 5, DEV_B: 4}),
+               snap(300, DEV_B, {DEV_A: 6, DEV_B: 9})],
+              note="Neither kept snapshot covers C up to 8.")
+    del_snaps("nothing is deleted while the newest snapshot is too young",
+              [snap(100, DEV_A, {DEV_A: 3}), snap(200, DEV_A, {DEV_A: 5}), snap(300, DEV_B, {DEV_A: 6}, age_ok=False)])
+    del_snaps("concurrent snapshots resolved by a later dominating one",
+              [s_y, s_x, dict(s_z, ageOk=True)],
+              note="S_Z merged both, so it dominates S_Y, which can go; S_X is one of the two newest and stays.")
+
+    write("compaction.json", "Reading with snapshots and compaction rules (sync-protocol.md sections 10.2 and 11).",
+          cases)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     gen_hlc()
@@ -1061,6 +1449,7 @@ def main():
     gen_phrase()
     gen_files()
     gen_merge()
+    gen_compaction()
 
 
 if __name__ == "__main__":
