@@ -697,6 +697,24 @@ def gen_files():
     env("snapshot hlc must match the file name", dict(good_snap, hlc=h(601)), snap_path)
     env("snapshot device must match the hlc's device", dict(good_snap, deviceId=DEV_B), snap_path)
     env("snapshot covers must map device IDs to sequence numbers", dict(good_snap, covers={DEV_A: "3"}), snap_path)
+    other_vault = "019a0000-0000-7000-8000-00000000fa02"
+    env("check order: wrong vaultId and wrong deviceId reports vaultMismatch",
+        dict(good_chg, vaultId=other_vault, deviceId=DEV_B), chg_path,
+        note="Envelope checks run in table order (sync-protocol.md 6.3): vaultId (4) before deviceId (5)")
+    env("check order: wrong vaultId and wrong deviceId in a snapshot reports vaultMismatch",
+        dict(good_snap, vaultId=other_vault, deviceId=DEV_B), snap_path)
+    env("check order: wrong type and wrong formatVersion reports typeMismatch",
+        dict(good_chg, type="snapshot", formatVersion=2), chg_path)
+    env("check order: wrong formatVersion and wrong vaultId reports unsupportedFormat",
+        dict(good_chg, formatVersion=2, vaultId=other_vault), chg_path)
+    env("check order: wrong deviceId and wrong seq reports deviceMismatch",
+        dict(good_chg, deviceId=DEV_B, seq=4), chg_path)
+    env("check order: wrong seq and records not an array reports seqMismatch",
+        dict(good_chg, seq=4, records={}), chg_path)
+    env("check order: snapshot with wrong deviceId and wrong hlc reports deviceMismatch",
+        dict(good_snap, deviceId=DEV_B, hlc=h(601)), snap_path)
+    env("check order: snapshot with wrong hlc and bad covers reports hlcMismatch",
+        dict(good_snap, hlc=h(601), covers={DEV_A: True}), snap_path)
 
     def raw_env(name, data, path, as_text=True, note=None):
         """Payload given as bytes: goes through the strict JSON parser first."""
@@ -1321,6 +1339,50 @@ def gen_merge():
             name, full_settings, {"fields": {("setting", k): {"value": v} for k, v in expect_fields.items()}}, note,
             edit={"seen": list(range(len(full_settings))),
                   "op": {"op": "restore", "hlc": h(1000), "rows": plan_rows, "settings": settings}}))
+
+    tomb_state = (W1 + bill(BILL_2, h(10), "Contoso Card", 40.0, 900.0)
+                  + [r("bill", BILL_2, "deleted", True, h(20, 0, DEV_B))]
+                  + bill(BILL_3, h(30), "Home Insurance", 480.0, 600.0, type_="Bills"))
+    C.append(merge_case(
+        "restore does not re-tombstone a row that is already deleted", tomb_state,
+        {"emitted": [r("bill", BILL_1, f, v, h(1000)) for f, v in
+                     [("deleted", False), ("name", "Woodgrove Rewards"), ("payment", 55.0),
+                      ("remainingCheckpoint", 1145.0), ("type", "Cards")]]
+         + [r("bill", BILL_3, "deleted", True, h(1000))],
+         "live": {"bill": [BILL_1]},
+         "fields": {("bill", BILL_2): {"deleted": True}}},
+        "BILL_2 is already tombstoned (by B at +20s) and BILL_3 is live; neither is in the backup. The restore "
+        "writes deleted=true only for BILL_3. A row whose winning deleted value is already true gets no new "
+        "record (sync-protocol.md 12.3), so B's tombstone keeps its HLC.",
+        edit={"seen": list(range(len(tomb_state))),
+              "op": {"op": "restore", "hlc": h(1000), "rows": plan_rows, "settings": {}}}))
+
+    revive_state = W1 + [r("bill", BILL_1, "deleted", True, h(20, 0, DEV_B))]
+    C.append(merge_case(
+        "restore brings back a deleted row that is in the backup", revive_state,
+        {"emittedCount": 5, "live": {"bill": [BILL_1]}},
+        "The backup has BILL_1, which is tombstoned locally: the restore writes deleted=false with the rest.",
+        edit={"seen": list(range(len(revive_state))),
+              "op": {"op": "restore", "hlc": h(1000), "rows": plan_rows, "settings": {}}}))
+
+    dead_bill = (bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1145.0) + mark(BILL_1, P1, 55.0, h(0))
+                 + [r("bill", BILL_1, "deleted", True, h(50))])
+    C.append(merge_case(
+        "unmark on a deleted bill writes only the payment tombstone", dead_bill,
+        {"emitted": [r("payment", rid(BILL_1, P1), "deleted", True, h(100))],
+         "live": {"bill": [], "payment": []}, "remaining": {},
+         "fields": {("bill", BILL_1): {"remainingCheckpoint": 1145.0}}},
+        "The payment is absorbed (same HLC as the checkpoint), but its bill is not live, so no checkpoint is "
+        "written: unmark raises a checkpoint only for a live bill (sync-protocol.md 5.3). The bill keeps "
+        "checkpoint 1145, so undeleting it later shows 1145, not 1200.",
+        edit={"seen": list(range(len(dead_bill))), "op": op_unmark(BILL_1, P1, h(100))}))
+
+    pending_bill = ([r("bill", BILL_1, "remainingCheckpoint", 1145.0, h(0))] + mark(BILL_1, P1, 55.0, h(0)))
+    C.append(merge_case(
+        "unmark when the bill's create has not arrived writes only the payment tombstone", pending_bill,
+        {"emitted": [r("payment", rid(BILL_1, P1), "deleted", True, h(100))], "remaining": {}},
+        "A pending bill (no deleted record yet) is not live either.",
+        edit={"seen": list(range(len(pending_bill))), "op": op_unmark(BILL_1, P1, h(100))}))
 
     restore_settings_case(
         "restore ignores out-of-range money in a backup setting",

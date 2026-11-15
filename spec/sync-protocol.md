@@ -346,6 +346,11 @@ if the payment's kind counts against Remaining (Regular or Extra, data-model.md 
     emit bill.remainingCheckpoint = max(0, u + cents(amountPaid)) / 100 at the same hlc
 ```
 
+If the bill is not live (deleted, or pending because its create has not arrived), unmark writes only
+`payment.deleted = true` and leaves the checkpoint as it is; undeleting the bill later shows that
+checkpoint unchanged (fixtures: "unmark on a deleted bill...", "unmark when the bill's create has not
+arrived..."). The rule also does nothing for an absorbed SetAside or an unknown kind.
+
 The new checkpoint uses the unclamped value, so a Remaining that was showing 0 because of an
 overpayment comes back correctly (fixture: "unmark while Remaining is clamped at zero..."). Writing
 the checkpoint at `hlc` absorbs every payment this device currently counts, which is correct because
@@ -492,7 +497,9 @@ records (`data-model.md` section 1.1).
 **Pairing file**: section 9.
 
 Envelope checks, after decryption and before merging, run in this order; the first failure is
-reported (fixtures: `files.json`, `checkEnvelope`):
+reported, so a payload wrong in several ways reports the lowest-numbered check (for example a wrong
+`vaultId` and a wrong `deviceId` is `vaultMismatch`). Fixtures: `files.json`, `checkEnvelope`,
+including the "check order: ..." cases.
 
 | # | Check | Error |
 |---|---|---|
@@ -976,7 +983,11 @@ Design section 6.5: restore means "make every device look like this backup". Fix
      every field of every row in the backup (including fields equal to the current value: a restore
      re-stamps everything) plus `deleted: false`;
    - for the same five entities: `deleted: true` for every row this device knows that is not in the
-     backup and is not already tombstoned (live or pending rows);
+     backup and is not already tombstoned (live or pending rows). A row whose winning `deleted` value
+     is already `true` gets **no** record, so its existing tombstone keeps its HLC; a row that is in the
+     backup but tombstoned locally comes back through the `deleted: false` above. Fixtures:
+     `merge.json`, "restore does not re-tombstone a row that is already deleted", "restore brings
+     back a deleted row that is in the backup";
    - every **plan setting** the mapping produced: `PayAnchor`, `EarlyStart`, `SafeToSpendBuffer`,
      `ReminderDaysBefore` and `TypeColor/<type>` keys;
    - `value: null` for every plan setting this device knows that the mapping did not produce and that
