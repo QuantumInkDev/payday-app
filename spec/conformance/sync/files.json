@@ -1551,6 +1551,79 @@
       }
     },
     {
+      "name": "3.0000000000000001 is integral once parsed to binary64",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3.0000000000000001,\"records\":[]}"
+      },
+      "expected": {
+        "ignoredRecords": []
+      },
+      "note": "Integral is decided on the binary64 value the number parses to, which is exactly 3"
+    },
+    {
+      "name": "2.9999999999999999 is integral once parsed to binary64",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":2.9999999999999999,\"records\":[]}"
+      },
+      "expected": {
+        "ignoredRecords": []
+      }
+    },
+    {
+      "name": "3.000000000001 is not integral",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3.000000000001,\"records\":[]}"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "an integer above 2^53 - 1 is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":9007199254740993,\"records\":[]}"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "2^53 - 1 is a valid integer (here it is just the wrong seq)",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":9007199254740991,\"records\":[]}"
+      },
+      "expected": {
+        "error": "seqMismatch"
+      }
+    },
+    {
+      "name": "1e400 overflows binary64 and is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":1e400,\"records\":[]}"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
       "name": "trailing text after the object is malformed",
       "input": {
         "fn": "checkEnvelope",

@@ -12,14 +12,16 @@ def _cov(s, d):
     return s["covers"].get(d, 0)
 
 
-def read_plan(cursors, files, snapshots):
+def read_plan(cursors, files, snapshots, unreadable=None):
     """Which snapshots a reader must merge and which change files it reads, in one sync.
 
-    cursors: {deviceId: highest contiguous seq merged}; files: {deviceId: [listed seqs]}.
+    cursors: {deviceId: highest contiguous seq merged}; files: {deviceId: [listed seqs]};
+    unreadable: {deviceId: [listed seqs that failed to open in this sync]}, treated as not listed.
     Returns mergeSnapshots (sorted HLCs), readFiles ({device: [seqs]}), cursorsAfter, gaps.
     """
     cur = {d: c for d, c in cursors.items()}
-    present = {d: set(v) for d, v in files.items()}
+    bad = {d: set(v) for d, v in (unreadable or {}).items()}
+    present = {d: set(v) - bad.get(d, set()) for d, v in files.items()}
     devices = set(cur) | set(present) | {d for s in snapshots for d in s["covers"]}
     for d in devices:
         cur.setdefault(d, 0)
@@ -49,11 +51,13 @@ def read_plan(cursors, files, snapshots):
     }
 
 
-def snapshot_age_ok(snapshot_wall_ms, local_now_ms, server_created_ms, server_now_ms):
-    """A snapshot is old enough to compact against only if both clocks say 7 days have passed."""
-    if server_created_ms is None or server_now_ms is None:
+def snapshot_age_ok(first_seen_local_ms, local_now_ms, server_created_ms, server_now_ms):
+    """Old enough to compact against: 7 days since this device first listed the snapshot (local
+    clock only) and 7 days since the provider created the file (provider clock only). The snapshot's
+    own HLC wall time is not used, so a writer with a skewed clock cannot stall or rush compaction."""
+    if None in (first_seen_local_ms, server_created_ms, server_now_ms):
         return False
-    return (local_now_ms - snapshot_wall_ms >= MIN_AGE_MS
+    return (local_now_ms - first_seen_local_ms >= MIN_AGE_MS
             and server_now_ms - server_created_ms >= MIN_AGE_MS)
 
 

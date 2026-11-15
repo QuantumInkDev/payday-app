@@ -1760,7 +1760,7 @@
       }
     },
     {
-      "name": "a checkpoint set after an offline payment absorbs it",
+      "name": "known limitation: a checkpoint set after an offline payment absorbs it",
       "note": "B paid 100 offline (HLC +100s). A, not having seen it, typed a statement balance of 950 (HLC +200s). The checkpoint is later, so the payment is treated as already reflected in 950.",
       "input": {
         "fn": "merge",
@@ -6131,6 +6131,1229 @@
             "field": "value",
             "value": null,
             "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "known limitation: unmarking a payment the restore never saw raises Remaining",
+      "note": "Continues the restore case. B (now synced) unmarks its P2 payment (+900s). P2 is at or before the restore checkpoint (+1000s), so it counts as absorbed and unmark raises the checkpoint by 60. But the restore never knew P2, so P2 had never lowered Remaining: the correct result is 1085, not 1145 (sync-protocol.md 5.4).",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ede910-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "name",
+            "value": "Contoso Card",
+            "hlc": "01a1d9ede910-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "payment",
+            "value": 40.0,
+            "hlc": "01a1d9ede910-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "remainingCheckpoint",
+            "value": 900.0,
+            "hlc": "01a1d9ede910-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9ede910-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove (renamed)",
+            "hlc": "01a1d9ee1020-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "amountPaid",
+            "value": 55.0,
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "paidAt",
+            "value": "2026-11-14T12:00:30.000Z",
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "periodKey",
+            "value": "2026-10-29",
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9ee3b18-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9ee3f00-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9ee42e8-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "NotionOwnerDeviceId",
+            "field": "value",
+            "value": "0a0a0a0a0a0a0a0a",
+            "hlc": "01a1d9ee46d0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "FutureSetting",
+            "field": "value",
+            "value": "kept",
+            "hlc": "01a1d9ee4ab8-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "device",
+            "id": "0a0a0a0a0a0a0a0a",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc5e8-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "device",
+            "id": "0a0a0a0a0a0a0a0a",
+            "field": "name",
+            "value": "Windows PC",
+            "hlc": "01a1d9edc5e8-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "device",
+            "id": "0b0b0b0b0b0b0b0b",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc9d0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "device",
+            "id": "0b0b0b0b0b0b0b0b",
+            "field": "name",
+            "value": "Phone",
+            "hlc": "01a1d9edc9d0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "budgetGoal",
+            "id": "019a0000-0000-7000-8000-0000000000d1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ee4ea0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "amountPaid",
+            "value": 60.0,
+            "hlc": "01a1d9fb7da0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9fb7da0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fb7da0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9fb7da0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "paidAt",
+            "value": "2026-11-14T12:15:00.000Z",
+            "hlc": "01a1d9fb7da0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "periodKey",
+            "value": "2026-11-12",
+            "hlc": "01a1d9fb7da0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "amountPaid",
+            "value": 60.0,
+            "hlc": "01a1d9fe8ae0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9fe8ae0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fe8ae0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9fe8ae0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "paidAt",
+            "value": "2026-11-14T12:18:20.000Z",
+            "hlc": "01a1d9fe8ae0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "periodKey",
+            "value": "2026-11-26",
+            "hlc": "01a1d9fe8ae0-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "amountPaid",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "paidAt",
+            "value": "2026-11-14T12:00:30.000Z",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "periodKey",
+            "value": "2026-10-29",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-20",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53
+          ],
+          "op": {
+            "op": "unmarkPaid",
+            "billId": "019a0000-0000-7000-8000-0000000000b1",
+            "periodKey": "2026-11-12",
+            "kind": "Regular",
+            "hlc": "01a1da001180-0000-0b0b0b0b0b0b0b0b"
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            },
+            "019a0000-0000-7000-8000-0000000000b2": {
+              "deleted": true,
+              "name": "Contoso Card",
+              "payment": 40.0,
+              "remainingCheckpoint": 900.0,
+              "type": "Cards"
+            }
+          },
+          "budgetGoal": {
+            "019a0000-0000-7000-8000-0000000000d1": {
+              "deleted": false
+            }
+          },
+          "device": {
+            "0a0a0a0a0a0a0a0a": {
+              "deleted": false,
+              "name": "Windows PC"
+            },
+            "0b0b0b0b0b0b0b0b": {
+              "deleted": false,
+              "name": "Phone"
+            }
+          },
+          "payment": {
+            "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5": {
+              "amountPaid": 60.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": false,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:18:20.000Z",
+              "periodKey": "2026-11-26"
+            },
+            "594ced47-4d2d-5e0b-bd50-662365bb214c": {
+              "amountPaid": 55.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": false,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:00:30.000Z",
+              "periodKey": "2026-10-29"
+            },
+            "92c8e9ed-5f91-50a0-b203-103ace1a06d1": {
+              "amountPaid": 60.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": true,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:15:00.000Z",
+              "periodKey": "2026-11-12"
+            }
+          },
+          "setting": {
+            "FutureSetting": {
+              "value": "kept"
+            },
+            "NotionOwnerDeviceId": {
+              "value": "0a0a0a0a0a0a0a0a"
+            },
+            "PayAnchor": {
+              "value": "2025-03-20"
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "budgetGoal": [
+            "019a0000-0000-7000-8000-0000000000d1"
+          ],
+          "device": [
+            "0a0a0a0a0a0a0a0a",
+            "0b0b0b0b0b0b0b0b"
+          ],
+          "payment": [
+            "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "594ced47-4d2d-5e0b-bd50-662365bb214c"
+          ],
+          "setting": [
+            "FutureSetting",
+            "NotionOwnerDeviceId",
+            "PayAnchor",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1da001180-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1da001180-0000-0b0b0b0b0b0b0b0b"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore never writes or clears the Notion connector settings",
+      "note": "The backup holds a dead owner device ID, an old Bills database ID, a null Payments database ID and no Snapshots database ID, plus per-device keys. None of it is written: the connector keeps working. Only the bill (4 fields + deleted) and PayAnchor are written.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "NotionOwnerDeviceId",
+            "field": "value",
+            "value": "0a0a0a0a0a0a0a0a",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "NotionBillsDb",
+            "field": "value",
+            "value": "00000000-0000-0000-0000-00000000b0b1",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "NotionPaymentsDb",
+            "field": "value",
+            "value": "00000000-0000-0000-0000-00000000b0b2",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "PayAnchor": "2025-03-20",
+              "NotionOwnerDeviceId": "0d0d0d0d0d0d0d0d",
+              "NotionBillsDb": "00000000-0000-0000-0000-0000000000a1",
+              "NotionPaymentsDb": null,
+              "Theme": "Dark",
+              "LastNotionSync": "2026-11-14T12:00:00.000Z"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "NotionBillsDb": {
+              "value": "00000000-0000-0000-0000-00000000b0b1"
+            },
+            "NotionOwnerDeviceId": {
+              "value": "0a0a0a0a0a0a0a0a"
+            },
+            "NotionPaymentsDb": {
+              "value": "00000000-0000-0000-0000-00000000b0b2"
+            },
+            "PayAnchor": {
+              "value": "2025-03-20"
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "NotionBillsDb",
+            "NotionOwnerDeviceId",
+            "NotionPaymentsDb",
+            "PayAnchor"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-20",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore maps legacy backup settings",
+      "note": "A legacy backup stores every setting as text and the type colours as one TypeColors JSON object. TypeColors becomes one TypeColor/<type> key per valid entry (uppercased; 'red' is not #RRGGBB and is dropped). Loans is not in the backup, so its colour resets (null). EarlyStart 'True' becomes true, the number and integer strings become numbers. SchemaVersion and Theme are per-device and are not written (data-model.md 8.5).",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": false,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "PayAnchor": "2025-03-20",
+              "EarlyStart": "True",
+              "TypeColors": "{\"Cards\":\"#fd79a8\",\"Gym\":\"#00B894\",\"Bad\":\"red\"}",
+              "SafeToSpendBuffer": "75.5",
+              "ReminderDaysBefore": "3",
+              "SchemaVersion": "2",
+              "Theme": "Light"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": true
+            },
+            "PayAnchor": {
+              "value": "2025-03-20"
+            },
+            "ReminderDaysBefore": {
+              "value": 3
+            },
+            "SafeToSpendBuffer": {
+              "value": 75.5
+            },
+            "TypeColor/Cards": {
+              "value": "#FD79A8"
+            },
+            "TypeColor/Gym": {
+              "value": "#00B894"
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Gym",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-20",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 3,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 75.5,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#FD79A8",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Gym",
+            "field": "value",
+            "value": "#00B894",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "known limitation: unmarking an absorbed payment also absorbs another device's unmerged payment",
+      "note": "A marks 100, types 880, then unmarks (+300s), raising the checkpoint to 980 at +300s. B's offline 50 payment (+250s), which A had not merged, is now before the checkpoint and absorbed: 980 instead of 930 (sync-protocol.md 5.4).",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1000.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "amountPaid",
+            "value": 100.0,
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "paidAt",
+            "value": "2026-11-14T12:01:40.000Z",
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "periodKey",
+            "value": "2026-11-12",
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 880.0,
+            "hlc": "01a1d9f0cf40-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "amountPaid",
+            "value": 50.0,
+            "hlc": "01a1d9f19290-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9f19290-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9f19290-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9f19290-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "paidAt",
+            "value": "2026-11-14T12:04:10.000Z",
+            "hlc": "01a1d9f19290-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "payment",
+            "id": "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5",
+            "field": "periodKey",
+            "value": "2026-11-26",
+            "hlc": "01a1d9f19290-0000-0b0b0b0b0b0b0b0b"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "op": {
+            "op": "unmarkPaid",
+            "billId": "019a0000-0000-7000-8000-0000000000b1",
+            "periodKey": "2026-11-12",
+            "kind": "Regular",
+            "hlc": "01a1d9f255e0-0000-0a0a0a0a0a0a0a0a"
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 980.0,
+              "type": "Cards"
+            }
+          },
+          "payment": {
+            "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5": {
+              "amountPaid": 50.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": false,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:04:10.000Z",
+              "periodKey": "2026-11-26"
+            },
+            "92c8e9ed-5f91-50a0-b203-103ace1a06d1": {
+              "amountPaid": 100.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": true,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:01:40.000Z",
+              "periodKey": "2026-11-12"
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "payment": [
+            "217e9b2a-1b72-54a0-9061-6c9a1da5d6e5"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 980.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 980.0,
+            "hlc": "01a1d9f255e0-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9f255e0-0000-0a0a0a0a0a0a0a0a"
           }
         ]
       }

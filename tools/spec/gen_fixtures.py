@@ -681,6 +681,13 @@ def gen_files():
     raw_env("invalid UTF-8 is malformed", chg_text("3").replace(b'"records":[]', b'"records":[],"note":"\xff"'),
             chg_path, as_text=False)
     raw_env("NaN is not JSON", chg_text("NaN"), chg_path)
+    raw_env("3.0000000000000001 is integral once parsed to binary64", chg_text("3.0000000000000001"), chg_path,
+            note="Integral is decided on the binary64 value the number parses to, which is exactly 3")
+    raw_env("2.9999999999999999 is integral once parsed to binary64", chg_text("2.9999999999999999"), chg_path)
+    raw_env("3.000000000001 is not integral", chg_text("3.000000000001"), chg_path)
+    raw_env("an integer above 2^53 - 1 is malformed", chg_text("9007199254740993"), chg_path)
+    raw_env("2^53 - 1 is a valid integer (here it is just the wrong seq)", chg_text("9007199254740991"), chg_path)
+    raw_env("1e400 overflows binary64 and is malformed", chg_text("1e400"), chg_path)
     raw_env("trailing text after the object is malformed", chg_text("3") + b" x", chg_path)
     raw_env("whitespace around the object is fine", b" \n" + chg_text("3") + b"\n", chg_path)
 
@@ -919,7 +926,7 @@ def gen_merge():
 
     pay_b = mark(BILL_1, P2, 100.0, h(100, 0, DEV_B))
     C.append(merge_case(
-        "a checkpoint set after an offline payment absorbs it", bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1000.0)
+        "known limitation: a checkpoint set after an offline payment absorbs it", bill(BILL_1, h(0), "Woodgrove Rewards", 55.0, 1000.0)
         + pay_b + [r("bill", BILL_1, "remainingCheckpoint", 950.0, h(200, 0, DEV_A))],
         {"remaining": {BILL_1: 950.0}},
         "B paid 100 offline (HLC +100s). A, not having seen it, typed a statement balance of 950 (HLC +200s). "
@@ -1157,6 +1164,78 @@ def gen_merge():
         "lower Remaining; B's P3 payment after the restore does: 1145 - 60 = 1085.",
         edit={"seen": list(range(len(known_to_a))), "op": restore_op}))
 
+    restored = known_to_a + later + play(known_to_a, [restore_op])
+    C.append(merge_case(
+        "known limitation: unmarking a payment the restore never saw raises Remaining", restored,
+        {"emittedCount": 2, "remaining": {BILL_1: 1145.0}},
+        "Continues the restore case. B (now synced) unmarks its P2 payment (+900s). P2 is at or before the restore "
+        "checkpoint (+1000s), so it counts as absorbed and unmark raises the checkpoint by 60. But the restore "
+        "never knew P2, so P2 had never lowered Remaining: the correct result is 1085, not 1145 "
+        "(sync-protocol.md 5.4).",
+        edit={"seen": list(range(len(restored))), "op": op_unmark(BILL_1, P2, h(1200, 0, DEV_B))}))
+
+    plan_rows = {"bill": {BILL_1: {"name": "Woodgrove Rewards", "type": "Cards", "payment": 55.0,
+                                   "remainingCheckpoint": 1145.0}}}
+    notion_state = W1 + [
+        r("setting", "NotionOwnerDeviceId", "value", DEV_A, h(5)),
+        r("setting", "NotionBillsDb", "value", "00000000-0000-0000-0000-00000000b0b1", h(5)),
+        r("setting", "NotionPaymentsDb", "value", "00000000-0000-0000-0000-00000000b0b2", h(5)),
+    ]
+    C.append(merge_case(
+        "restore never writes or clears the Notion connector settings", notion_state,
+        {"emittedCount": 6,
+         "fields": {("setting", "NotionOwnerDeviceId"): {"value": DEV_A},
+                    ("setting", "NotionBillsDb"): {"value": "00000000-0000-0000-0000-00000000b0b1"},
+                    ("setting", "NotionPaymentsDb"): {"value": "00000000-0000-0000-0000-00000000b0b2"},
+                    ("setting", "PayAnchor"): {"value": "2025-03-20"}}},
+        "The backup holds a dead owner device ID, an old Bills database ID, a null Payments database ID and no "
+        "Snapshots database ID, plus per-device keys. None of it is written: the connector keeps working. Only "
+        "the bill (4 fields + deleted) and PayAnchor are written.",
+        edit={"seen": list(range(len(notion_state))),
+              "op": {"op": "restore", "hlc": h(1000), "rows": plan_rows,
+                     "settings": {"PayAnchor": "2025-03-20", "NotionOwnerDeviceId": "0d0d0d0d0d0d0d0d",
+                                  "NotionBillsDb": "00000000-0000-0000-0000-0000000000a1",
+                                  "NotionPaymentsDb": None, "Theme": "Dark", "LastNotionSync": iso(0)}}}))
+
+    color_state = W1 + [
+        r("setting", "TypeColor/Cards", "value", "#123456", h(5)),
+        r("setting", "TypeColor/Loans", "value", "#6C5CE7", h(5)),
+        r("setting", "EarlyStart", "value", False, h(5)),
+    ]
+    C.append(merge_case(
+        "restore maps legacy backup settings", color_state,
+        {"fields": {("setting", "TypeColor/Cards"): {"value": "#FD79A8"},
+                    ("setting", "TypeColor/Gym"): {"value": "#00B894"},
+                    ("setting", "TypeColor/Loans"): {"value": None},
+                    ("setting", "EarlyStart"): {"value": True},
+                    ("setting", "SafeToSpendBuffer"): {"value": 75.5},
+                    ("setting", "ReminderDaysBefore"): {"value": 3},
+                    ("setting", "PayAnchor"): {"value": "2025-03-20"}},
+         "live": {"setting": ["EarlyStart", "PayAnchor", "ReminderDaysBefore", "SafeToSpendBuffer",
+                              "TypeColor/Cards", "TypeColor/Gym", "TypeColor/Loans"]}},
+        "A legacy backup stores every setting as text and the type colours as one TypeColors JSON object. "
+        "TypeColors becomes one TypeColor/<type> key per valid entry (uppercased; 'red' is not #RRGGBB and is "
+        "dropped). Loans is not in the backup, so its colour resets (null). EarlyStart 'True' becomes true, the "
+        "number and integer strings become numbers. SchemaVersion and Theme are per-device and are not written "
+        "(data-model.md 8.5).",
+        edit={"seen": list(range(len(color_state))),
+              "op": {"op": "restore", "hlc": h(1000), "rows": plan_rows,
+                     "settings": {"PayAnchor": "2025-03-20", "EarlyStart": "True",
+                                  "TypeColors": '{"Cards":"#fd79a8","Gym":"#00B894","Bad":"red"}',
+                                  "SafeToSpendBuffer": "75.5", "ReminderDaysBefore": "3",
+                                  "SchemaVersion": "2", "Theme": "Light"}}}))
+
+    a_other = base1000 + play(base1000, [op_mark(BILL_1, P2, 100.0, h(100)), op_remaining(BILL_1, 880.0, h(200))])
+    b_other = play(base1000 + mark(BILL_1, P2, 100.0, h(100)), [op_mark(BILL_1, P3, 50.0, h(250, 0, DEV_B))])
+    C.append(merge_case(
+        "known limitation: unmarking an absorbed payment also absorbs another device's unmerged payment",
+        a_other + b_other,
+        {"remaining": {BILL_1: 980.0}},
+        "A marks 100, types 880, then unmarks (+300s), raising the checkpoint to 980 at +300s. B's offline 50 "
+        "payment (+250s), which A had not merged, is now before the checkpoint and absorbed: 980 instead of 930 "
+        "(sync-protocol.md 5.4).",
+        edit={"seen": list(range(len(a_other))), "op": op_unmark(BILL_1, P2, h(300))}))
+
     C.append(merge_case(
         "settings: last write wins per key, keys are independent", [
             r("setting", "PayAnchor", "value", "2025-03-20", h(0)),
@@ -1369,10 +1448,12 @@ def gen_compaction():
     def snap(sec, dev, covers, age_ok=True):
         return {"hlc": h(sec, 0, dev), "covers": covers, "ageOk": age_ok}
 
-    def plan(name, cursors, files, snaps, note=None):
-        add(name, {"fn": "readPlan", "cursors": cursors, "files": files,
-                   "snapshots": [{"hlc": x["hlc"], "covers": x["covers"]} for x in snaps]},
-            K.read_plan(cursors, files, snaps), note)
+    def plan(name, cursors, files, snaps, note=None, unreadable=None):
+        inp = {"fn": "readPlan", "cursors": cursors, "files": files,
+               "snapshots": [{"hlc": x["hlc"], "covers": x["covers"]} for x in snaps]}
+        if unreadable is not None:
+            inp["unreadable"] = unreadable
+        add(name, inp, K.read_plan(cursors, files, snaps, unreadable), note)
 
     rng = lambda a, b: list(range(a, b + 1))  # noqa: E731
     plan("fresh join with no snapshots reads every file", {}, {DEV_A: rng(1, 3), DEV_B: rng(1, 2)}, [])
@@ -1390,20 +1471,33 @@ def gen_compaction():
     plan("a gap no snapshot covers is reported", {DEV_A: 0}, {DEV_A: [1, 2, 4]}, [])
     plan("two snapshots fill two gaps", {DEV_A: 0}, {DEV_A: rng(1, 3) + rng(11, 13) + [21, 22]},
          [snap(300, DEV_A, {DEV_A: 10}), snap(400, DEV_A, {DEV_A: 20})])
+    plan("a listed file that cannot be opened falls back to a snapshot that covers it", {DEV_A: 0},
+         {DEV_A: rng(1, 5)}, [snap(300, DEV_B, {DEV_A: 4})], unreadable={DEV_A: [3]},
+         note="File 3 failed to open in this sync. For the snapshot step it counts as not listed, so the snapshot "
+              "covering it is merged instead of the reader stalling on it.")
+    plan("a listed file that cannot be opened and is not covered is a gap", {DEV_A: 0},
+         {DEV_A: rng(1, 5)}, [], unreadable={DEV_A: [3]},
+         note="Retry next sync; after 24 hours show 'A file from <device> could not be read'.")
     plan("a snapshot is not required when every file is present", {DEV_A: 0}, {DEV_A: rng(1, 3)},
          [snap(300, DEV_B, {DEV_A: 3})],
          note="A reader MAY merge it anyway; cursorsAfter is the same either way.")
 
     day = K.DAY_MS
-    for name, args in [
-        ("snapshot age: both clocks agree it is 8 days old", (T0, T0 + 8 * day, T0, T0 + 8 * day)),
-        ("snapshot age: exactly 7 days by both clocks", (T0, T0 + 7 * day, T0, T0 + 7 * day)),
-        ("snapshot age: the local clock is 6 days ahead, the provider says 2 days", (T0, T0 + 8 * day, T0, T0 + 2 * day)),
-        ("snapshot age: provider time unavailable", (T0, T0 + 30 * day, None, None)),
-        ("snapshot age: the local clock is behind", (T0, T0 + 1 * day, T0, T0 + 9 * day)),
+    for name, args, note in [
+        ("snapshot age: first listed 8 days ago, provider says 8 days", (T0, T0 + 8 * day, T0, T0 + 8 * day), None),
+        ("snapshot age: exactly 7 days by both clocks", (T0, T0 + 7 * day, T0, T0 + 7 * day), None),
+        ("snapshot age: the local clock jumped 6 days ahead, the provider says 2 days",
+         (T0, T0 + 8 * day, T0, T0 + 2 * day), None),
+        ("snapshot age: provider time unavailable", (T0, T0 + 30 * day, None, None), None),
+        ("snapshot age: listed only yesterday on this device although the provider says 9 days",
+         (T0 + 8 * day, T0 + 9 * day, T0, T0 + 9 * day), None),
+        ("snapshot age: written by a device whose clock is a year ahead",
+         (T0, T0 + 8 * day, T0, T0 + 8 * day),
+         "The snapshot's HLC wall time (a year in the future) is not an input: local age counts from when this "
+         "device first listed the file, so one skewed writer cannot stop compaction for the whole vault."),
     ]:
-        add(name, {"fn": "snapshotAgeOk", "snapshotWallMs": args[0], "localNowMs": args[1],
-                   "serverCreatedMs": args[2], "serverNowMs": args[3]}, {"ok": K.snapshot_age_ok(*args)})
+        add(name, {"fn": "snapshotAgeOk", "firstSeenLocalMs": args[0], "localNowMs": args[1],
+                   "serverCreatedMs": args[2], "serverNowMs": args[3]}, {"ok": K.snapshot_age_ok(*args)}, note)
 
     def del_files(name, me, seqs, snaps, note=None):
         add(name, {"fn": "deletableChangeFiles", "deviceId": me, "seqs": seqs, "snapshots": snaps},

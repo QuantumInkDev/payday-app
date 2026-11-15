@@ -23,7 +23,7 @@ types used below:
 | `string` | string | UTF-8. Any length. Apps do not trim or case-fold on write. |
 | `string?` | string or `null` | `null` means "not set". An empty string is a value, not "not set". |
 | `bool` | `true` / `false` | Never `0`/`1`. |
-| `int` | number with an integer value | Writers write plain digits (`3`). Readers accept any integral number (`3`, `3.0`, `3e0` are all 3). `true`/`false` are booleans, never ints: a boolean in an `int` field is the wrong type (1.2). |
+| `int` | number with an integer value | Writers write plain digits (`3`). Readers accept any number that is an integer once parsed to binary64 (`3`, `3.0`, `3e0`, `3.0000000000000001` are all 3; `sync-protocol.md` section 6.3). `true`/`false` are booleans, never ints: a boolean in an `int` field is the wrong type (1.2). |
 | `number` | number | Finite. Used for non-money quantities (APR). Not rounded. |
 | `money` | number | See section 3. |
 | `date` | string `YYYY-MM-DD` | A calendar date with no time or zone, for example `2026-11-12`. Always zero-padded. |
@@ -476,15 +476,28 @@ keys inside `Snapshots.Details`.
 | `Id` INTEGER | row ID | `UUIDv5(namespace, "legacy-snapshot/<snapshotDate>/<totalCents>/<n>")`, from the row's content for the same reason as 8.3 (decided here). `<n>` numbers rows with the same date and total in old `Id` order. |
 | `SnapshotDate`, `TotalRemaining` (renamed from `TotalOwed`), `Details`, `NotionPageId` | `snapshotDate`, `totalRemaining`, `details`, `notionPageId` | `details` keys rewritten (8.2). |
 
-### 8.5 Settings table
+### 8.5 Settings table and backup settings
 
-| Today's key | Becomes |
-|---|---|
-| `PayAnchor`, `EarlyStart` | Synced settings of the same name (`EarlyStart` `"true"`/`"false"` text becomes `bool`). |
-| `TypeColors` (JSON object, type to `#RRGGBB`) | One `TypeColor/<type>` setting per entry. |
-| `NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb` | Synced settings of the same name. |
-| `Theme`, `LastNotionSync`, `SchemaVersion` | Stay per-device. |
-| (none) | `SafeToSpendBuffer`, `ReminderDaysBefore`, `NotionOwnerDeviceId`: written only when the user sets them. A device that has a Notion token when it creates the vault writes `NotionOwnerDeviceId` = its own ID. |
+The migration (creating a vault from today's database) and a restore (`sync-protocol.md`
+section 12.3) both turn a settings table into synced settings. Today's table, and the `settings`
+object of a backup file, hold every value as text (or `null`). The mapping (decided here):
+
+| Key in the table or backup | Becomes | Conversion |
+|---|---|---|
+| `PayAnchor` | `PayAnchor` | Kept if it is a valid `YYYY-MM-DD` date; otherwise not used. |
+| `EarlyStart` | `EarlyStart` (`bool`) | `true` if the text equals `true` ignoring case (as today's C# reads it), otherwise `false`. A JSON boolean is taken as is. |
+| `TypeColors` (JSON object text, type to `#RRGGBB`) | one `TypeColor/<type>` per entry | Each entry whose value is `#` plus 6 hex digits, uppercased; other entries are dropped. Text that is not a JSON object gives no colours (as today's C# reads it). |
+| `TypeColor/<type>` (a backup made after sync) | same key | `#RRGGBB`, uppercased; otherwise not used. Overrides a `TypeColors` entry for the same type. |
+| `SafeToSpendBuffer` | `SafeToSpendBuffer` (`money`) | Decimal text (`-?digits[.digits]`) or a JSON number, then `round2`; otherwise not used. |
+| `ReminderDaysBefore` | `ReminderDaysBefore` (`int`) | Digit text or an integral JSON number, ≥ 0; otherwise not used. |
+| `NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb` | same key | **Migration only.** A restore never writes or clears them (`sync-protocol.md` section 12.3). |
+| `NotionOwnerDeviceId` | same key | **Never** taken from a table or backup. A device that has a Notion token when it creates the vault writes its own ID. |
+| `Theme`, `LastNotionSync`, `SchemaVersion` and other per-device keys (section 6.2) | stay per-device | Not synced. A restore applies them to the restoring device only. |
+| any other key | (ignored) | |
+
+"Not used" means the key is treated as missing: a restore then sets that synced setting to `null`
+(its default). `SafeToSpendBuffer` and `ReminderDaysBefore` have no row in today's table; they are
+written when the user sets them. Fixture: `merge.json`, "restore maps legacy backup settings".
 
 ### 8.6 Legacy names
 

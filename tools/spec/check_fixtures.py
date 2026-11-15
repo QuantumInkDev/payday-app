@@ -343,18 +343,18 @@ def check_compaction_case(c):
     i, e = c["input"], c["expected"]
     fn = i["fn"]
     if fn == "readPlan":
-        got = K.read_plan(i["cursors"], i["files"], i["snapshots"])
+        got = K.read_plan(i["cursors"], i["files"], i["snapshots"], i.get("unreadable"))
         check_equal(got, e, "read plan")
         # Optional extra snapshot merges must not change the resulting cursors.
         cur = dict(i["cursors"])
         for snap in i["snapshots"]:
             for d, v in snap["covers"].items():
                 cur[d] = max(cur.get(d, 0), v)
-        extra = K.read_plan(cur, i["files"], i["snapshots"])
+        extra = K.read_plan(cur, i["files"], i["snapshots"], i.get("unreadable"))
         expect(all(extra["cursorsAfter"].get(d, 0) == v for d, v in e["cursorsAfter"].items()),
                "merging every snapshot up front must reach the same cursors")
     elif fn == "snapshotAgeOk":
-        check_equal({"ok": K.snapshot_age_ok(i["snapshotWallMs"], i["localNowMs"], i["serverCreatedMs"],
+        check_equal({"ok": K.snapshot_age_ok(i["firstSeenLocalMs"], i["localNowMs"], i["serverCreatedMs"],
                                              i["serverNowMs"])}, e, "age")
     elif fn == "deletableChangeFiles":
         got = K.deletable_change_files(i["deviceId"], i["seqs"], i["snapshots"])

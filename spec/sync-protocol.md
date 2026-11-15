@@ -365,17 +365,19 @@ otherwise emit remainingCheckpoint = v / 100 at hlc
 A checkpoint means "the balance is this, as of now, on this device". It cannot know about payments
 or unmarks this device has not merged yet. These cases are wrong after merging and are fixed by the
 user typing the correct Remaining. They need two devices acting on the same bill while out of touch,
-around a checkpoint. Each has a `merge.json` case named "known limitation: ...".
+around a checkpoint. Every row has a `merge.json` case; its name is in the last column.
 
-| Case | Result |
-|---|---|
-| A real Remaining edit (app or Notion statement figure) while another device has an unmerged payment | The payment is absorbed: Remaining is high by its amount. This is the design's rule (design section 6.2) and the reason for the echo and unchanged-value rules. |
-| Device A marks a payment and then sets a checkpoint; device B, which never saw A's mark, marks the same bill and period | B's write is the latest mark and is after the checkpoint, so the payment is subtracted again: Remaining is low by its amount. |
-| Device A marks a payment and sets a checkpoint; device B, which saw the mark but not the checkpoint, unmarks it | B does not see the payment as absorbed, so it writes no checkpoint: Remaining is low by its amount. |
-| Unmarking an absorbed payment raises the checkpoint at the unmark's HLC | Like any checkpoint, it also absorbs payments from other devices this device has not merged yet. |
+| Case | Result | `merge.json` case |
+|---|---|---|
+| A real Remaining edit (app or Notion statement figure) while another device has an unmerged payment | The payment is absorbed: Remaining is high by its amount. This is the design's rule (design section 6.2) and the reason for the echo and unchanged-value rules. | "known limitation: a checkpoint set after an offline payment absorbs it" |
+| Device A marks a payment and then sets a checkpoint; device B, which never saw A's mark, marks the same bill and period | B's write is the latest mark and is after the checkpoint, so the payment is subtracted again: Remaining is low by its amount. | "known limitation: a device that missed the mark re-marks after a checkpoint" |
+| Device A marks a payment and sets a checkpoint; device B, which saw the mark but not the checkpoint, unmarks it | B does not see the payment as absorbed, so it writes no checkpoint: Remaining is low by its amount. | "known limitation: a device that missed the checkpoint unmarks an absorbed payment" |
+| Unmarking an absorbed payment raises the checkpoint at the unmark's HLC | Like any checkpoint, it also absorbs payments from other devices this device has not merged yet: Remaining is high by their amount. | "known limitation: unmarking an absorbed payment also absorbs another device's unmerged payment" |
+| A checkpoint (a restore, or any real edit) absorbed a payment its writer never saw; later a device unmarks that payment | The payment is at or before the checkpoint HLC, so it counts as absorbed and unmark raises the checkpoint by its amount, although it had never lowered Remaining: Remaining is high by its amount. | "known limitation: unmarking a payment the restore never saw raises Remaining" |
 
-A rule that fixed the second and third cases would need each payment to remember every mark and
-unmark, not just the winning one; per-field last-write-wins keeps only the winner. That is not worth
+A rule that fixed the second, third and fifth cases would need each payment to remember every mark
+and unmark, and each checkpoint which payments it actually saw; per-field last-write-wins keeps only
+the winner. That is not worth
 the format cost for a one-person app where the fix is to type the balance.
 
 ## 6. Files and encryption
@@ -435,8 +437,11 @@ The same rules apply to `vault.json`. Fixtures: `files.json` (`payloadText`, `pa
 
 **Integer fields** (`formatVersion`, `seq`, `covers` values, `generation`, vault.json generation
 `id` and `currentGeneration`): writers MUST write plain digits (`3`, never `3.0` or `3e0`). Readers
-MUST accept any JSON number whose value is an integer within ±(2^53 − 1) as that integer (`3`,
-`3.0`, `3e0` and `30e-1` are all 3), because JavaScript cannot tell `3` from `3.0`. Readers MUST
+MUST accept any JSON number that is an integer within ±(2^53 − 1) **after it is parsed to an IEEE-754
+binary64 value** (round-to-nearest, as `JSON.parse` does), as that integer: `3`, `3.0`, `3e0`,
+`30e-1`, `3.0000000000000001` and `2.9999999999999999` all parse to exactly 3; `3.000000000001` does
+not, and `1e400` overflows and is rejected. This is because JavaScript cannot tell `3` from `3.0`,
+so the rule has to be one every platform can apply to a parsed double. Readers MUST
 reject booleans, strings, `null` and non-integral numbers in these fields as `malformed` (Python and
 some other languages treat `true` as 1; that is not allowed here). A `formatVersion` that is a valid
 integer other than 1 is `unsupportedFormat`. The same reading rule applies to `int` fields inside
@@ -679,8 +684,8 @@ On the existing device ("Add a device"):
    screen, or after 10 minutes, whichever is first.
 
 **Every device** also deletes stale pairing files on every sync (section 10.2, step 5): any file in
-`pairing/` whose provider creation time is more than 10 minutes before the provider's current time
-(section 11.1 says how to read both). This removes files left behind when the pairing screen was
+`pairing/` whose provider-assigned creation time is more than 10 minutes before the provider's
+current time (section 11.1 says how to read both; writers never set these timestamps). This removes files left behind when the pairing screen was
 killed or the device lost power. Deletion uses the provider's permanent delete where it has one
 (Google Drive's `files.delete` bypasses the trash); otherwise an ordinary delete, which on OneDrive
 and Dropbox leaves the file recoverable from the recycle bin or deleted-file history for weeks
@@ -732,9 +737,9 @@ The pairing file plus the QR code together are the vault key. Neither alone is.
    later with the same plaintext and `seq` (re-encrypting with a fresh nonce is fine).
 5. If one or more files with that name already exist when uploading (for example a previous upload
    succeeded but the app did not hear back), download and open each. If every one holds the same
-   records as the sealed batch, treat the upload as done. If any differs, two installs share a
-   device ID (a cloned disk or restored app data): stop syncing, tell the user, and rejoin with a new
-   device ID (section 12.2).
+   records as the sealed batch, treat the upload as done. If any differs, or any fails to open (this
+   device's own upload always opens), two installs share a device ID (a cloned disk or restored app
+   data): stop syncing, tell the user, and rejoin with a new device ID (section 12.2).
 6. A batch MUST contain at least one record. There is no size limit; writers SHOULD split batches
    above about 5,000 records.
 
@@ -761,6 +766,9 @@ heard of have cursor 0. A sync:
      After each file, `observe` every valid record's HLC and advance `cursor[D]`;
    - if, for some device `D`, file `cursor[D] + 1` is **not listed** (whether or not any higher file
      is), merge **every** listed snapshot not yet merged whose `covers[D] > cursor[D]` (section 11.3).
+     A listed file that failed to open in this sync counts as **not listed** here (decided here: no
+     24-hour wait, since merging a snapshot is always safe), so a corrupt or undecryptable file that a
+     snapshot covers never blocks reading (`compaction.json`, `unreadable`).
 4. Update the materialized tables and the UI in the same transaction as each merge.
 5. Delete stale pairing files (section 9.1).
 
@@ -786,8 +794,11 @@ Properties the reader relies on, and MUST keep:
 - **Duplicate names.** Google Drive does not enforce unique file names, so a listing can show two
   files with the same name. A reader opens every one. If their `records` are the same (as defined in
   10.1), merge one. If they differ, treat it as a device-ID clash: merge neither, do not advance the
-  cursor, and show "Two devices are using the same identity; <device name> needs to rejoin". The
-  same applies to two snapshots with the same name. (Two `vault.json` files: section 12.1.)
+  cursor, and show "Two devices are using the same identity; <device name> needs to rejoin". If any
+  copy fails to open, merge none of them and treat the name as an unreadable file (the rule above:
+  it counts as not listed for the snapshot step, and is reported after 24 hours); a readable copy
+  alone cannot be trusted while another copy might hold different records. The same applies to
+  snapshots with the same name. (Two `vault.json` files: section 12.1.)
 - **Unreadable files** (`authFailed`, `badMagic`, envelope errors) are not merged and do not advance
   the cursor. Retry on later syncs; if still failing after 24 hours, show "A file from
   <device name> could not be read". `unknownKeyGeneration` and `unsupportedVersion` /
@@ -810,17 +821,27 @@ months then merges a snapshot instead of the deleted files, and ends in the same
 ### 11.1 Snapshot age
 
 Compaction waits until a snapshot is at least **7 days** old, so devices whose listing lags see it
-before the files it replaces disappear. A device's own clock can be wrong, so age is measured twice
-and both must agree (decided here):
+before the files it replaces disappear. Any one device's clock can be wrong, so age is measured on
+two clocks that a skewed writer cannot influence, and both must agree (decided here):
 
-- **local:** the local physical clock minus the snapshot's HLC wall time ≥ 7 days;
-- **provider:** the provider's current time minus the file's server-side creation time ≥ 7 days.
-  "Current time" is the provider's response time (for example the HTTP `Date` header of the listing),
-  never the local clock. OneDrive `createdDateTime`, Google Drive `createdTime` and Dropbox
-  `server_modified` (snapshots are written once) are the creation times.
+- **local:** this device's physical clock now, minus the time this device **first listed** the
+  snapshot (recorded locally, per snapshot name) ≥ 7 days. The snapshot's own HLC wall time is never
+  used: a device whose clock runs a year ahead would otherwise make its snapshots look new to every
+  other device for a year and stop compaction vault-wide;
+- **provider:** the provider's current time minus the file's **provider-assigned** creation time
+  ≥ 7 days. "Current time" is the provider's response time (for example the HTTP `Date` header of
+  the listing), never the local clock. Use OneDrive's item `createdDateTime` (not
+  `fileSystemInfo`), Google Drive `createdTime` and Dropbox `server_modified` (snapshots are written
+  once).
 
-If the provider gives no creation time, the snapshot is not old enough. Fixtures: `compaction.json`
-(`snapshotAgeOk`).
+**Writers MUST NOT set provider timestamps** that clients are allowed to set (Google Drive
+`createdTime` and `modifiedTime`, OneDrive `fileSystemInfo`, Dropbox `client_modified`); the age
+checks and stale-pairing cleanup (section 9.1) rely on the provider assigning them. A buggy writer
+that sets them anyway can only move the provider check, never the local first-listed check.
+
+If the provider gives no creation time, or this device has no first-listed time, the snapshot is not
+old enough. The "7 days old" snapshot-writing trigger (11.2) uses the same two measurements.
+Fixtures: `compaction.json` (`snapshotAgeOk`).
 
 ### 11.2 Writing a snapshot (thresholds decided here)
 
@@ -915,20 +936,28 @@ Design section 6.5: restore means "make every device look like this backup". Fix
 "restore re-stamps the backup..." (op `restore`).
 
 1. Confirm with the user and save the current state as a backup first.
-2. Map the backup's IDs as in `data-model.md` section 8 (legacy bill IDs, string or integer payment
-   IDs), and map each bill's Remaining to `remainingCheckpoint`.
+2. Map the backup as in `data-model.md` section 8: IDs (legacy bill IDs, string or integer payment
+   IDs), each bill's Remaining to `remainingCheckpoint`, and the backup's `settings` object to synced
+   setting values (section 8.5: for example a legacy `TypeColors` JSON value becomes one
+   `TypeColor/<type>` key per colour, and `"true"`/`"false"` text becomes a boolean).
 3. Take **one** HLC for the whole restore. At that HLC, write:
    - for the **plan entities** `bill`, `payment`, `balanceSnapshot`, `incomeSource` and `paycheck`:
      every field of every row in the backup (including fields equal to the current value: a restore
      re-stamps everything) plus `deleted: false`;
    - for the same five entities: `deleted: true` for every row this device knows that is not in the
      backup and is not already tombstoned (live or pending rows);
-   - every synced setting in the backup;
-   - `value: null` for every synced setting this device knows that is missing from the backup and is
-     not already null: the keys in `data-model.md` section 6.1 and `TypeColor/<type>` keys,
-     **except** the Notion connector keys (`NotionOwnerDeviceId`, `NotionBillsDb`,
-     `NotionPaymentsDb`, `NotionSnapshotsDb`), which describe the connection, not the plan (decided
-     here: restoring an old backup must not silently disconnect Notion).
+   - every **plan setting** the mapping produced: `PayAnchor`, `EarlyStart`, `SafeToSpendBuffer`,
+     `ReminderDaysBefore` and `TypeColor/<type>` keys;
+   - `value: null` for every plan setting this device knows that the mapping did not produce and that
+     is not already null (a colour missing from the backup resets to its default).
+
+   The **Notion connector keys** (`NotionOwnerDeviceId`, `NotionBillsDb`, `NotionPaymentsDb`,
+   `NotionSnapshotsDb`) are neither written nor cleared, whatever the backup holds (decided here).
+   Backups export the whole settings table, so a backup can hold a dead device's ID as owner, `null`,
+   or database IDs from an older connection; writing any of them at the restore HLC would silently
+   break the connector. Per-device keys in the backup (`Theme`, `LastNotionSync`, `SchemaVersion`, ...)
+   are not synced (step 5), and unknown keys are ignored. Fixtures: `merge.json`, "restore never
+   writes or clears the Notion connector settings", "restore maps legacy backup settings".
 4. Never write `device` rows, rows of entities this app does not know, or setting keys it does not
    know. They are not part of a backup, and tombstoning them would erase another device's identity or
    a newer app's data.
@@ -1025,9 +1054,9 @@ the contract.
 | 20 | Sealed batches are immutable; a same-name file with different records means a device-ID clash (also for Google Drive duplicate names) | 10.1, 10.2 |
 | 21 | Sync triggers: launch/foreground, 5 s debounce, 5 min, manual | 10.1 |
 | 22 | Read cursor = highest contiguous seq; a missing file is filled from every snapshot that covers it | 10.2 |
-| 23 | Snapshot thresholds 20 / 100 files / 7 days; age measured by both the local and the provider clock; a snapshot is deleted only if a kept one dominates it; a change file only if no newer snapshot covers less; owner-only deletion of change files | 11 |
+| 23 | Snapshot thresholds 20 / 100 files / 7 days; age measured from this device's first listing (local clock) and from the provider-assigned creation time (provider clock), never from the snapshot's HLC; writers never set provider timestamps; a file that fails to open counts as not listed for the snapshot fallback; a snapshot is deleted only if a kept one dominates it; a change file only if no newer snapshot covers less; owner-only deletion of change files | 11 |
 | 24 | vault.json written last; duplicate vault.json resolved by earliest `createdAt` | 12.1 |
-| 25 | Restore uses one HLC, tombstones only plan entities, nulls missing synced settings except Notion connector keys, never touches devices or unknown data | 12.3 |
+| 25 | Restore uses one HLC, maps backup settings per data-model 8.5, tombstones only plan entities, writes and nulls only plan settings (never the Notion connector keys), never touches devices or unknown data | 12.3 |
 | 26 | Notion connector owner = synced `NotionOwnerDeviceId`; new owner pushes before pulling | 12.5 |
 | 27 | Clock state is persisted in the same transaction as the records it stamped | 2.3 |
 | 28 | Paychecks of Irregular sources get UUIDv7 IDs; migrated extra payments and balance snapshots get content-derived UUIDv5 IDs | 3.2 |

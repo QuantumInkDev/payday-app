@@ -107,7 +107,8 @@ app runs `op` against that state; the records it writes must equal `expected.emi
 (order: sorted by entity, then id, then field). `op` values are `markPaid`, `unmarkPaid`,
 `deletePayment`, `setRemaining` (`sync-protocol.md` section 5.3) and `restore` (section 12.3).
 `restore` carries the backup as `rows` (`{entity: {id: {field: value}}}`, IDs already migrated,
-each bill's Remaining already mapped to `remainingCheckpoint`) and `settings` (`{key: value}`).
+each bill's Remaining already mapped to `remainingCheckpoint`) and `settings`: the backup's
+settings object exactly as stored in the file, which the app maps itself (`data-model.md` section 8.5).
 
 `expected` in a merge case is the state after merging `input.records` plus `expected.emitted`:
 

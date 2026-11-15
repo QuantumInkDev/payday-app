@@ -2,8 +2,11 @@
 for mark paid / unmark / editing Remaining. Spec: spec/sync-protocol.md sections 4 and 5.
 """
 
+import json
 import math
+import re
 
+import fc_files
 import fc_hlc
 import fc_ids
 import fc_money
@@ -264,20 +267,78 @@ def op_set_remaining(store, op):
 
 RESTORABLE = ("bill", "payment", "balanceSnapshot", "incomeSource", "paycheck")
 KNOWN_SETTINGS = {"PayAnchor", "EarlyStart", "SafeToSpendBuffer", "ReminderDaysBefore"}
-SETTING_PREFIXES = ("TypeColor/",)
-# Connector state, not plan data: a restore never clears these (sync-protocol.md 12.3).
-RESTORE_KEEPS = {"NotionOwnerDeviceId", "NotionBillsDb", "NotionPaymentsDb", "NotionSnapshotsDb"}
+TYPE_COLOR_PREFIX = "TypeColor/"
+# Connector state, not plan data: a restore never writes or clears these (sync-protocol.md 12.3).
+NOTION_KEYS = {"NotionOwnerDeviceId", "NotionBillsDb", "NotionPaymentsDb", "NotionSnapshotsDb"}
+
+_HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_DECIMAL = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
+_DIGITS = re.compile(r"^[0-9]+$")
 
 
-def _nulls_on_restore(key):
-    return key not in RESTORE_KEEPS and (key in KNOWN_SETTINGS or key.startswith(SETTING_PREFIXES))
+def is_restorable_setting(key):
+    """Synced plan settings a restore writes or clears (never the Notion keys)."""
+    return key in KNOWN_SETTINGS or key.startswith(TYPE_COLOR_PREFIX)
+
+
+def _map_one(key, raw):
+    """Convert one backup setting value to its synced value, or None if it cannot be used."""
+    if raw is None:
+        return None
+    if key == "PayAnchor":
+        return raw if fc_ids.is_date(raw) else None
+    if key == "EarlyStart":
+        if isinstance(raw, bool):
+            return raw
+        return raw.lower() == "true" if isinstance(raw, str) else None  # as today's C# reads it
+    if key == "SafeToSpendBuffer":
+        if isinstance(raw, str) and _DECIMAL.match(raw):
+            raw = float(raw)
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+            return None
+        return fc_money.round2(raw)
+    if key == "ReminderDaysBefore":
+        if isinstance(raw, str) and _DIGITS.match(raw):
+            return int(raw)
+        v = fc_files.as_int(raw)
+        return v if v is not None and v >= 0 else None
+    if key.startswith(TYPE_COLOR_PREFIX):
+        return raw.upper() if isinstance(raw, str) and _HEX_COLOR.match(raw) else None
+    return None
+
+
+def map_backup_settings(raw_settings):
+    """data-model.md 8.5: map a backup's Settings object (string values today) to synced setting
+    values. Returns only restorable keys with a usable value; Notion, per-device and unknown keys
+    are dropped."""
+    out = {}
+    colors = raw_settings.get("TypeColors")
+    if isinstance(colors, str):
+        try:
+            parsed = json.loads(colors)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            for type_name, hex_ in parsed.items():
+                v = _map_one(TYPE_COLOR_PREFIX + type_name, hex_)
+                if v is not None and type_name != "":
+                    out[TYPE_COLOR_PREFIX + type_name] = v
+    for key, raw in raw_settings.items():
+        if key in NOTION_KEYS or not is_restorable_setting(key) or key == TYPE_COLOR_PREFIX:
+            continue
+        v = _map_one(key, raw)
+        if v is not None:
+            out[key] = v  # an explicit TypeColor/<type> key overrides the TypeColors entry
+    return out
 
 
 def op_restore(store, op):
     """Restore a backup with sync on. op.rows: {entity: {id: {field: value}}} (IDs already
-    migrated, bill Remaining already mapped to remainingCheckpoint); op.settings: {key: value}."""
+    migrated, bill Remaining already mapped to remainingCheckpoint); op.settings: the backup's
+    Settings object as stored in the file (mapped here per data-model.md 8.5)."""
     h = op["hlc"]
-    rows, settings = op.get("rows", {}), op.get("settings", {})
+    rows = op.get("rows", {})
+    settings = map_backup_settings(op.get("settings", {}))
     for entity in rows:
         if entity not in RESTORABLE:
             raise ValueError(f"restore does not write {entity} rows")
@@ -292,10 +353,10 @@ def op_restore(store, op):
         for id_ in store.ids(entity):
             if id_ not in backup and store.value(entity, id_, "deleted") is not True:
                 out.append(_rec(entity, id_, "deleted", True, h))
-    for key, v in settings.items():
+    for key, v in sorted(settings.items()):
         out.append(_rec("setting", key, "value", v, h))
     for key in store.ids("setting"):
-        if key not in settings and _nulls_on_restore(key) and store.value("setting", key, "value") is not None:
+        if key not in settings and is_restorable_setting(key) and store.value("setting", key, "value") is not None:
             out.append(_rec("setting", key, "value", None, h))
     return _sorted(out)
 

@@ -281,6 +281,94 @@
       }
     },
     {
+      "name": "a listed file that cannot be opened falls back to a snapshot that covers it",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 4
+            }
+          }
+        ],
+        "unreadable": {
+          "0a0a0a0a0a0a0a0a": [
+            3
+          ]
+        }
+      },
+      "expected": {
+        "mergeSnapshots": [
+          "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b"
+        ],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            5
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 5
+        },
+        "gaps": {}
+      },
+      "note": "File 3 failed to open in this sync. For the snapshot step it counts as not listed, so the snapshot covering it is merged instead of the reader stalling on it."
+    },
+    {
+      "name": "a listed file that cannot be opened and is not covered is a gap",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "snapshots": [],
+        "unreadable": {
+          "0a0a0a0a0a0a0a0a": [
+            3
+          ]
+        }
+      },
+      "expected": {
+        "mergeSnapshots": [],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 2
+        },
+        "gaps": {
+          "0a0a0a0a0a0a0a0a": 3
+        }
+      },
+      "note": "Retry next sync; after 24 hours show 'A file from <device> could not be read'."
+    },
+    {
       "name": "a snapshot is not required when every file is present",
       "input": {
         "fn": "readPlan",
@@ -320,10 +408,10 @@
       "note": "A reader MAY merge it anyway; cursorsAfter is the same either way."
     },
     {
-      "name": "snapshot age: both clocks agree it is 8 days old",
+      "name": "snapshot age: first listed 8 days ago, provider says 8 days",
       "input": {
         "fn": "snapshotAgeOk",
-        "snapshotWallMs": 1794657600000,
+        "firstSeenLocalMs": 1794657600000,
         "localNowMs": 1795348800000,
         "serverCreatedMs": 1794657600000,
         "serverNowMs": 1795348800000
@@ -336,7 +424,7 @@
       "name": "snapshot age: exactly 7 days by both clocks",
       "input": {
         "fn": "snapshotAgeOk",
-        "snapshotWallMs": 1794657600000,
+        "firstSeenLocalMs": 1794657600000,
         "localNowMs": 1795262400000,
         "serverCreatedMs": 1794657600000,
         "serverNowMs": 1795262400000
@@ -346,10 +434,10 @@
       }
     },
     {
-      "name": "snapshot age: the local clock is 6 days ahead, the provider says 2 days",
+      "name": "snapshot age: the local clock jumped 6 days ahead, the provider says 2 days",
       "input": {
         "fn": "snapshotAgeOk",
-        "snapshotWallMs": 1794657600000,
+        "firstSeenLocalMs": 1794657600000,
         "localNowMs": 1795348800000,
         "serverCreatedMs": 1794657600000,
         "serverNowMs": 1794830400000
@@ -362,7 +450,7 @@
       "name": "snapshot age: provider time unavailable",
       "input": {
         "fn": "snapshotAgeOk",
-        "snapshotWallMs": 1794657600000,
+        "firstSeenLocalMs": 1794657600000,
         "localNowMs": 1797249600000,
         "serverCreatedMs": null,
         "serverNowMs": null
@@ -372,17 +460,31 @@
       }
     },
     {
-      "name": "snapshot age: the local clock is behind",
+      "name": "snapshot age: listed only yesterday on this device although the provider says 9 days",
       "input": {
         "fn": "snapshotAgeOk",
-        "snapshotWallMs": 1794657600000,
-        "localNowMs": 1794744000000,
+        "firstSeenLocalMs": 1795348800000,
+        "localNowMs": 1795435200000,
         "serverCreatedMs": 1794657600000,
         "serverNowMs": 1795435200000
       },
       "expected": {
         "ok": false
       }
+    },
+    {
+      "name": "snapshot age: written by a device whose clock is a year ahead",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1794657600000,
+        "localNowMs": 1795348800000,
+        "serverCreatedMs": 1794657600000,
+        "serverNowMs": 1795348800000
+      },
+      "expected": {
+        "ok": true
+      },
+      "note": "The snapshot's HLC wall time (a year in the future) is not an input: local age counts from when this device first listed the file, so one skewed writer cannot stop compaction for the whole vault."
     },
     {
       "name": "own files covered by an old enough snapshot",
