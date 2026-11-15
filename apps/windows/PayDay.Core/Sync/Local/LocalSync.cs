@@ -309,9 +309,11 @@ public sealed class LocalSync : IDisposable
 
     /// <summary>
     /// Gives this device a new identity for a new vault while keeping its synced data
-    /// (<c>sync-protocol.md</c> 12.1 step 5): a new device ID, cursors and queue reset, then every
-    /// winning value re-stamped at one tick of the new ID (<see cref="SyncReplica.RestampLocalState"/>),
-    /// so the first change file carries only this device's records. Requires sync on.
+    /// (<c>sync-protocol.md</c> 12.1 step 5), in <b>one</b> transaction: a new device ID, cursors and
+    /// queue reset, and every winning value except <c>device</c> rows re-stamped at one tick of the new
+    /// ID and queued (as <see cref="SyncReplica.RestampLocalState"/> does), so the first change file
+    /// carries only this device's records. The old vault's <c>device</c> rows are dropped: they belong
+    /// to devices of another vault. Requires sync on.
     /// </summary>
     public void StartNewIdentity(string vaultId, SyncWriteLease held)
     {
@@ -319,10 +321,23 @@ public sealed class LocalSync : IDisposable
         if (held.Owner != this || !held.IsHeld) throw new ArgumentException("That lease is not held on this LocalSync.", nameof(held));
         lock (_gate)
         {
-            var (_, storage) = RequireOn();
-            var replica = SyncReplica.Start(storage, _time, vaultId, clearSyncedData: false, Materializer);
+            var (old, storage) = RequireOn();
+            var materializer = Materializer!;
+            var keep = old.Read((s, _) => s.AllRecords().Where(r => r.Entity != SyncEntities.Device).ToArray());
+            var replica = SyncReplica.Start(storage, _time, vaultId, clearSyncedData: true, materializer, state =>
+            {
+                var deviceId = storage.Metadata.DeviceId!;
+                var hlc = Clock.HlcClock.Tick(null, _time.GetUtcNow().ToUnixTimeMilliseconds(), deviceId);
+                var restamped = keep.Select(r => new ChangeRecord(r.Entity, r.Id, r.Field, r.Value, hlc)).ToArray();
+                state.MergeAll(restamped);
+                if (restamped.Length > 0)
+                {
+                    storage.Metadata.EnqueuePending(restamped);
+                    storage.Metadata.ClockState = hlc;
+                }
+                materializer.RebuildAll(state);
+            });
             Replica = replica;
-            replica.RestampLocalState();
         }
     }
 
