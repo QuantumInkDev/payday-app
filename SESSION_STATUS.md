@@ -10,9 +10,9 @@
 
 - Multi-platform design approved (`planning/2026-11-14-multiplatform-design.md`); product name locked in as **FutureCheck** (code name PayDay stays in the code).
 - Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` unchanged). New root `README.md`.
-- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified on 2026-11-14 at the head of PR #1 (after all scrub passes, on a freshly re-cloned VM checkout): 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `aa5772b` was a silent no-op caused by a `vm-build.sh` bug that `e2becb1` fixed.
+- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified on 2026-11-14 at the head of PR #1 (after all scrub passes, on a freshly re-cloned VM checkout): 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `cfd55c6` was a silent no-op caused by a `vm-build.sh` bug that `ee9d898` fixed.
 
-- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes, the bill-editor placeholder text and several test fixtures held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` (four passes: the second and third caught card figures and two utility-bill amounts in test fixtures, and the fourth fixed a derived test total) to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind; test fixtures keep a few generic names such as Electric and Phone, but every amount next to them is fictional. Non-monetary details such as due days and the pay anchor date were kept) and placeholder Notion IDs (`00000000-…`). All branches on GitHub were force-pushed. **Every commit ID from before this changed**, and the IDs quoted in these notes were updated to the rewritten history. The old commits can stay reachable on GitHub by their old IDs until GitHub purges them, so a GitHub Support sensitive-data removal request is needed (owner action). The old-to-new maps and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
+- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes, the bill-editor placeholder text and several test fixtures held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` (five passes: the second and third caught card figures and two utility-bill amounts in test fixtures, the fourth fixed a derived test total, and the fifth replaced the sample-data due days, swapped brand names in test fixtures for made-up ones, and moved the pay anchor and every date in the C# code and tests back one year, so the default anchor is now `2025-03-20` and the real pay cadence can't be read off the tests) to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind; test fixtures use generic names such as Electric, Phone, Amber and Sparrow, and every amount is fictional) and placeholder Notion IDs (`00000000-…`). Installed apps keep their saved pay anchor; only a brand-new install starts from the new default. All branches on GitHub were force-pushed. **Every commit ID from before this changed**, and the IDs quoted in these notes were updated to the rewritten history. The old commits can stay reachable on GitHub by their old IDs until GitHub purges them, so a GitHub Support sensitive-data removal request is needed (owner action). The old-to-new maps and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
 - `tools/notion-diagnose.ps1` now compares against placeholder IDs; pass your real data-source IDs if you use it. Installed apps keep their own Notion settings in their local database, so live sync is unaffected.
 
 **Old clones must not push.** The rig (`P:\Projects-Not-On-Cloud\PayDayApp`), the VM daily clone (`C:\Projects\PayDayApp`) and any other copy still hold the old history with the real data. Pushing any branch from them would put it back on GitHub. (The VM's build checkout `C:\Builds\payday-app` was deleted on 2026-11-14; `tools/vm-build.sh` re-clones it.) Before doing anything else in an old clone, run `git fetch --prune origin`, then for each local branch `git switch <branch> && git reset --hard origin/<branch>` or simply re-clone. If an old clone has uncommitted edits you want to keep, copy those files out by hand first, because the reset discards them.
@@ -42,17 +42,17 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 | Chunk | Commit | What |
 |---|---|---|
-| 7a | `653312e` | Sortable All Bills columns |
-| 7b | `242b713` | Bill auto-sync on edit (PushBillAsync + AllBills wiring) |
-| 7c | `d5a4ef6` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
-| 7d | `3b1f78b` | Sync Now button at top of nav + Pay decrements Remaining |
-| 7e | `94b76e6` | Dashboard polish (row→editor, bigger subtotals) |
-| 7f | `9d09129` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types, scrollbar fix) |
-| 7g | `669de55` | Type tag color customization (TypeColorService + Settings UI) |
-| 7h | `a83ae28` | Installments type |
-| 7i | `45023bf` | Insights snapshot delete/clear + Payoff snowball/avalanche |
-| 7j | `48e191a` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
-| 7k | `c470138` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
+| 7a | `8f73958` | Sortable All Bills columns |
+| 7b | `8d7935a` | Bill auto-sync on edit (PushBillAsync + AllBills wiring) |
+| 7c | `122be56` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
+| 7d | `8c0e8fd` | Sync Now button at top of nav + Pay decrements Remaining |
+| 7e | `c928deb` | Dashboard polish (row→editor, bigger subtotals) |
+| 7f | `72149aa` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types, scrollbar fix) |
+| 7g | `89188d1` | Type tag color customization (TypeColorService + Settings UI) |
+| 7h | `d1a8c02` | Installments type |
+| 7i | `7c4fa77` | Insights snapshot delete/clear + Payoff snowball/avalanche |
+| 7j | `08b5882` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
+| 7k | `57a97b8` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 **Tests:** 194/194 green (was 150 entering Phase 7 — +44). Build 0 warn / 0 err on both projects.
 
