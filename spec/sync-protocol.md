@@ -742,9 +742,24 @@ On the new device:
    letters that some case-mapping functions turn into ASCII (dotless `ı` U+0131 becomes `I` under
    Unicode uppercasing), other Unicode spaces, and spaces inside the text.
 2. Download `pairing/<pairingId>.pair`, open it with the pairing key, run the envelope checks,
-   reject it if `expiresAt` has passed (by the local clock).
+   and reject it if it has expired by the local clock. The boundary is inclusive (decided here):
+   with both times in Unix milliseconds, the file is accepted while `now ≤ expiresAt` and expired
+   once `now > expiresAt`, so a file whose `expiresAt` equals now is still accepted and 1 ms later
+   it is expired.
 3. Check `vaultKey` against vault.json's key check value for `generation` (section 7.2), store it
-   in the keystore, delete the pairing file, and continue with "join" (section 12.2).
+   in the keystore, delete the pairing file, and continue with "join" (section 12.2), or, for a
+   Locked device, with "unlock" (section 12.7).
+
+**Pairing outcomes.** Besides success, the new device reports these outcomes to the user (decided
+here). They are UI outcomes, not file error codes, and never appear in fixtures:
+
+| Outcome | When | What the user sees |
+|---|---|---|
+| `expired` | step 2: the file opened and passed the envelope checks, but `now > expiresAt` | "This pairing code has expired. Show a new code on your other device." |
+| `keyCheckMismatch` | step 3: `vaultKey` does not match the key check value of `generation` in vault.json | "This code is for a different vault." |
+
+A file that cannot be opened reports the codes of section 6.6, and a QR text that does not parse
+reports `badQr` (section 14).
 
 Fixtures: `crypto.json` (`pairingQr`, `parsePairingQr`, and the pairing `seal`/`open` cases).
 
@@ -851,6 +866,11 @@ Properties the reader relies on, and MUST keep:
   `unsupportedFormat` show their specific messages immediately (section 14).
 - A device never reads its own change files back (its records are already merged locally), except to
   resolve an upload conflict (section 10.1, step 5).
+- **The 24-hour timers persist (decided here).** For every unreadable file name and every gap
+  (device, missing `seq`), the device stores locally the time it was first seen. These entries
+  survive app restarts, so restarting the app never resets a 24-hour wait. An entry is pruned as
+  soon as it is resolved: the file was merged, a merged snapshot or a cursor moved past it, or an
+  unreadable file is no longer listed. Pruning happens at the end of every sync.
 
 ## 11. Snapshots and compaction
 
@@ -952,6 +972,8 @@ Fixtures: `compaction.json` (`deletableChangeFiles`).
    (32 bytes) and `vaultId` (UUIDv7). Store the key in the keystore.
 4. If the local database is from today's Windows app, run the migration (`data-model.md`
    section 8). It takes one HLC (one `tick` with the new device ID) for all migrated records.
+   Set `NotionOwnerDeviceId` in the same records: this device's ID if it holds a Notion token,
+   otherwise `null` when the local data holds any value (section 12.5).
 5. Upload `devices/<me>/000001.chg` with every record of the local state plus this device's
    `device` row.
 6. Upload `vault.json` **last**, so a vault.json always means the first data is already there.
@@ -976,6 +998,11 @@ Fixtures: `compaction.json` (`deletableChangeFiles`).
    snapshots covering compacted files and every change file they do not cover. (Merging every listed
    snapshot first is allowed and saves downloads.)
 5. Write the first change file: this device's `device` row.
+
+Steps 4 and 5 may overlap (decided here): the joining device MAY queue its `device` row (one `tick`,
+section 4.4) right after generating its device ID and before the first read, and upload it as
+`000001.chg` after or during that read. The row's HLC may then be lower than records it is about to
+merge; that is harmless, because only this device writes its own `device` row.
 
 ### 12.3 Restore a JSON backup with sync on
 
@@ -1025,20 +1052,79 @@ Remaining (section 5.4); edits made after the restore HLC apply on top as usual.
 stays. The device's files stay in the vault. Turning sync on again is a "join" (12.2) with a new
 device ID.
 
+If the leaving device is the Notion owner (`NotionOwnerDeviceId` is its ID), it first writes
+`NotionOwnerDeviceId = null` and seals and uploads that record before removing its keys, if it can
+(decided here). If the upload fails (for example offline), it leaves anyway; the setting then names a
+device that is gone, and no other device claims the connector until a user does (section 12.5).
+
 ### 12.5 Notion connector ownership (decided here)
 
 - The synced setting `NotionOwnerDeviceId` names the one device that runs the Notion connector.
-  Connecting Notion on a device sets it to that device's ID. Other devices show "Notion: connected
-  on <device name>" and do not push or pull.
+  Other devices show "Notion: connected on <device name>" and do not push or pull.
+- **Claiming takes an explicit user action.** A device sets `NotionOwnerDeviceId` to its own ID
+  only when the user saves a Notion token on it (connects Notion), or when it creates a vault while
+  holding a token (section 12.1; `data-model.md` section 8.5). Nothing else claims the connector:
+  a vault whose `NotionOwnerDeviceId` is `null`, missing, or names a device that left does **not**
+  get an owner automatically, even on a device that still holds a token.
+- **Re-saving the token on the current owner changes nothing:** no new record for
+  `NotionOwnerDeviceId`, and the device's owner state (below) stays as it is.
+- **Pending, then full owner.** A device that has just claimed the connector is a *pending owner*.
+  It pushes, but pulls nothing from Notion, until it has completed one push pass of **every live
+  bill** with no errors; only then is it a *full owner* and starts pulling. A pass with any error
+  leaves it pending and is retried on the next run. This is how a new owner learns its `lastPushed`
+  values (section 5.3) before any pull can be mistaken for an edit. (A Notion edit made while
+  ownership moves can be overwritten by that push.) Pending or full is per-device state, persisted
+  locally (`data-model.md` section 6.2).
 - A device that sees `NotionOwnerDeviceId` change to another device stops running the connector.
+- **Leaving.** An owner that leaves the vault clears `NotionOwnerDeviceId` (section 12.4). A device
+  that has left does not run the connector again, with or without sync, until the user explicitly
+  reconnects Notion on it (which is a claim, above).
+- **New identity.** A device that creates a vault under a new device ID **without** holding a
+  Notion token writes `NotionOwnerDeviceId = null` among its first records if its local data still
+  holds a value (a stale owner from an earlier identity or vault). With a token, it claims instead.
 - Notion page and database IDs are synced (`bill.notionPageId`, `payment.notionPageId`,
   `balanceSnapshot.notionPageId`, `Notion*Db` settings), so a new owner updates the same pages
   instead of creating duplicates.
-- The echo state (`lastPushed`, section 5.3) is per device. A new owner MUST push every bill before
-  its first pull, so its `lastPushed` values are known. (A Notion edit made in the minutes while
-  ownership moves can be overwritten by that push.)
 - Notion's Remaining column is always written as computed Remaining. Pulling a Remaining value goes
   through `setRemaining` with `source: "notion"`.
+
+### 12.6 Notion page matching and deleted bills (decided here)
+
+**Matching a Notion page to a bill.** When the connector reads a page from the Bills database, it
+finds the bill in this order and stops at the first match:
+
+1. the bill whose `notionPageId` equals the page's ID;
+2. the bill whose ID equals the page's "Bill ID" text property (a UUID-shaped value is lowercased
+   first, `data-model.md` section 2);
+3. the bill whose ID equals the legacy-ID mapping of "Bill ID" (`data-model.md` section 8.2: a
+   non-UUID value such as `"13"` maps to `UUIDv5(namespace, "legacy-bill/13")`), so pages created
+   before the ID migration still match.
+
+Every push writes the bill's current ID to the page's "Bill ID" property (and the page's ID to
+`bill.notionPageId`), so after one push a page matches by step 1 or 2.
+
+**Archive on delete.** On its next connector run, the owner moves the Notion page of every
+tombstoned bill that has a `notionPageId` to Notion's trash (`in_trash: true` in the Notion API,
+formerly `archived`). This replaces the old "archive-on-delete needs a tombstone table" carryover.
+
+**A pull never undeletes.** A Notion page that matches a tombstoned bill (by any step above) is
+ignored: none of its values are merged, and it never creates a new bill. Only a user undeleting the
+bill in an app brings it back.
+
+### 12.7 Locked device: unlock (decided here)
+
+A device is **Locked** when it has local sync state for a vault (device ID, cursors, sequence
+number, outgoing batches) but the vault key is missing from its keystore (for example the OS
+keystore was cleared, or app data was restored without it). A Locked device does not read or
+upload. It unlocks with a pairing code (section 9) or the recovery phrase (section 8):
+
+1. Confirm the key against vault.json's key check value (section 7.2). If vault.json's `vaultId`
+   differs from the one this device joined, this is not an unlock: offer "join" (section 12.2).
+2. Store the key in the keystore and resume syncing with the **same device ID** and all local data
+   and sync state: cursors, the next sequence number and any sealed batches still to upload.
+
+Unlocking is neither a create nor a join, so it does not make a new device ID (section 1) and does
+not replace local data.
 
 ## 13. Security notes
 
@@ -1075,6 +1161,9 @@ the contract.
 | `badPath`, `badSeq` | File names | Not a sync file; ignored. |
 | `wrongWordCount`, `unknownWord`, `badChecksum` | Recovery phrase | "Check the words and try again." |
 | `badQr` | Pairing QR | "That isn't a FutureCheck pairing code." |
+
+The pairing outcomes `expired` and `keyCheckMismatch` (section 9.1) are reported to the user like
+these codes but are not file error codes and do not appear in fixtures.
 | `badKeyLength`, `badNonceLength` | Crypto helpers (reference only) | |
 
 ## 15. Decisions made here
@@ -1113,3 +1202,10 @@ the contract.
 | 26 | Notion connector owner = synced `NotionOwnerDeviceId`; new owner pushes before pulling | 12.5 |
 | 27 | Clock state is persisted in the same transaction as the records it stamped | 2.3 |
 | 28 | Paychecks of Irregular sources get UUIDv7 IDs; migrated extra payments and balance snapshots get content-derived UUIDv5 IDs | 3.2 |
+| 29 | Notion ownership is claimed only by an explicit action; pending owner pulls nothing until one error-free push pass of every live bill; re-saving the token changes nothing; leaving clears the owner; a device that left waits for an explicit reconnect; a new identity without a token clears a stale owner | 12.4, 12.5 |
+| 30 | Notion pages match a bill by `notionPageId`, then "Bill ID", then the legacy mapping of "Bill ID"; pushes write "Bill ID" | 12.6 |
+| 31 | The owner trashes Notion pages of tombstoned bills; a pull never undeletes a bill | 12.6 |
+| 32 | A Locked device unlocks with a pairing code or the recovery phrase and keeps its device ID and data | 12.7 |
+| 33 | The 24-hour unreadable-file and gap timers persist across restarts; resolved entries are pruned | 10.2 |
+| 34 | Pairing expiry is inclusive (`now ≤ expiresAt` is accepted); `expired` and `keyCheckMismatch` are UI outcomes, not file codes | 9.1 |
+| 35 | A joining device may queue its `device` row before its first read | 12.2 |
