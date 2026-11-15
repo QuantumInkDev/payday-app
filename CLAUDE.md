@@ -1,7 +1,7 @@
 # PayDay App (product name: FutureCheck)
 
 **Last Updated**: November 14, 2026
-**Project Phase**: Multi-platform step 1 (repo restructure) done — next: feature scoping
+**Project Phase**: Multi-platform steps 1–4 done (restructure, name, feature scope, spec + conformance) — next: step 5, Windows sync
 **Current Version**: unknown — no version string is set in any `.csproj`, and `SESSION_STATUS.md` does not record one
 
 ## 🚀 What This App Does
@@ -50,7 +50,8 @@ Key packages:
   WindowsAppSDK auto-initializer throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process
   without package identity. That constraint is why the VMs live here, not in the app project.
   `InternalsVisibleTo("PayDay.Tests")` keeps helpers internal but test-visible.
-- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`. 194 tests as of the last verified run.
+- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`, including `Conformance/` which runs `spec/conformance/core/*.json`. 353 tests as of the last verified run. Runs on the Mac too (`export PATH=~/.dotnet:$PATH; dotnet test apps/windows/PayDay.Tests`).
+- **`spec/`** — the cross-platform contract: data model, sync protocol, and JSON conformance fixtures every app must pass. `tools/spec/check_fixtures.py` (Python reference) re-derives the sync fixtures.
 - **`tools/vm-build.sh`** — builds and tests a pushed commit on the arm64 Windows VM from the Mac.
 - **`planning/`** — the build plan and sprint tracking. `PAYDAY_WINUI3_PLAN.md` is the master plan
   (Phases 1–8, DB schema, seed data, Notion DB IDs, design system). `current-sprint.md` tracks the
@@ -118,24 +119,24 @@ revertable:
 
 | Chunk | Commit | What |
 |---|---|---|
-| 7a | `653312e` | Sortable All Bills columns |
-| 7b | `242b713` | Bill auto-sync on edit |
-| 7c | `d5a4ef6` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
-| 7d | `3b1f78b` | Sync Now at top of nav + Pay decrements Remaining |
-| 7e | `94b76e6` | Dashboard polish |
-| 7f | `9d09129` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types) |
-| 7g | `669de55` | Type tag color customization |
-| 7h | `a83ae28` | Installments type |
-| 7i | `45023bf` | Insights snapshot delete/clear + Payoff snowball/avalanche |
-| 7j | `48e191a` | Exclude inactive bills from BillGroup subtotals |
-| 7k | `c470138` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
+| 7a | `8f73958` | Sortable All Bills columns |
+| 7b | `8d7935a` | Bill auto-sync on edit |
+| 7c | `122be56` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
+| 7d | `8c0e8fd` | Sync Now at top of nav + Pay decrements Remaining |
+| 7e | `c928deb` | Dashboard polish |
+| 7f | `72149aa` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types) |
+| 7g | `89188d1` | Type tag color customization |
+| 7h | `d1a8c02` | Installments type |
+| 7i | `7c4fa77` | Insights snapshot delete/clear + Payoff snowball/avalanche |
+| 7j | `08b5882` | Exclude inactive bills from BillGroup subtotals |
+| 7k | `57a97b8` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 Tests went 150 → **194** across Phase 7. Phase 5 (Notion sync) and Phase 6 (backup/restore,
 auto-backup) are closed.
 
 **In flight:** nothing is mid-implementation. Work for the multi-platform design happens on
 `feature/multiplatform` until merged to `main` (repo restructure done: Windows projects moved to
-`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `1bb7f97`
+`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `cc74064`
 (the 2026-05-17 end-of-night status commit that closed Phase 7). The next step is design §9 step 3
 (`planning/2026-11-14-multiplatform-design.md`): scope the new features. **Phase 8 — Ship** (MSIX
 packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8) is now design §9 step 12.

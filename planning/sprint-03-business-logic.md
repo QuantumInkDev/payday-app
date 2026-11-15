@@ -4,7 +4,7 @@
 **Closed:** 2026-05-15
 **Scope:** Port the JS pay-period engine, payment-tracking helpers, and payoff calculator to C#. No UI yet — that's Phase 4.
 **Plan reference:** `PAYDAY_WINUI3_PLAN.md` §3 (§3.1 Pay Period Engine, §3.2 Payment Tracking, §3.3 Payoff Calculator).
-**Prior sprint:** `sprint-02-data-layer.md` (closed 2026-05-15, commit `d0f7c79`).
+**Prior sprint:** `sprint-02-data-layer.md` (closed 2026-05-15, commit `22be62f`).
 
 ## Tasks
 

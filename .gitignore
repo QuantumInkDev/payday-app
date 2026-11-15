@@ -60,3 +60,10 @@ artifacts/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Python (tools/spec)
+__pycache__/
+.venv/
+
+# Agent worktrees
+.claude/worktrees/

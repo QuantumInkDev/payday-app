@@ -22,4 +22,7 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Conformance fixtures are read from spec/conformance/ in the source tree at test time
+       (ConformanceFixtures.cs), not copied to the output, so a deleted fixture cannot linger in bin/. -->
+
 </Project>

@@ -1,0 +1,1363 @@
+{
+  "version": 1,
+  "description": "Backup file (JSON export/import). Three kinds of case; full rules in README.md. kind 'serialize': input { kind, exportedAtUtc: date-time in UTC, bills: [Bill], payments: [Payment], snapshots: [Snapshot], settings: { key: string or null } } -> expected { document }, the backup file parsed as JSON and compared structurally (key order and whitespace do not matter). The document has formatVersion 1, exportedAt as the UTC time with 7 fractional digits and a Z, then bills, payments, snapshots, settings; keys are camelCase; a property whose value is null is left out, but a null settings value is written as null. kind 'parse': input { kind, document: object } or { kind, text: string } (text is used where the input is not a plain JSON object, such as invalid JSON or duplicate keys). expected { backup } or { rejected: true }. backup is normalised: every field of every record is present, missing fields take their defaults (Bill defaults in README.md; Payment: id 0, billId '', periodKey '', amountPaid 0; Snapshot: id 0, snapshotDate '', totalRemaining 0; optional strings null), missing bills/payments/snapshots/settings are empty. Keys are case-sensitive camelCase; unknown keys are ignored. Legacy bills: keys 'cost' and 'owed' inside a bill are read as 'payment' and 'remaining'. Rejected: not valid JSON, a root that is not an object, formatVersion missing or < 1 or > 1, or a value of the wrong JSON type. kind 'roundTrip': input as for 'serialize' -> expected { backup }, the normalised result of parsing what serialize wrote.",
+  "cases": [
+    {
+      "name": "serialize an empty dataset",
+      "input": {
+        "kind": "serialize",
+        "exportedAtUtc": "2025-05-15T12:00:00",
+        "bills": [],
+        "payments": [],
+        "snapshots": [],
+        "settings": {}
+      },
+      "expected": {
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "serialize a full dataset: nulls are omitted, settings nulls kept",
+      "input": {
+        "kind": "serialize",
+        "exportedAtUtc": "2025-05-15T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 55.0,
+            "remaining": 1200.0,
+            "available": 1800.0,
+            "creditLimit": 3000.0,
+            "dueDay": 12,
+            "rate": "Monthly",
+            "apr": 24.99,
+            "autoPay": false,
+            "active": true,
+            "notes": "Fictional test card",
+            "createdAt": "2025-03-01T09:00:00",
+            "updatedAt": "2025-05-10T18:30:00",
+            "notionPageId": "page-0001"
+          },
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20
+          },
+          {
+            "id": "domain",
+            "name": "Domain Renewal",
+            "type": "Subscriptions",
+            "payment": 15.0,
+            "rate": "Yearly",
+            "yearlyDate": "07-04",
+            "autoPay": true
+          },
+          {
+            "id": "old",
+            "name": "Old Phone",
+            "type": "Bills",
+            "payment": 45.0,
+            "active": false
+          }
+        ],
+        "payments": [
+          {
+            "id": 5,
+            "billId": "contoso",
+            "periodKey": "2025-05-15",
+            "amountPaid": 55.0,
+            "paidAt": "2025-05-16T10:00:00.0000000Z",
+            "notionPageId": "page-0101"
+          },
+          {
+            "id": 6,
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 120.0
+          }
+        ],
+        "snapshots": [
+          {
+            "id": 1,
+            "snapshotDate": "2025-05-15",
+            "totalRemaining": 1200.0,
+            "details": "{\"contoso\":1200.00}",
+            "notionPageId": "page-0201"
+          },
+          {
+            "id": 2,
+            "snapshotDate": "2025-05-29",
+            "totalRemaining": 1145.0
+          }
+        ],
+        "settings": {
+          "PayAnchor": "2025-03-20",
+          "EarlyStart": "false",
+          "Theme": null
+        }
+      },
+      "expected": {
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [
+            {
+              "id": "contoso",
+              "name": "Contoso Card",
+              "type": "Cards",
+              "payment": 55,
+              "remaining": 1200,
+              "available": 1800,
+              "creditLimit": 3000,
+              "dueDay": 12,
+              "rate": "Monthly",
+              "apr": 24.99,
+              "autoPay": false,
+              "active": true,
+              "notes": "Fictional test card",
+              "createdAt": "2025-03-01T09:00:00",
+              "updatedAt": "2025-05-10T18:30:00",
+              "notionPageId": "page-0001"
+            },
+            {
+              "id": "electric",
+              "name": "Electric",
+              "type": "Bills",
+              "payment": 120,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 20,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true
+            },
+            {
+              "id": "domain",
+              "name": "Domain Renewal",
+              "type": "Subscriptions",
+              "payment": 15,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Yearly",
+              "apr": 0,
+              "autoPay": true,
+              "active": true,
+              "yearlyDate": "07-04"
+            },
+            {
+              "id": "old",
+              "name": "Old Phone",
+              "type": "Bills",
+              "payment": 45,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": false
+            }
+          ],
+          "payments": [
+            {
+              "id": 5,
+              "billId": "contoso",
+              "periodKey": "2025-05-15",
+              "amountPaid": 55,
+              "paidAt": "2025-05-16T10:00:00.0000000Z",
+              "notionPageId": "page-0101"
+            },
+            {
+              "id": 6,
+              "billId": "electric",
+              "periodKey": "2025-05-15",
+              "amountPaid": 120
+            }
+          ],
+          "snapshots": [
+            {
+              "id": 1,
+              "snapshotDate": "2025-05-15",
+              "totalRemaining": 1200,
+              "details": "{\"contoso\":1200.00}",
+              "notionPageId": "page-0201"
+            },
+            {
+              "id": 2,
+              "snapshotDate": "2025-05-29",
+              "totalRemaining": 1145
+            }
+          ],
+          "settings": {
+            "PayAnchor": "2025-03-20",
+            "EarlyStart": "false",
+            "Theme": null
+          }
+        }
+      }
+    },
+    {
+      "name": "serialize keeps cents and non-ASCII names",
+      "input": {
+        "kind": "serialize",
+        "exportedAtUtc": "2025-05-15T12:00:00",
+        "bills": [
+          {
+            "id": "cafe",
+            "name": "Café Électrique – Ünïcode",
+            "type": "Bills",
+            "payment": 19.99,
+            "remaining": 0.01
+          }
+        ],
+        "payments": [],
+        "snapshots": [],
+        "settings": {}
+      },
+      "expected": {
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [
+            {
+              "id": "cafe",
+              "name": "Café Électrique – Ünïcode",
+              "type": "Bills",
+              "payment": 19.99,
+              "remaining": 0.01,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "serialize exportedAt at a year boundary",
+      "input": {
+        "kind": "serialize",
+        "exportedAtUtc": "2025-12-31T23:59:59",
+        "bills": [],
+        "payments": [],
+        "snapshots": [],
+        "settings": {}
+      },
+      "expected": {
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-12-31T23:59:59.0000000Z",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "round trip an empty dataset",
+      "input": {
+        "kind": "roundTrip",
+        "exportedAtUtc": "2025-05-15T12:00:00",
+        "bills": [],
+        "payments": [],
+        "snapshots": [],
+        "settings": {}
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "round trip a full dataset",
+      "input": {
+        "kind": "roundTrip",
+        "exportedAtUtc": "2025-05-15T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 55.0,
+            "remaining": 1200.0,
+            "available": 1800.0,
+            "creditLimit": 3000.0,
+            "dueDay": 12,
+            "rate": "Monthly",
+            "apr": 24.99,
+            "autoPay": false,
+            "active": true,
+            "notes": "Fictional test card",
+            "createdAt": "2025-03-01T09:00:00",
+            "updatedAt": "2025-05-10T18:30:00",
+            "notionPageId": "page-0001"
+          },
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20
+          },
+          {
+            "id": "domain",
+            "name": "Domain Renewal",
+            "type": "Subscriptions",
+            "payment": 15.0,
+            "rate": "Yearly",
+            "yearlyDate": "07-04",
+            "autoPay": true
+          },
+          {
+            "id": "old",
+            "name": "Old Phone",
+            "type": "Bills",
+            "payment": 45.0,
+            "active": false
+          }
+        ],
+        "payments": [
+          {
+            "id": 5,
+            "billId": "contoso",
+            "periodKey": "2025-05-15",
+            "amountPaid": 55.0,
+            "paidAt": "2025-05-16T10:00:00.0000000Z",
+            "notionPageId": "page-0101"
+          },
+          {
+            "id": 6,
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 120.0
+          }
+        ],
+        "snapshots": [
+          {
+            "id": 1,
+            "snapshotDate": "2025-05-15",
+            "totalRemaining": 1200.0,
+            "details": "{\"contoso\":1200.00}",
+            "notionPageId": "page-0201"
+          },
+          {
+            "id": 2,
+            "snapshotDate": "2025-05-29",
+            "totalRemaining": 1145.0
+          }
+        ],
+        "settings": {
+          "PayAnchor": "2025-03-20",
+          "EarlyStart": "false",
+          "Theme": null
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [
+            {
+              "id": "contoso",
+              "name": "Contoso Card",
+              "type": "Cards",
+              "payment": 55,
+              "remaining": 1200,
+              "available": 1800,
+              "creditLimit": 3000,
+              "dueDay": 12,
+              "rate": "Monthly",
+              "apr": 24.99,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": "Fictional test card",
+              "createdAt": "2025-03-01T09:00:00",
+              "updatedAt": "2025-05-10T18:30:00",
+              "notionPageId": "page-0001"
+            },
+            {
+              "id": "electric",
+              "name": "Electric",
+              "type": "Bills",
+              "payment": 120,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 20,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            },
+            {
+              "id": "domain",
+              "name": "Domain Renewal",
+              "type": "Subscriptions",
+              "payment": 15,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Yearly",
+              "apr": 0,
+              "autoPay": true,
+              "active": true,
+              "yearlyDate": "07-04",
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            },
+            {
+              "id": "old",
+              "name": "Old Phone",
+              "type": "Bills",
+              "payment": 45,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": false,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [
+            {
+              "id": 5,
+              "billId": "contoso",
+              "periodKey": "2025-05-15",
+              "amountPaid": 55,
+              "paidAt": "2025-05-16T10:00:00.0000000Z",
+              "notionPageId": "page-0101"
+            },
+            {
+              "id": 6,
+              "billId": "electric",
+              "periodKey": "2025-05-15",
+              "amountPaid": 120,
+              "paidAt": null,
+              "notionPageId": null
+            }
+          ],
+          "snapshots": [
+            {
+              "id": 1,
+              "snapshotDate": "2025-05-15",
+              "totalRemaining": 1200,
+              "details": "{\"contoso\":1200.00}",
+              "notionPageId": "page-0201"
+            },
+            {
+              "id": 2,
+              "snapshotDate": "2025-05-29",
+              "totalRemaining": 1145,
+              "details": null,
+              "notionPageId": null
+            }
+          ],
+          "settings": {
+            "PayAnchor": "2025-03-20",
+            "EarlyStart": "false",
+            "Theme": null
+          }
+        }
+      }
+    },
+    {
+      "name": "round trip keeps cents and non-ASCII names",
+      "input": {
+        "kind": "roundTrip",
+        "exportedAtUtc": "2025-05-15T12:00:00",
+        "bills": [
+          {
+            "id": "cafe",
+            "name": "Café Électrique – Ünïcode",
+            "type": "Bills",
+            "payment": 19.99,
+            "remaining": 0.01
+          }
+        ],
+        "payments": [],
+        "snapshots": [],
+        "settings": {}
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [
+            {
+              "id": "cafe",
+              "name": "Café Électrique – Ünïcode",
+              "type": "Bills",
+              "payment": 19.99,
+              "remaining": 0.01,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse a header-only file gives empty collections",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-01-01"
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-01-01",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse fills bill defaults for missing fields",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [
+            {
+              "id": "x"
+            }
+          ],
+          "payments": [
+            {
+              "billId": "x"
+            }
+          ],
+          "snapshots": [
+            {}
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T12:00:00.0000000Z",
+          "bills": [
+            {
+              "id": "x",
+              "name": "",
+              "type": "",
+              "payment": 0,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [
+            {
+              "id": 0,
+              "billId": "x",
+              "periodKey": "",
+              "amountPaid": 0,
+              "paidAt": null,
+              "notionPageId": null
+            }
+          ],
+          "snapshots": [
+            {
+              "id": 0,
+              "snapshotDate": "",
+              "totalRemaining": 0,
+              "details": null,
+              "notionPageId": null
+            }
+          ],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse legacy cost and owed keys",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Contoso Card",
+              "type": "Cards",
+              "cost": 55.0,
+              "owed": 1200.0
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Contoso Card",
+              "type": "Cards",
+              "payment": 55,
+              "remaining": 1200,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse a mix of legacy and current bills",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "legacy",
+              "name": "Woodgrove Rewards",
+              "type": "Cards",
+              "cost": 35.25,
+              "owed": 300.5
+            },
+            {
+              "id": "current",
+              "name": "Electric",
+              "type": "Bills",
+              "payment": 120.0,
+              "remaining": 0
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "legacy",
+              "name": "Woodgrove Rewards",
+              "type": "Cards",
+              "payment": 35.25,
+              "remaining": 300.5,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            },
+            {
+              "id": "current",
+              "name": "Electric",
+              "type": "Bills",
+              "payment": 120,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse legacy cost alone",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Phone",
+              "cost": 65.5
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Phone",
+              "type": "",
+              "payment": 65.5,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse a bill with both cost and payment: the later key wins (payment last)",
+      "input": {
+        "kind": "parse",
+        "text": "{\"formatVersion\": 1, \"exportedAt\": \"2025-05-15T00:00:00\", \"bills\": [{\"id\": \"1\", \"name\": \"Phone\", \"cost\": 10.00, \"payment\": 20.00}]}"
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Phone",
+              "type": "",
+              "payment": 20,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse a bill with both cost and payment: the later key wins (cost last)",
+      "input": {
+        "kind": "parse",
+        "text": "{\"formatVersion\": 1, \"exportedAt\": \"2025-05-15T00:00:00\", \"bills\": [{\"id\": \"1\", \"name\": \"Phone\", \"payment\": 20.00, \"cost\": 10.00}]}"
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Phone",
+              "type": "",
+              "payment": 10,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse capitalised legacy keys Cost and Owed are not migrated",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Phone",
+              "Cost": 65.5,
+              "Owed": 300.0
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Phone",
+              "type": "",
+              "payment": 0,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse legacy snapshot key totalOwed is not migrated",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "snapshots": [
+            {
+              "id": 1,
+              "snapshotDate": "2025-05-15",
+              "totalOwed": 1200.0
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [],
+          "payments": [],
+          "snapshots": [
+            {
+              "id": 1,
+              "snapshotDate": "2025-05-15",
+              "totalRemaining": 0,
+              "details": null,
+              "notionPageId": null
+            }
+          ],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse ignores unknown keys",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "appName": "FutureCheck",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Electric",
+              "payment": 120.0,
+              "color": "#ffcc00"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Electric",
+              "type": "",
+              "payment": 120,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse PascalCase keys are not recognised",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "Id": "1",
+              "Name": "Electric",
+              "Payment": 120.0,
+              "id": "1"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "",
+              "type": "",
+              "payment": 0,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse null collections become empty",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": null,
+          "payments": null,
+          "snapshots": null,
+          "settings": null
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse keeps null settings values",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "settings": {
+            "PayAnchor": "2025-03-20",
+            "Theme": null
+          }
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {
+            "PayAnchor": "2025-03-20",
+            "Theme": null
+          }
+        }
+      }
+    },
+    {
+      "name": "parse missing exportedAt gives an empty string",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "",
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse null exportedAt stays null",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": null
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": null,
+          "bills": [],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "parse null optional bill strings stay null",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Electric",
+              "notes": null,
+              "yearlyDate": null
+            }
+          ]
+        }
+      },
+      "expected": {
+        "backup": {
+          "formatVersion": 1,
+          "exportedAt": "2025-05-15T00:00:00",
+          "bills": [
+            {
+              "id": "1",
+              "name": "Electric",
+              "type": "",
+              "payment": 0,
+              "remaining": 0,
+              "available": 0,
+              "creditLimit": 0,
+              "dueDay": 1,
+              "rate": "Monthly",
+              "apr": 0,
+              "autoPay": false,
+              "active": true,
+              "yearlyDate": null,
+              "notes": null,
+              "createdAt": null,
+              "updatedAt": null,
+              "notionPageId": null
+            }
+          ],
+          "payments": [],
+          "snapshots": [],
+          "settings": {}
+        }
+      }
+    },
+    {
+      "name": "reject a missing formatVersion",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "bills": []
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject formatVersion 0",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 0,
+          "exportedAt": "2025-01-01"
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject a negative formatVersion",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": -1,
+          "exportedAt": "2025-01-01"
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject a future formatVersion",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 2,
+          "exportedAt": "2025-01-01"
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject formatVersion as a string",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": "1",
+          "exportedAt": "2025-01-01"
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject a bill payment given as a string",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-01-01",
+          "bills": [
+            {
+              "id": "1",
+              "payment": "55.00"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject a numeric bill id",
+      "input": {
+        "kind": "parse",
+        "document": {
+          "formatVersion": 1,
+          "exportedAt": "2025-01-01",
+          "bills": [
+            {
+              "id": 1
+            }
+          ]
+        }
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject invalid JSON",
+      "input": {
+        "kind": "parse",
+        "text": "{\"formatVersion\": 1, \"bills\": ["
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject trailing commas",
+      "input": {
+        "kind": "parse",
+        "text": "{\"formatVersion\": 1, \"exportedAt\": \"2025-01-01\",}"
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject a root array",
+      "input": {
+        "kind": "parse",
+        "text": "[{\"formatVersion\": 1}]"
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject a root null",
+      "input": {
+        "kind": "parse",
+        "text": "null"
+      },
+      "expected": {
+        "rejected": true
+      }
+    },
+    {
+      "name": "reject an empty file",
+      "input": {
+        "kind": "parse",
+        "text": ""
+      },
+      "expected": {
+        "rejected": true
+      }
+    }
+  ]
+}

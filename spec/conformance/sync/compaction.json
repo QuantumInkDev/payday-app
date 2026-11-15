@@ -1,0 +1,819 @@
+{
+  "version": 1,
+  "description": "Reading with snapshots and compaction rules (sync-protocol.md sections 10.2 and 11).",
+  "cases": [
+    {
+      "name": "fresh join with no snapshots reads every file",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {},
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3
+          ],
+          "0b0b0b0b0b0b0b0b": [
+            1,
+            2
+          ]
+        },
+        "snapshots": []
+      },
+      "expected": {
+        "mergeSnapshots": [],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3
+          ],
+          "0b0b0b0b0b0b0b0b": [
+            1,
+            2
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 3,
+          "0b0b0b0b0b0b0b0b": 2
+        },
+        "gaps": {}
+      }
+    },
+    {
+      "name": "join after compaction merges the snapshot that covers the missing files",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {},
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            41,
+            42
+          ],
+          "0b0b0b0b0b0b0b0b": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f56320-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 40,
+              "0b0b0b0b0b0b0b0b": 3
+            }
+          }
+        ]
+      },
+      "expected": {
+        "mergeSnapshots": [
+          "01a1d9f56320-0000-0b0b0b0b0b0b0b0b"
+        ],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            41,
+            42
+          ],
+          "0b0b0b0b0b0b0b0b": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 42,
+          "0b0b0b0b0b0b0b0b": 5
+        },
+        "gaps": {}
+      }
+    },
+    {
+      "name": "a device that compacted and went quiet: the snapshot is merged although no higher file exists",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0b0b0b0b0b0b0b0b": 10
+        },
+        "files": {
+          "0b0b0b0b0b0b0b0b": []
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f56320-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 7,
+              "0b0b0b0b0b0b0b0b": 40
+            }
+          }
+        ]
+      },
+      "expected": {
+        "mergeSnapshots": [
+          "01a1d9f56320-0000-0a0a0a0a0a0a0a0a"
+        ],
+        "readFiles": {},
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 7,
+          "0b0b0b0b0b0b0b0b": 40
+        },
+        "gaps": {}
+      },
+      "note": "B deleted files 11-40 after a snapshot covered them and wrote nothing since. A reader at cursor 10 finds no file 11 and no higher file; it must still merge the snapshot."
+    },
+    {
+      "name": "concurrent snapshots: the older one is the one that covers the gap",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 12,
+          "0b0b0b0b0b0b0b0b": 5
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "0b0b0b0b0b0b0b0b": [
+            11,
+            12
+          ]
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20,
+              "0b0b0b0b0b0b0b0b": 5
+            }
+          },
+          {
+            "hlc": "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 12,
+              "0b0b0b0b0b0b0b0b": 10
+            }
+          }
+        ]
+      },
+      "expected": {
+        "mergeSnapshots": [
+          "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b"
+        ],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "0b0b0b0b0b0b0b0b": [
+            11,
+            12
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 20,
+          "0b0b0b0b0b0b0b0b": 12
+        },
+        "gaps": {}
+      },
+      "note": "Reading only the newest snapshot would never fill B's gap 6-10; readers consider every listed snapshot."
+    },
+    {
+      "name": "a gap no snapshot covers is reported",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            4
+          ]
+        },
+        "snapshots": []
+      },
+      "expected": {
+        "mergeSnapshots": [],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 2
+        },
+        "gaps": {
+          "0a0a0a0a0a0a0a0a": 3
+        }
+      }
+    },
+    {
+      "name": "two snapshots fill two gaps",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3,
+            11,
+            12,
+            13,
+            21,
+            22
+          ]
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f255e0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 10
+            }
+          },
+          {
+            "hlc": "01a1d9f3dc80-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20
+            }
+          }
+        ]
+      },
+      "expected": {
+        "mergeSnapshots": [
+          "01a1d9f255e0-0000-0a0a0a0a0a0a0a0a",
+          "01a1d9f3dc80-0000-0a0a0a0a0a0a0a0a"
+        ],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3,
+            21,
+            22
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 22
+        },
+        "gaps": {}
+      }
+    },
+    {
+      "name": "a listed file that cannot be opened falls back to a snapshot that covers it",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 4
+            }
+          }
+        ],
+        "unreadable": {
+          "0a0a0a0a0a0a0a0a": [
+            3
+          ]
+        }
+      },
+      "expected": {
+        "mergeSnapshots": [
+          "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b"
+        ],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            5
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 5
+        },
+        "gaps": {}
+      },
+      "note": "File 3 failed to open in this sync. For the snapshot step it counts as not listed, so the snapshot covering it is merged instead of the reader stalling on it."
+    },
+    {
+      "name": "a listed file that cannot be opened and is not covered is a gap",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "snapshots": [],
+        "unreadable": {
+          "0a0a0a0a0a0a0a0a": [
+            3
+          ]
+        }
+      },
+      "expected": {
+        "mergeSnapshots": [],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 2
+        },
+        "gaps": {
+          "0a0a0a0a0a0a0a0a": 3
+        }
+      },
+      "note": "Retry next sync; after 24 hours show 'A file from <device> could not be read'."
+    },
+    {
+      "name": "a snapshot is not required when every file is present",
+      "input": {
+        "fn": "readPlan",
+        "cursors": {
+          "0a0a0a0a0a0a0a0a": 0
+        },
+        "files": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3
+          ]
+        },
+        "snapshots": [
+          {
+            "hlc": "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 3
+            }
+          }
+        ]
+      },
+      "expected": {
+        "mergeSnapshots": [],
+        "readFiles": {
+          "0a0a0a0a0a0a0a0a": [
+            1,
+            2,
+            3
+          ]
+        },
+        "cursorsAfter": {
+          "0a0a0a0a0a0a0a0a": 3
+        },
+        "gaps": {}
+      },
+      "note": "A reader MAY merge it anyway; cursorsAfter is the same either way."
+    },
+    {
+      "name": "snapshot age: first listed 8 days ago, provider says 8 days",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1794657600000,
+        "localNowMs": 1795348800000,
+        "serverCreatedMs": 1794657600000,
+        "serverNowMs": 1795348800000
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "name": "snapshot age: exactly 7 days by both clocks",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1794657600000,
+        "localNowMs": 1795262400000,
+        "serverCreatedMs": 1794657600000,
+        "serverNowMs": 1795262400000
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "name": "snapshot age: the local clock jumped 6 days ahead, the provider says 2 days",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1794657600000,
+        "localNowMs": 1795348800000,
+        "serverCreatedMs": 1794657600000,
+        "serverNowMs": 1794830400000
+      },
+      "expected": {
+        "ok": false
+      }
+    },
+    {
+      "name": "snapshot age: provider time unavailable",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1794657600000,
+        "localNowMs": 1797249600000,
+        "serverCreatedMs": null,
+        "serverNowMs": null
+      },
+      "expected": {
+        "ok": false
+      }
+    },
+    {
+      "name": "snapshot age: listed only yesterday on this device although the provider says 9 days",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1795348800000,
+        "localNowMs": 1795435200000,
+        "serverCreatedMs": 1794657600000,
+        "serverNowMs": 1795435200000
+      },
+      "expected": {
+        "ok": false
+      }
+    },
+    {
+      "name": "snapshot age: written by a device whose clock is a year ahead",
+      "input": {
+        "fn": "snapshotAgeOk",
+        "firstSeenLocalMs": 1794657600000,
+        "localNowMs": 1795348800000,
+        "serverCreatedMs": 1794657600000,
+        "serverNowMs": 1795348800000
+      },
+      "expected": {
+        "ok": true
+      },
+      "note": "The snapshot's HLC wall time (a year in the future) is not an input: local age counts from when this device first listed the file, so one skewed writer cannot stop compaction for the whole vault."
+    },
+    {
+      "name": "own files covered by an old enough snapshot",
+      "input": {
+        "fn": "deletableChangeFiles",
+        "deviceId": "0a0a0a0a0a0a0a0a",
+        "seqs": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "snapshots": [
+          {
+            "hlc": "01a1d9ef48a0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 3
+            },
+            "ageOk": true
+          }
+        ]
+      },
+      "expected": {
+        "deletable": [
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "name": "nothing is deleted while the covering snapshot is too young",
+      "input": {
+        "fn": "deletableChangeFiles",
+        "deviceId": "0a0a0a0a0a0a0a0a",
+        "seqs": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "snapshots": [
+          {
+            "hlc": "01a1d9ef48a0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 3
+            },
+            "ageOk": false
+          }
+        ]
+      },
+      "expected": {
+        "deletable": []
+      }
+    },
+    {
+      "name": "a newer snapshot that covers less blocks deletion",
+      "input": {
+        "fn": "deletableChangeFiles",
+        "deviceId": "0b0b0b0b0b0b0b0b",
+        "seqs": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "snapshots": [
+          {
+            "hlc": "01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20,
+              "0b0b0b0b0b0b0b0b": 5
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 12,
+              "0b0b0b0b0b0b0b0b": 10
+            },
+            "ageOk": true
+          }
+        ]
+      },
+      "expected": {
+        "deletable": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "note": "S_Y covers B's 6-10 but the newer S_X does not, so 6-10 stay; 1-5 are covered by both."
+    },
+    {
+      "name": "once only dominating snapshots remain, the files can go",
+      "input": {
+        "fn": "deletableChangeFiles",
+        "deviceId": "0b0b0b0b0b0b0b0b",
+        "seqs": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "snapshots": [
+          {
+            "hlc": "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 12,
+              "0b0b0b0b0b0b0b0b": 10
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f87060-0000-0c0c0c0c0c0c0c0c",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20,
+              "0b0b0b0b0b0b0b0b": 12
+            },
+            "ageOk": false
+          }
+        ]
+      },
+      "expected": {
+        "deletable": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      },
+      "note": "11-12 are covered only by S_Z, which is not old enough yet."
+    },
+    {
+      "name": "the two newest snapshots are never deleted",
+      "input": {
+        "fn": "deletableSnapshots",
+        "snapshots": [
+          {
+            "hlc": "01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20,
+              "0b0b0b0b0b0b0b0b": 5
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 12,
+              "0b0b0b0b0b0b0b0b": 10
+            },
+            "ageOk": true
+          }
+        ]
+      },
+      "expected": {
+        "deletable": []
+      }
+    },
+    {
+      "name": "an older snapshot dominated by a kept one can be deleted",
+      "input": {
+        "fn": "deletableSnapshots",
+        "snapshots": [
+          {
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 3,
+              "0b0b0b0b0b0b0b0b": 2
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f0cf40-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 5,
+              "0b0b0b0b0b0b0b0b": 4
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 6,
+              "0b0b0b0b0b0b0b0b": 9
+            },
+            "ageOk": true
+          }
+        ]
+      },
+      "expected": {
+        "deletable": [
+          "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+        ]
+      }
+    },
+    {
+      "name": "an older snapshot that covers more for some device is kept",
+      "input": {
+        "fn": "deletableSnapshots",
+        "snapshots": [
+          {
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 3,
+              "0c0c0c0c0c0c0c0c": 8
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f0cf40-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 5,
+              "0b0b0b0b0b0b0b0b": 4
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 6,
+              "0b0b0b0b0b0b0b0b": 9
+            },
+            "ageOk": true
+          }
+        ]
+      },
+      "expected": {
+        "deletable": []
+      },
+      "note": "Neither kept snapshot covers C up to 8."
+    },
+    {
+      "name": "nothing is deleted while the newest snapshot is too young",
+      "input": {
+        "fn": "deletableSnapshots",
+        "snapshots": [
+          {
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 3
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f0cf40-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 5
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f255e0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 6
+            },
+            "ageOk": false
+          }
+        ]
+      },
+      "expected": {
+        "deletable": []
+      }
+    },
+    {
+      "name": "concurrent snapshots resolved by a later dominating one",
+      "input": {
+        "fn": "deletableSnapshots",
+        "snapshots": [
+          {
+            "hlc": "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 12,
+              "0b0b0b0b0b0b0b0b": 10
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20,
+              "0b0b0b0b0b0b0b0b": 5
+            },
+            "ageOk": true
+          },
+          {
+            "hlc": "01a1d9f87060-0000-0c0c0c0c0c0c0c0c",
+            "covers": {
+              "0a0a0a0a0a0a0a0a": 20,
+              "0b0b0b0b0b0b0b0b": 12
+            },
+            "ageOk": true
+          }
+        ]
+      },
+      "expected": {
+        "deletable": [
+          "01a1d9f6c2b0-0000-0b0b0b0b0b0b0b0b"
+        ]
+      },
+      "note": "S_Z merged both, so it dominates S_Y, which can go; S_X is one of the two newest and stays."
+    }
+  ]
+}

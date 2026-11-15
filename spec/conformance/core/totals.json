@@ -1,0 +1,2318 @@
+{
+  "version": 1,
+  "description": "Totals and subtotals. Three kinds of case; Bill shape and defaults are in README.md. kind 'payDayPage' (the PayDay home page for the current period): input { kind, anchor, now, bills: [Bill], payments: [ { billId, periodKey, amountPaid } ] }. The current period is 'This Pay Period' from pay-periods; its bills come from bill-assignment. Auto-pay bills go to autoPayBills and ignore payments. A manual bill is paid when a payment exists with its billId and periodKey = the current period key; with several, only the first in input order counts. expected { periodKey, totalDue (sum of manual bills' payment), totalPaid (sum of counted amountPaid), remaining (max(0, totalDue - totalPaid)), progressFraction (totalDue > 0 ? min(1, totalPaid / totalDue) : 0), isAllPaid (no unpaid manual bills and (at least one paid or totalDue == 0)), autoPayTotal, autoPayBills: [id], unpaidBills: [id], paidBills: [ { id, amountPaid } ] }; each list in bill-assignment order. kind 'dashboard': input { kind, anchor, now, bills }. expected { totalMonthlyObligations (active bills: Monthly payment, Bi-Weekly payment*26/12, Yearly payment/12, anything else 0), totalRemaining (sum of active bills' remaining), hasCreditCards (an active bill with type exactly 'Cards' and creditLimit > 0 exists), creditUtilizationPct (those cards' remaining / their creditLimit * 100, rounded to 1 decimal, 0 when hasCreditCards is false), billsDueThisPeriod, sections: [ { label, key, manualTotal, autoPayTotal, grandTotal, billCount, manualBills: [id], autoPayBills: [id] } ] } with one section per period. kind 'billGroups' (All Bills page): input { kind, bills }. Bills are grouped by type (exact, case-sensitive); groups are ordered Cards, Bills, Loans, Installments, Subscriptions, Business, People, Medical, Other, then any other type ordered case-insensitively. Within a group bills are ordered by name, case-insensitive, ties in input order. expected { totalBills, groups: [ { type, count (including inactive), totalPayment and totalRemaining (active bills only), bills: [id] } ] }.",
+  "cases": [
+    {
+      "name": "empty period counts as all paid",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [],
+        "payments": []
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 0,
+        "totalPaid": 0,
+        "remaining": 0,
+        "progressFraction": 0,
+        "isAllPaid": true,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "one manual bill, unpaid",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": []
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 0,
+        "remaining": 120,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "electric"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "auto-pay bills are excluded from the amount due",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40.0,
+            "dueDay": 25,
+            "rate": "Monthly",
+            "autoPay": true
+          },
+          {
+            "id": "streaming",
+            "name": "Streaming",
+            "type": "Subscriptions",
+            "payment": 15.99,
+            "dueDay": 22,
+            "rate": "Monthly",
+            "autoPay": true
+          }
+        ],
+        "payments": []
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 0,
+        "remaining": 120,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 55.99,
+        "autoPayBills": [
+          "streaming",
+          "contoso"
+        ],
+        "unpaidBills": [
+          "electric"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "partial payments: exact, short and none",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "phone",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65.5,
+            "dueDay": 16,
+            "rate": "Monthly"
+          },
+          {
+            "id": "woodgrove",
+            "name": "Woodgrove Rewards",
+            "type": "Cards",
+            "payment": 35.25,
+            "dueDay": 18,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 120.0
+          },
+          {
+            "billId": "phone",
+            "periodKey": "2025-05-15",
+            "amountPaid": 50.0
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 220.75,
+        "totalPaid": 170,
+        "remaining": 50.75,
+        "progressFraction": 0.7701,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "woodgrove"
+        ],
+        "paidBills": [
+          {
+            "id": "phone",
+            "amountPaid": 50
+          },
+          {
+            "id": "electric",
+            "amountPaid": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "overpayment clamps remaining at 0 and progress at 1",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "phone",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65.5,
+            "dueDay": 16,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 200.0
+          },
+          {
+            "billId": "phone",
+            "periodKey": "2025-05-15",
+            "amountPaid": 65.5
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 185.5,
+        "totalPaid": 265.5,
+        "remaining": 0,
+        "progressFraction": 1,
+        "isAllPaid": true,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [],
+        "paidBills": [
+          {
+            "id": "phone",
+            "amountPaid": 65.5
+          },
+          {
+            "id": "electric",
+            "amountPaid": 200
+          }
+        ]
+      }
+    },
+    {
+      "name": "every manual bill paid",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "phone",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65.5,
+            "dueDay": 16,
+            "rate": "Monthly"
+          },
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40.0,
+            "dueDay": 25,
+            "rate": "Monthly",
+            "autoPay": true
+          }
+        ],
+        "payments": [
+          {
+            "billId": "phone",
+            "periodKey": "2025-05-15",
+            "amountPaid": 65.5
+          },
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 120.0
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 185.5,
+        "totalPaid": 185.5,
+        "remaining": 0,
+        "progressFraction": 1,
+        "isAllPaid": true,
+        "autoPayTotal": 40,
+        "autoPayBills": [
+          "contoso"
+        ],
+        "unpaidBills": [],
+        "paidBills": [
+          {
+            "id": "phone",
+            "amountPaid": 65.5
+          },
+          {
+            "id": "electric",
+            "amountPaid": 120
+          }
+        ]
+      }
+    },
+    {
+      "name": "only auto-pay bills counts as all paid",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40.0,
+            "dueDay": 25,
+            "rate": "Monthly",
+            "autoPay": true
+          },
+          {
+            "id": "streaming",
+            "name": "Streaming",
+            "type": "Subscriptions",
+            "payment": 15.99,
+            "dueDay": 22,
+            "rate": "Monthly",
+            "autoPay": true
+          }
+        ],
+        "payments": []
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 0,
+        "totalPaid": 0,
+        "remaining": 0,
+        "progressFraction": 0,
+        "isAllPaid": true,
+        "autoPayTotal": 55.99,
+        "autoPayBills": [
+          "streaming",
+          "contoso"
+        ],
+        "unpaidBills": [],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "a payment against an auto-pay bill is ignored",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40.0,
+            "dueDay": 25,
+            "rate": "Monthly",
+            "autoPay": true
+          }
+        ],
+        "payments": [
+          {
+            "billId": "contoso",
+            "periodKey": "2025-05-15",
+            "amountPaid": 40.0
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 0,
+        "remaining": 120,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 40,
+        "autoPayBills": [
+          "contoso"
+        ],
+        "unpaidBills": [
+          "electric"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "payments for another period key are ignored",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "phone",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65.5,
+            "dueDay": 16,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-01",
+            "amountPaid": 120.0
+          },
+          {
+            "billId": "phone",
+            "periodKey": "2025-05-29",
+            "amountPaid": 65.5
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 185.5,
+        "totalPaid": 0,
+        "remaining": 185.5,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "phone",
+          "electric"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "payment for a bill not due this period is ignored",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "rent",
+            "name": "Rent",
+            "type": "Bills",
+            "payment": 900,
+            "dueDay": 1,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "rent",
+            "periodKey": "2025-05-15",
+            "amountPaid": 900
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 0,
+        "remaining": 120,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "electric"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "two payments for one bill: only the first counts",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 70.0
+          },
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 50.0
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 70,
+        "remaining": 50,
+        "progressFraction": 0.5833,
+        "isAllPaid": true,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [],
+        "paidBills": [
+          {
+            "id": "electric",
+            "amountPaid": 70
+          }
+        ]
+      }
+    },
+    {
+      "name": "inactive bills are excluded even when paid",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "old",
+            "name": "Old Phone",
+            "type": "Bills",
+            "payment": 45,
+            "dueDay": 18,
+            "rate": "Monthly",
+            "active": false
+          }
+        ],
+        "payments": [
+          {
+            "billId": "old",
+            "periodKey": "2025-05-15",
+            "amountPaid": 45
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 0,
+        "remaining": 120,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "electric"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "bi-weekly and yearly bills are included",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "savings",
+            "name": "Savings Transfer",
+            "type": "Other",
+            "payment": 100,
+            "dueDay": 20,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "domain",
+            "name": "Domain Renewal",
+            "type": "Subscriptions",
+            "payment": 15,
+            "dueDay": 20,
+            "rate": "Yearly",
+            "yearlyDate": "05-27"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "savings",
+            "periodKey": "2025-05-15",
+            "amountPaid": 100
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 235,
+        "totalPaid": 100,
+        "remaining": 135,
+        "progressFraction": 0.4255,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "electric",
+          "domain"
+        ],
+        "paidBills": [
+          {
+            "id": "savings",
+            "amountPaid": 100
+          }
+        ]
+      }
+    },
+    {
+      "name": "a zero-payment bill left unpaid keeps the period open",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "free",
+            "name": "Free Trial",
+            "type": "Bills",
+            "payment": 0,
+            "dueDay": 17,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": []
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 0,
+        "totalPaid": 0,
+        "remaining": 0,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "free"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "a recorded payment of 0 still marks the bill paid",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "electric",
+            "periodKey": "2025-05-15",
+            "amountPaid": 0
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 120,
+        "totalPaid": 0,
+        "remaining": 120,
+        "progressFraction": 0,
+        "isAllPaid": true,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [],
+        "paidBills": [
+          {
+            "id": "electric",
+            "amountPaid": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "cent amounts add up without drift beyond half a cent",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "a",
+            "name": "Gas",
+            "type": "Bills",
+            "payment": 10.1,
+            "dueDay": 16,
+            "rate": "Monthly"
+          },
+          {
+            "id": "b",
+            "name": "Water",
+            "type": "Bills",
+            "payment": 20.2,
+            "dueDay": 17,
+            "rate": "Monthly"
+          },
+          {
+            "id": "c",
+            "name": "Trash",
+            "type": "Bills",
+            "payment": 30.3,
+            "dueDay": 18,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "a",
+            "periodKey": "2025-05-15",
+            "amountPaid": 10.1
+          },
+          {
+            "billId": "b",
+            "periodKey": "2025-05-15",
+            "amountPaid": 20.2
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-15",
+        "totalDue": 60.6,
+        "totalPaid": 30.3,
+        "remaining": 30.3,
+        "progressFraction": 0.5,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "c"
+        ],
+        "paidBills": [
+          {
+            "id": "a",
+            "amountPaid": 10.1
+          },
+          {
+            "id": "b",
+            "amountPaid": 20.2
+          }
+        ]
+      }
+    },
+    {
+      "name": "after 3 PM on the last day the next period is current",
+      "input": {
+        "kind": "payDayPage",
+        "anchor": "2025-03-20",
+        "now": "2025-05-28T15:00:00",
+        "bills": [
+          {
+            "id": "d27",
+            "name": "Day 27",
+            "type": "Bills",
+            "payment": 80,
+            "dueDay": 27,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d30",
+            "name": "Day 30",
+            "type": "Bills",
+            "payment": 90,
+            "dueDay": 30,
+            "rate": "Monthly"
+          }
+        ],
+        "payments": [
+          {
+            "billId": "d27",
+            "periodKey": "2025-05-15",
+            "amountPaid": 80
+          }
+        ]
+      },
+      "expected": {
+        "periodKey": "2025-05-29",
+        "totalDue": 90,
+        "totalPaid": 0,
+        "remaining": 90,
+        "progressFraction": 0,
+        "isAllPaid": false,
+        "autoPayTotal": 0,
+        "autoPayBills": [],
+        "unpaidBills": [
+          "d30"
+        ],
+        "paidBills": []
+      }
+    },
+    {
+      "name": "empty database",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": []
+      },
+      "expected": {
+        "totalMonthlyObligations": 0,
+        "totalRemaining": 0,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 0,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "monthly obligations normalise each rate",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "m",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "bw",
+            "name": "Savings Transfer",
+            "type": "Other",
+            "payment": 100.0,
+            "dueDay": 20,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "y",
+            "name": "Domain Renewal",
+            "type": "Subscriptions",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Yearly",
+            "yearlyDate": "11-01"
+          },
+          {
+            "id": "once",
+            "name": "One-off Repair",
+            "type": "Bills",
+            "payment": 300.0,
+            "dueDay": 20,
+            "rate": "Once"
+          },
+          {
+            "id": "weekly",
+            "name": "Unknown Rate",
+            "type": "Bills",
+            "payment": 10.0,
+            "dueDay": 20,
+            "rate": "Weekly"
+          },
+          {
+            "id": "inactive",
+            "name": "Old Phone",
+            "type": "Bills",
+            "payment": 45.0,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 346.67,
+        "totalRemaining": 0,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 2,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 220,
+            "autoPayTotal": 0,
+            "grandTotal": 220,
+            "billCount": 2,
+            "manualBills": [
+              "bw",
+              "m"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 100,
+            "autoPayTotal": 0,
+            "grandTotal": 100,
+            "billCount": 1,
+            "manualBills": [
+              "bw"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 220,
+            "autoPayTotal": 0,
+            "grandTotal": 220,
+            "billCount": 2,
+            "manualBills": [
+              "bw",
+              "m"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "bi-weekly obligation that does not divide evenly",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "bw",
+            "name": "Allowance",
+            "type": "People",
+            "payment": 25.0,
+            "dueDay": 20,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "y",
+            "name": "Insurance",
+            "type": "Bills",
+            "payment": 1000.0,
+            "dueDay": 20,
+            "rate": "Yearly",
+            "yearlyDate": "09-15"
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 137.5,
+        "totalRemaining": 0,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 1,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 25,
+            "autoPayTotal": 0,
+            "grandTotal": 25,
+            "billCount": 1,
+            "manualBills": [
+              "bw"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 25,
+            "autoPayTotal": 0,
+            "grandTotal": 25,
+            "billCount": 1,
+            "manualBills": [
+              "bw"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 25,
+            "autoPayTotal": 0,
+            "grandTotal": 25,
+            "billCount": 1,
+            "manualBills": [
+              "bw"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "credit utilization uses active Cards with a limit only",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 1250.0,
+            "creditLimit": 5000
+          },
+          {
+            "id": "woodgrove",
+            "name": "Woodgrove Rewards",
+            "type": "Cards",
+            "payment": 35,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 300.0,
+            "creditLimit": 1000
+          },
+          {
+            "id": "nolimit",
+            "name": "Store Card",
+            "type": "Cards",
+            "payment": 25,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 500.0,
+            "creditLimit": 0
+          },
+          {
+            "id": "loan",
+            "name": "Car Loan",
+            "type": "Loans",
+            "payment": 250,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 8000.0,
+            "creditLimit": 20000
+          },
+          {
+            "id": "closed",
+            "name": "Closed Card",
+            "type": "Cards",
+            "payment": 0,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 900.0,
+            "creditLimit": 1000,
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 350,
+        "totalRemaining": 10050,
+        "hasCreditCards": true,
+        "creditUtilizationPct": 25.8,
+        "billsDueThisPeriod": 4,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 350,
+            "autoPayTotal": 0,
+            "grandTotal": 350,
+            "billCount": 4,
+            "manualBills": [
+              "contoso",
+              "woodgrove",
+              "nolimit",
+              "loan"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 350,
+            "autoPayTotal": 0,
+            "grandTotal": 350,
+            "billCount": 4,
+            "manualBills": [
+              "contoso",
+              "woodgrove",
+              "nolimit",
+              "loan"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "credit utilization rounds to one decimal",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 1000.0,
+            "creditLimit": 3000
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 40,
+        "totalRemaining": 1000,
+        "hasCreditCards": true,
+        "creditUtilizationPct": 33.3,
+        "billsDueThisPeriod": 1,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 40,
+            "autoPayTotal": 0,
+            "grandTotal": 40,
+            "billCount": 1,
+            "manualBills": [
+              "contoso"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 40,
+            "autoPayTotal": 0,
+            "grandTotal": 40,
+            "billCount": 1,
+            "manualBills": [
+              "contoso"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "credit utilization above 100 percent",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 1500.0,
+            "creditLimit": 1200
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 40,
+        "totalRemaining": 1500,
+        "hasCreditCards": true,
+        "creditUtilizationPct": 125,
+        "billsDueThisPeriod": 1,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 40,
+            "autoPayTotal": 0,
+            "grandTotal": 40,
+            "billCount": 1,
+            "manualBills": [
+              "contoso"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 40,
+            "autoPayTotal": 0,
+            "grandTotal": 40,
+            "billCount": 1,
+            "manualBills": [
+              "contoso"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "no credit cards: utilization is 0",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "loan",
+            "name": "Car Loan",
+            "type": "Loans",
+            "payment": 250,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 8000.0
+          },
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 370,
+        "totalRemaining": 8000,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 2,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 370,
+            "autoPayTotal": 0,
+            "grandTotal": 370,
+            "billCount": 2,
+            "manualBills": [
+              "loan",
+              "electric"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 370,
+            "autoPayTotal": 0,
+            "grandTotal": 370,
+            "billCount": 2,
+            "manualBills": [
+              "loan",
+              "electric"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "type 'cards' in lower case is not a credit card",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "lower",
+            "name": "Lowercase Card",
+            "type": "cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 500.0,
+            "creditLimit": 1000
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 40,
+        "totalRemaining": 500,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 1,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 40,
+            "autoPayTotal": 0,
+            "grandTotal": 40,
+            "billCount": 1,
+            "manualBills": [
+              "lower"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 40,
+            "autoPayTotal": 0,
+            "grandTotal": 40,
+            "billCount": 1,
+            "manualBills": [
+              "lower"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "total remaining includes every active balance",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 1250.55,
+            "creditLimit": 5000
+          },
+          {
+            "id": "loan",
+            "name": "Car Loan",
+            "type": "Loans",
+            "payment": 250,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 8000.1
+          },
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 0
+          },
+          {
+            "id": "old",
+            "name": "Old Loan",
+            "type": "Loans",
+            "payment": 100,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 2000.0,
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 410,
+        "totalRemaining": 9250.65,
+        "hasCreditCards": true,
+        "creditUtilizationPct": 25,
+        "billsDueThisPeriod": 3,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 410,
+            "autoPayTotal": 0,
+            "grandTotal": 410,
+            "billCount": 3,
+            "manualBills": [
+              "contoso",
+              "loan",
+              "electric"
+            ],
+            "autoPayBills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 410,
+            "autoPayTotal": 0,
+            "grandTotal": 410,
+            "billCount": 3,
+            "manualBills": [
+              "contoso",
+              "loan",
+              "electric"
+            ],
+            "autoPayBills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "sections split manual and auto-pay bills per period",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120.0,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "phone",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65.5,
+            "dueDay": 16,
+            "rate": "Monthly"
+          },
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40.0,
+            "dueDay": 25,
+            "rate": "Monthly",
+            "autoPay": true
+          },
+          {
+            "id": "woodgrove",
+            "name": "Woodgrove Rewards",
+            "type": "Cards",
+            "payment": 35.25,
+            "dueDay": 18,
+            "rate": "Monthly"
+          },
+          {
+            "id": "streaming",
+            "name": "Streaming",
+            "type": "Subscriptions",
+            "payment": 15.99,
+            "dueDay": 22,
+            "rate": "Monthly",
+            "autoPay": true
+          },
+          {
+            "id": "rent",
+            "name": "Rent",
+            "type": "Bills",
+            "payment": 900,
+            "dueDay": 1,
+            "rate": "Monthly"
+          },
+          {
+            "id": "gym",
+            "name": "Gym",
+            "type": "Subscriptions",
+            "payment": 30,
+            "dueDay": 10,
+            "rate": "Monthly",
+            "autoPay": true
+          },
+          {
+            "id": "savings",
+            "name": "Savings Transfer",
+            "type": "Other",
+            "payment": 100,
+            "dueDay": 20,
+            "rate": "Bi-Weekly",
+            "autoPay": true
+          },
+          {
+            "id": "inactive",
+            "name": "Old Phone",
+            "type": "Bills",
+            "payment": 45,
+            "dueDay": 21,
+            "rate": "Monthly",
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 1423.41,
+        "totalRemaining": 0,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 6,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "manualTotal": 220.75,
+            "autoPayTotal": 155.99,
+            "grandTotal": 376.74,
+            "billCount": 6,
+            "manualBills": [
+              "phone",
+              "woodgrove",
+              "electric"
+            ],
+            "autoPayBills": [
+              "savings",
+              "streaming",
+              "contoso"
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 900,
+            "autoPayTotal": 130,
+            "grandTotal": 1030,
+            "billCount": 3,
+            "manualBills": [
+              "rent"
+            ],
+            "autoPayBills": [
+              "savings",
+              "gym"
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "manualTotal": 220.75,
+            "autoPayTotal": 155.99,
+            "grandTotal": 376.74,
+            "billCount": 6,
+            "manualBills": [
+              "phone",
+              "woodgrove",
+              "electric"
+            ],
+            "autoPayBills": [
+              "savings",
+              "streaming",
+              "contoso"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "after 3 PM on the last day the sections move forward",
+      "input": {
+        "kind": "dashboard",
+        "anchor": "2025-03-20",
+        "now": "2025-05-28T15:00:00",
+        "bills": [
+          {
+            "id": "d27",
+            "name": "Day 27",
+            "type": "Bills",
+            "payment": 80,
+            "dueDay": 27,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d30",
+            "name": "Day 30",
+            "type": "Bills",
+            "payment": 90,
+            "dueDay": 30,
+            "rate": "Monthly",
+            "autoPay": true
+          }
+        ]
+      },
+      "expected": {
+        "totalMonthlyObligations": 170,
+        "totalRemaining": 0,
+        "hasCreditCards": false,
+        "creditUtilizationPct": 0,
+        "billsDueThisPeriod": 1,
+        "sections": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-29",
+            "manualTotal": 0,
+            "autoPayTotal": 90,
+            "grandTotal": 90,
+            "billCount": 1,
+            "manualBills": [],
+            "autoPayBills": [
+              "d30"
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-06-12",
+            "manualTotal": 0,
+            "autoPayTotal": 0,
+            "grandTotal": 0,
+            "billCount": 0,
+            "manualBills": [],
+            "autoPayBills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-26",
+            "manualTotal": 80,
+            "autoPayTotal": 90,
+            "grandTotal": 170,
+            "billCount": 2,
+            "manualBills": [
+              "d27"
+            ],
+            "autoPayBills": [
+              "d30"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "no bills",
+      "input": {
+        "kind": "billGroups",
+        "bills": []
+      },
+      "expected": {
+        "totalBills": 0,
+        "groups": []
+      }
+    },
+    {
+      "name": "canonical type order, then custom types alphabetically",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "o",
+            "name": "Misc",
+            "type": "Other",
+            "payment": 10,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "s",
+            "name": "Streaming",
+            "type": "Subscriptions",
+            "payment": 15.99,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "garden",
+            "name": "Garden Service",
+            "type": "garden",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "c",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "pets",
+            "name": "Pet Insurance",
+            "type": "Pets",
+            "payment": 30,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "b",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "i",
+            "name": "Laptop Plan",
+            "type": "Installments",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "l",
+            "name": "Car Loan",
+            "type": "Loans",
+            "payment": 250,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "m",
+            "name": "Clinic",
+            "type": "Medical",
+            "payment": 20,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "p",
+            "name": "Allowance",
+            "type": "People",
+            "payment": 25,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "biz",
+            "name": "Coworking",
+            "type": "Business",
+            "payment": 150,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "auto",
+            "name": "Auto Club",
+            "type": "Automotive",
+            "payment": 9,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 12,
+        "groups": [
+          {
+            "type": "Cards",
+            "count": 1,
+            "totalPayment": 40,
+            "totalRemaining": 0,
+            "bills": [
+              "c"
+            ]
+          },
+          {
+            "type": "Bills",
+            "count": 1,
+            "totalPayment": 120,
+            "totalRemaining": 0,
+            "bills": [
+              "b"
+            ]
+          },
+          {
+            "type": "Loans",
+            "count": 1,
+            "totalPayment": 250,
+            "totalRemaining": 0,
+            "bills": [
+              "l"
+            ]
+          },
+          {
+            "type": "Installments",
+            "count": 1,
+            "totalPayment": 50,
+            "totalRemaining": 0,
+            "bills": [
+              "i"
+            ]
+          },
+          {
+            "type": "Subscriptions",
+            "count": 1,
+            "totalPayment": 15.99,
+            "totalRemaining": 0,
+            "bills": [
+              "s"
+            ]
+          },
+          {
+            "type": "Business",
+            "count": 1,
+            "totalPayment": 150,
+            "totalRemaining": 0,
+            "bills": [
+              "biz"
+            ]
+          },
+          {
+            "type": "People",
+            "count": 1,
+            "totalPayment": 25,
+            "totalRemaining": 0,
+            "bills": [
+              "p"
+            ]
+          },
+          {
+            "type": "Medical",
+            "count": 1,
+            "totalPayment": 20,
+            "totalRemaining": 0,
+            "bills": [
+              "m"
+            ]
+          },
+          {
+            "type": "Other",
+            "count": 1,
+            "totalPayment": 10,
+            "totalRemaining": 0,
+            "bills": [
+              "o"
+            ]
+          },
+          {
+            "type": "Automotive",
+            "count": 1,
+            "totalPayment": 9,
+            "totalRemaining": 0,
+            "bills": [
+              "auto"
+            ]
+          },
+          {
+            "type": "garden",
+            "count": 1,
+            "totalPayment": 40,
+            "totalRemaining": 0,
+            "bills": [
+              "garden"
+            ]
+          },
+          {
+            "type": "Pets",
+            "count": 1,
+            "totalPayment": 30,
+            "totalRemaining": 0,
+            "bills": [
+              "pets"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "subtotals exclude inactive bills but the count includes them",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "c1",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40.0,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 1250.0
+          },
+          {
+            "id": "c2",
+            "name": "Woodgrove Rewards",
+            "type": "Cards",
+            "payment": 35.25,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 300.5
+          },
+          {
+            "id": "c3",
+            "name": "Closed Card",
+            "type": "Cards",
+            "payment": 20.0,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 900.0,
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 3,
+        "groups": [
+          {
+            "type": "Cards",
+            "count": 3,
+            "totalPayment": 75.25,
+            "totalRemaining": 1550.5,
+            "bills": [
+              "c3",
+              "c1",
+              "c2"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a group with only inactive bills has zero subtotals",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "old1",
+            "name": "Old Gym",
+            "type": "Subscriptions",
+            "payment": 30,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 0,
+            "active": false
+          },
+          {
+            "id": "old2",
+            "name": "Old Magazine",
+            "type": "Subscriptions",
+            "payment": 12,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 0,
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 2,
+        "groups": [
+          {
+            "type": "Subscriptions",
+            "count": 2,
+            "totalPayment": 0,
+            "totalRemaining": 0,
+            "bills": [
+              "old1",
+              "old2"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bills sort by name ignoring case, ties keep input order",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "p2",
+            "name": "phone",
+            "type": "Bills",
+            "payment": 10,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "w",
+            "name": "Water",
+            "type": "Bills",
+            "payment": 30,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "e",
+            "name": "electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "p1",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "a",
+            "name": "Alarm",
+            "type": "Bills",
+            "payment": 25,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 5,
+        "groups": [
+          {
+            "type": "Bills",
+            "count": 5,
+            "totalPayment": 250,
+            "totalRemaining": 0,
+            "bills": [
+              "a",
+              "e",
+              "p2",
+              "p1",
+              "w"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "type is grouped case-sensitively",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "big",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "small",
+            "name": "Lowercase Card",
+            "type": "cards",
+            "payment": 20,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 2,
+        "groups": [
+          {
+            "type": "Cards",
+            "count": 1,
+            "totalPayment": 40,
+            "totalRemaining": 0,
+            "bills": [
+              "big"
+            ]
+          },
+          {
+            "type": "cards",
+            "count": 1,
+            "totalPayment": 20,
+            "totalRemaining": 0,
+            "bills": [
+              "small"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "an empty type is a custom group sorted first among custom types",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "untyped",
+            "name": "No Type",
+            "type": "",
+            "payment": 10,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "zeta",
+            "name": "Zeta Thing",
+            "type": "Zeta",
+            "payment": 20,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "c",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 3,
+        "groups": [
+          {
+            "type": "Cards",
+            "count": 1,
+            "totalPayment": 40,
+            "totalRemaining": 0,
+            "bills": [
+              "c"
+            ]
+          },
+          {
+            "type": "",
+            "count": 1,
+            "totalPayment": 10,
+            "totalRemaining": 0,
+            "bills": [
+              "untyped"
+            ]
+          },
+          {
+            "type": "Zeta",
+            "count": 1,
+            "totalPayment": 20,
+            "totalRemaining": 0,
+            "bills": [
+              "zeta"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "cent subtotals",
+      "input": {
+        "kind": "billGroups",
+        "bills": [
+          {
+            "id": "a",
+            "name": "Gas",
+            "type": "Bills",
+            "payment": 10.1,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 0.1
+          },
+          {
+            "id": "b",
+            "name": "Water",
+            "type": "Bills",
+            "payment": 20.2,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 0.2
+          },
+          {
+            "id": "c",
+            "name": "Trash",
+            "type": "Bills",
+            "payment": 30.3,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "remaining": 0.3
+          }
+        ]
+      },
+      "expected": {
+        "totalBills": 3,
+        "groups": [
+          {
+            "type": "Bills",
+            "count": 3,
+            "totalPayment": 60.6,
+            "totalRemaining": 0.6,
+            "bills": [
+              "a",
+              "c",
+              "b"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
