@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build and test the Windows app on the arm64 Windows VM (Parallels) at a given commit.
 # Usage: tools/vm-build.sh [git-ref]   (default HEAD)
-# Exit: 0 ok; guest exit code on build/test failure; 2 if the commit is not on GitHub.
+# Exit: 0 ok; guest exit code on build/test failure; 1 if the guest output has no passing
+#       test summary; 2 if the commit is not on GitHub.
 # Env:  FC_VM (default "Win 11 Arm Dev"), FC_VM_DIR (default C:\Builds\payday-app)
 set -euo pipefail
 
@@ -12,6 +13,10 @@ DOTNET='"C:\Program Files\dotnet\dotnet.exe"'
 
 SHA=$(git rev-parse "${1:-HEAD}^{commit}")
 SHORT=$(git rev-parse --short "$SHA")
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Warning: you have uncommitted changes; the VM builds $SHORT, not your working tree." >&2
+fi
 
 git fetch --quiet origin
 if [ -z "$(git branch -r --contains "$SHA")" ]; then
@@ -38,7 +43,7 @@ trap 'rm -f "$LOG"' EXIT
 # pipefail makes the pipeline status the guest's exit code (tee always succeeds)
 prlctl exec "$FC_VM" cmd /c "$CMD" 2>&1 | tee "$LOG"
 
-if ! grep -q 'Passed!' "$LOG"; then
+if ! grep -Eq 'Passed!.*Passed: *[1-9]' "$LOG"; then
   echo "VM run produced no test summary; treating as failure." >&2
   exit 1
 fi

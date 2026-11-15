@@ -45,7 +45,7 @@ Key packages:
   Windows-only project. Navigation is a `NavigationView` with pages: PayDay (home), Dashboard, All
   Bills, Payoff Tracker, Insights, Settings.
 - **`apps/windows/PayDay.Core/`** — all logic that must be unit-testable: models, services
-  (`DatabaseService`, `PayPeriodService`, `NotionSyncService`, `TypeColorService`,
+  (`IDatabaseService` — the `DatabaseService` implementation lives in `apps/windows/PayDay/Services/` — `PayPeriodService`, `NotionSyncService`, `TypeColorService`,
   `BackupSerializer`, …) and every view-model. **Tests cannot reference `PayDay.csproj`** — the
   WindowsAppSDK auto-initializer throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process
   without package identity. That constraint is why the VMs live here, not in the app project.
@@ -55,7 +55,7 @@ Key packages:
 - **`planning/`** — the build plan and sprint tracking. `PAYDAY_WINUI3_PLAN.md` is the master plan
   (Phases 1–8, DB schema, seed data, Notion DB IDs, design system). `current-sprint.md` tracks the
   active sprint's chunks, exit criteria, and outstanding items.
-- **`tools/`** — three PowerShell helpers plus their output: `render-app-icon.ps1` and
+- **`tools/`** — `vm-build.sh` (builds and tests a pushed commit on the arm64 VM from the Mac) plus three PowerShell helpers and their output: `render-app-icon.ps1` and
   `preview-icon-candidates.ps1` (the app-icon pipeline, with `icon-candidates.png`) and
   `notion-diagnose.ps1`. Verified 2026-09-10.
 
@@ -101,7 +101,7 @@ winapp pack
 ## 💻 Where This Runs
 
 - The app is used **daily on the arm64 Windows VM**.
-- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**.
+- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at `ecd3059`: 194/194, 0 warnings.
 - The **packaged (appx) launch requires an INTERACTIVE Windows session**. Over SSH or from a service
   context, appx registration fails with `0x80070005`. This is a session constraint, not an app bug.
 - Clones:
@@ -132,11 +132,13 @@ revertable:
 Tests went 150 → **194** across Phase 7. Phase 5 (Notion sync) and Phase 6 (backup/restore,
 auto-backup) are closed.
 
-**In flight:** nothing is mid-implementation. The working tree is clean on branch
-`feature/multiplatform` (repo restructure done: Windows projects moved to `apps/windows/`), branched from the
-`wip/backup-2026-09-09` line, which sits on top of `f800119` (the 2026-05-17 end-of-night status commit that closed Phase 7). The next
-phase is **Phase 8 — Ship** (MSIX packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8).
-The Phase 7 leftovers below can be picked up alongside Phase 8 or as a Phase 7.5 mini-sprint; none
+**In flight:** nothing is mid-implementation. Work for the multi-platform design happens on
+`feature/multiplatform` until merged to `main` (repo restructure done: Windows projects moved to
+`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `f800119`
+(the 2026-05-17 end-of-night status commit that closed Phase 7). The next step is design §9 step 3
+(`planning/2026-11-14-multiplatform-design.md`): scope the new features. **Phase 8 — Ship** (MSIX
+packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8) is now design §9 step 12.
+The Phase 7 leftovers below can be picked up alongside that work or as a Phase 7.5 mini-sprint; none
 are blockers.
 
 ## 🕳️ Known Gaps
@@ -167,7 +169,7 @@ are blockers.
 Reads still tolerate the legacy "Owed" column via a fallback path, but **writes fail with a Notion
 validation error** until the rename happens. Whether the user has done this yet is **unknown**.
 
-**Contents of `tools/`** — resolved 2026-09-10: three PowerShell scripts (see Project Layout).
+**Contents of `tools/`** — resolved 2026-09-10: `vm-build.sh` plus three PowerShell scripts (see Project Layout).
 
 ## 🚨 Development Notes & Workarounds
 
@@ -217,7 +219,7 @@ validation error** until the rename happens. Whether the user has done this yet 
 ## 🔄 Git Workflow
 
 **Repo:** [QuantumInkDev/payday-app](https://github.com/QuantumInkDev/payday-app)
-**Main branch:** `main`. Current branch: `feature/multiplatform`.
+**Main branch:** `main`. Work for the multi-platform design happens on `feature/multiplatform` until merged to `main`.
 
 ### Branch Strategy
 

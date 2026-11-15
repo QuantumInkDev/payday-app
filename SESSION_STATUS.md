@@ -10,9 +10,18 @@
 
 - Multi-platform design approved (`planning/2026-11-14-multiplatform-design.md`); product name locked in as **FutureCheck** (code name PayDay stays in the code).
 - Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` untouched so the installed app keeps its data). New root `README.md`.
-- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `3b08f76`: exit 0 with warnings treated as errors.
+- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `ecd3059`: 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `3b08f76` was a silent no-op caused by a `vm-build.sh` bug that `ecd3059` fixed.
 
-**On the rig and the VM daily clone:** run `git pull`, then delete the leftover root `PayDay`, `PayDay.Core` and `PayDay.Tests` folders (only `bin/` and `obj/` remain in them), then build from `apps\windows\`. The installed app keeps its data because the package identity is unchanged.
+**On the rig and the VM daily clone** (these hold live data, so follow the steps in order):
+
+1. Export a JSON backup from Settings, and copy `LocalState\payday.db` and `LocalState\backups\` somewhere outside the package folder (path pattern is in `CLAUDE.md`, "Inspecting the SQLite DB").
+2. After this branch is merged: `git switch main && git pull`. A plain pull on the current branch won't bring the move, because it lives on `feature/multiplatform` until merged.
+3. Move `PayDay\Properties\PublishProfiles\` (untracked, ignored `*.pubxml`) into `apps\windows\PayDay\Properties\`.
+4. Build and run from `apps\windows\` and confirm your bills show.
+5. Only then delete the old root `PayDay`, `PayDay.Core` and `PayDay.Tests` folders. They hold only `bin/` and `obj/` plus any untracked files such as publish profiles.
+6. If registration fails ("already installed from a different location"), do NOT uninstall the app, because that deletes LocalState. Stop and ask, or use `Remove-AppxPackage -PreserveApplicationData` only if you know what it does.
+
+The package identity is unchanged (necessary for the installed app to keep its data), and following the steps above in order keeps the data safe.
 
 ---
 
