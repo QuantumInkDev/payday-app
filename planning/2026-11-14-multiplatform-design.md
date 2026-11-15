@@ -158,9 +158,8 @@ PayDayApp/
   and Payments and Snapshots move from `INTEGER AUTOINCREMENT` to string IDs (UUIDv7), Claude's
   call**, so rows created on two devices never collide. The migration rewrites references
   (`Payments.BillId`) to match.
-- **Fresh installs start empty (Claude's call).** `SeedData.cs` held the developer's real bills and
-  Notion database IDs until 2026-11-14, when they were replaced with fictional sample data across the
-  whole git history. Personal data must never ship in a store build or sit in this public repo. Seed data moves to a dev-only import
+- **Fresh installs start empty (Claude's call).** `SeedData.cs` now holds fictional sample data. Real
+  personal data must never ship in a store build or be committed to this public repo. Seed data moves to a dev-only import
   or demo mode.
 - Every synced row carries, per field, the time it was last changed and by which device, using a
   hybrid logical clock (HLC: wall-clock time plus a counter, so ordering survives clock skew).
@@ -186,12 +185,17 @@ PayDayApp/
   was set) and
   `Remaining = checkpoint − payments recorded after the checkpoint`, clamped at zero.
   Editing Remaining (in the app or in Notion) sets a new checkpoint. What the user sees doesn't
-  change; Notion's Remaining column is written as the computed value.
+  change; Notion's Remaining column is written as the computed value. Only a real edit sets a
+  checkpoint: the connector's own write-back to Notion (an echo) and any edit that leaves the value
+  unchanged never do, or an offline payment from another device could silently drop out of
+  Remaining. "After the checkpoint" compares the payment's HLC with the checkpoint's HLC, not
+  wall-clock `PaidAt`.
 - **Payments merge as a set.** Each payment is its own row, so concurrent payments all survive.
   The regular "mark paid" payment for a bill in a period gets a **deterministic ID** derived from
   (bill ID, period key), so two devices marking the same bill paid in the same period produce one
   payment, not two. Extra or one-time payments (a §9 feature candidate) get random IDs and simply
-  add up. Unmark tombstones the deterministic payment.
+  add up. Unmark sets the deterministic payment's deleted marker, which is an ordinary
+  last-write-wins field: marking the same bill paid again in that period clears it.
 - Other payment fields edited on two devices resolve per field like bills.
 - Merge must be deterministic: the same set of changes in any order produces the same database on
   every platform. This is the core of the conformance suite.
@@ -329,9 +333,8 @@ user is on Windows. Google Drive second (common for Android users). Dropbox thir
 
 ## 9. Build order
 
-1. **Restructure the repo** to the §5 layout. No behaviour change. Merge
-   `wip/backup-2026-09-09` into `main` first (it is one commit ahead and holds only Serena and
-   tooling files) and work on a `feature/` branch.
+1. **Restructure the repo** to the §5 layout. No behaviour change. Bring `main` up to the
+   `wip/backup-2026-09-09` tip first (done 2026-11-14), and work on a `feature/` branch.
 2. **Lock in the product name: FutureCheck (decided, 2026-11-14).** "PayDay" was crowded in the
    stores, suggested payday loans, and is a video-game franchise. "Check" means both the paycheck
    and the checkmark on a paid bill; "Future" points at the forecast. A web search on 2026-11-14
