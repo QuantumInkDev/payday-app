@@ -11,7 +11,14 @@ namespace PayDay.Tests;
 /// </summary>
 public class SettingsPageNotionTests
 {
-    private static (FakeDatabaseService db, InMemoryCredentialStore creds, RecordingHttpHandler handler, NotionSyncService notion)
+    /// <summary>
+    /// The database the services and view models under test get. The base class passes the fake
+    /// itself; <see cref="SyncOffRouterTests"/> runs every test again through the app's sync write
+    /// path with sync off, which must behave exactly like the plain database.
+    /// </summary>
+    private protected virtual IDatabaseService Wrap(FakeDatabaseService db) => db;
+
+    private (FakeDatabaseService db, InMemoryCredentialStore creds, RecordingHttpHandler handler, NotionSyncService notion)
         Setup(bool seedToken = false)
     {
         var db = new FakeDatabaseService();
@@ -21,7 +28,7 @@ public class SettingsPageNotionTests
         var creds = new InMemoryCredentialStore();
         if (seedToken) creds.Set(NotionSyncService.TokenKey, "test-token");
         var handler = new RecordingHttpHandler();
-        var notion = new NotionSyncService(db, creds, handler);
+        var notion = new NotionSyncService(Wrap(db), creds, handler);
         return (db, creds, handler, notion);
     }
 
@@ -29,7 +36,7 @@ public class SettingsPageNotionTests
     public async Task LoadAsync_NoNotionService_NotionSectionDisabled()
     {
         var db = new FakeDatabaseService();
-        var vm = new SettingsPageViewModel(db);
+        var vm = new SettingsPageViewModel(Wrap(db));
         await vm.LoadAsync();
 
         Assert.False(vm.NotionAvailable);
@@ -41,7 +48,7 @@ public class SettingsPageNotionTests
     public async Task LoadAsync_TokenAbsent_PromptToPaste()
     {
         var (db, _, _, notion) = Setup(seedToken: false);
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         Assert.True(vm.NotionAvailable);
@@ -55,7 +62,7 @@ public class SettingsPageNotionTests
     public async Task LoadAsync_TokenPresent_SectionEnabled()
     {
         var (db, _, _, notion) = Setup(seedToken: true);
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         Assert.True(vm.NotionTokenSet);
@@ -67,7 +74,7 @@ public class SettingsPageNotionTests
     public async Task SaveTokenAsync_SavesCredentialAndEnablesSection()
     {
         var (db, creds, _, notion) = Setup();
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.SaveTokenAsync("secret_abc123");
@@ -81,7 +88,7 @@ public class SettingsPageNotionTests
     public async Task SaveTokenAsync_BlankInput_NoOp()
     {
         var (db, creds, _, notion) = Setup();
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.SaveTokenAsync("   ");
@@ -94,7 +101,7 @@ public class SettingsPageNotionTests
     public async Task ClearTokenAsync_RemovesCredentialAndDisablesSection()
     {
         var (db, creds, _, notion) = Setup(seedToken: true);
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.ClearTokenAsync();
@@ -109,7 +116,7 @@ public class SettingsPageNotionTests
     {
         var (db, _, handler, notion) = Setup(seedToken: true);
         handler.OnGet("v1/users/me", _ => RecordingHttpHandler.Ok("""{ "id": "u1" }"""));
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.TestConnectionAsync();
@@ -124,7 +131,7 @@ public class SettingsPageNotionTests
     {
         var (db, _, handler, notion) = Setup(seedToken: true);
         handler.OnGet("v1/users/me", _ => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized, """{ "code": "unauthorized" }"""));
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.TestConnectionAsync();
@@ -138,7 +145,7 @@ public class SettingsPageNotionTests
     {
         var (db, _, handler, notion) = Setup(seedToken: true);
         handler.OnPost("v1/data_sources/bills-ds/query", _ => RecordingHttpHandler.Ok("""{ "object": "list", "results": [], "has_more": false, "next_cursor": null }"""));
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
         Assert.Equal("Never synced", vm.LastSyncedLabel);
 
@@ -155,12 +162,28 @@ public class SettingsPageNotionTests
     {
         var (db, _, handler, notion) = Setup(seedToken: true);
         handler.OnPost("v1/data_sources/bills-ds/query", _ => RecordingHttpHandler.Json(HttpStatusCode.InternalServerError, """{ "code": "boom" }"""));
-        var vm = new SettingsPageViewModel(db, notion);
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.SyncNowAsync();
 
         Assert.Equal(NotionPushStatus.Failed, vm.NotionStatus);
         Assert.Contains("failed", vm.NotionStatusLabel, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AfterLeavingASyncVault_TheNotionCardAsksForTheTokenAgain_AndSavingItReconnects()
+    {
+        var (db, _, _, notion) = Setup(seedToken: true);
+        db.Settings[NotionSyncService.ReconnectRequiredSetting] = "1";
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
+        await vm.LoadAsync();
+
+        Assert.Contains("Save the token again", vm.NotionStatusLabel, System.StringComparison.Ordinal);
+
+        await vm.SaveTokenAsync("test-token");
+        Assert.NotEqual("1", db.Settings.GetValueOrDefault(NotionSyncService.ReconnectRequiredSetting));
+        await vm.LoadAsync();
+        Assert.DoesNotContain("Save the token again", vm.NotionStatusLabel, System.StringComparison.Ordinal);
     }
 }

@@ -12,19 +12,26 @@ using SkiaSharp;
 
 namespace PayDay.Pages;
 
-public sealed partial class InsightsPage : Page
+public sealed partial class InsightsPage : Page, ISyncReloadable
 {
     public InsightsPageViewModel ViewModel { get; }
 
     public InsightsPage()
     {
-        ViewModel = new InsightsPageViewModel(DatabaseService.Instance, App.Notion, App.Backups);
+        ViewModel = new InsightsPageViewModel(App.Database, App.Notion, App.Backups);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.LoadAsync();
+        RebuildCharts();
+    }
+
+    /// <summary>Another device's changes were merged: show them.</summary>
+    public async System.Threading.Tasks.Task ReloadAfterSyncAsync(bool settingsChanged)
     {
         await ViewModel.LoadAsync();
         RebuildCharts();

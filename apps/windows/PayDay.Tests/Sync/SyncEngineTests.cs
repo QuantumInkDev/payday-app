@@ -23,13 +23,16 @@ namespace PayDay.Tests.Sync;
 public class SyncEngineTests
 {
     private const string VaultId = "019a0000-0000-7000-8000-00000000fa01";
-    private const long T0 = 1794657600000;
+    private const long T0 = 1747915200000;
     private static readonly byte[] VaultKey = Convert.FromHexString("f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5");
 
     private readonly ManualTimeProvider _time = new(T0);
 
+    /// <summary>The storage every device in these tests uses; the SQLite variant overrides it.</summary>
+    protected virtual ISyncStorage NewStorage() => new InMemorySyncStorage();
+
     private SyncReplica NewDevice(ISyncMaterializer? materializer = null)
-        => SyncReplica.Start(new InMemorySyncStorage(), _time, VaultId, materializer: materializer);
+        => SyncReplica.Start(NewStorage(), _time, VaultId, materializer: materializer);
 
     private static VaultCodec NewCodec() => new(VaultId, new Dictionary<uint, byte[]> { [1] = VaultKey }, 1);
 
@@ -53,7 +56,7 @@ public class SyncEngineTests
         var a = NewDevice();
         var bill = CreateBill(a, 1000);
         _time.Advance(1000);
-        var mark = a.MarkPaid(PaymentKinds.Regular, bill, "2026-11-12", 100, null);
+        var mark = a.MarkPaid(PaymentKinds.Regular, bill, "2025-05-15", 100, null);
         var paymentId = mark[0].Id;
         Assert.Equal(90000, a.State.RemainingCents(bill));
         _time.Advance(1000);
@@ -160,7 +163,7 @@ public class SyncEngineTests
     [Fact]
     public void Start_CanClearSyncedData_ForTheJoinFlow()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var first = SyncReplica.Start(storage, _time, VaultId);
         CreateBill(first, 100);
         Assert.NotEqual(0, storage.Records.Count);
@@ -177,7 +180,7 @@ public class SyncEngineTests
     public void RecordStore_ValueIndex_FollowsChanges_AndRollback()
     {
         var store = new InMemoryRecordStore();
-        var h1 = Hlc.Parse("01a1d9edc200-0000-0a0a0a0a0a0a0a0a");
+        var h1 = Hlc.Parse("0196f7dd5600-0000-0a0a0a0a0a0a0a0a");
         store.Set("payment", "p1", "billId", new SyncCell(SyncValue.String("b1"), h1));
         store.Set("payment", "p2", "billId", new SyncCell(SyncValue.String("b1"), h1));
         store.Set("payment", "p3", "amountPaid", new SyncCell(SyncValue.Number(3.0), h1));
@@ -199,7 +202,7 @@ public class SyncEngineTests
     [Fact]
     public void RestampLocalState_MakesEveryRecordThisDevicesOwn_ForANewVault()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var other = NewDevice();
         var bill = CreateBill(other, 1200);
         other.CreateRow(SyncEntities.Device, other.DeviceId, new Dictionary<string, SyncValue> { ["name"] = SyncValue.String("Old PC") });
@@ -283,29 +286,29 @@ public class SyncEngineTests
     public void AcceptPairing_ChecksExpiryAndTheKeyCheckValue()
     {
         using var codec = NewCodec();
-        var vault = VaultFile.Check(VaultFile.Create(VaultId, "2026-11-14T12:00:00.000Z", "0a0a0a0a0a0a0a0a", VaultKey));
+        var vault = VaultFile.Check(VaultFile.Create(VaultId, "2025-05-22T12:00:00.000Z", "0a0a0a0a0a0a0a0a", VaultKey));
         var code = PairingQr.NewCode();
-        var (_, data) = codec.SealPairing(code, "0a0a0a0a0a0a0a0a", "2026-11-14T12:10:00.000Z");
+        var (_, data) = codec.SealPairing(code, "0a0a0a0a0a0a0a0a", "2025-05-22T12:10:00.000Z");
         var scanned = PairingQr.Parse(PairingQr.Format(code));
 
-        var ok = VaultCodec.AcceptPairing(vault, scanned, data, DateTimeOffset.Parse("2026-11-14T12:10:00.000Z", System.Globalization.CultureInfo.InvariantCulture));
+        var ok = VaultCodec.AcceptPairing(vault, scanned, data, DateTimeOffset.Parse("2025-05-22T12:10:00.000Z", System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(PairingStatus.Accepted, ok.Status);
         Assert.Equal(VaultKey, ok.VaultKey);
         Assert.Equal(1, ok.Generation);
         Assert.Equal("0a0a0a0a0a0a0a0a", ok.SenderDeviceId);
 
-        var late = VaultCodec.AcceptPairing(vault, scanned, data, DateTimeOffset.Parse("2026-11-14T12:10:00.001Z", System.Globalization.CultureInfo.InvariantCulture));
+        var late = VaultCodec.AcceptPairing(vault, scanned, data, DateTimeOffset.Parse("2025-05-22T12:10:00.001Z", System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(PairingStatus.Expired, late.Status);
         Assert.Null(late.VaultKey);
 
         // A pairing file whose key does not match this vault.json (for example a recreated vault).
         using var stranger = new VaultCodec(VaultId, new Dictionary<uint, byte[]> { [1] = new byte[32] }, 1);
-        var (_, wrong) = stranger.SealPairing(code, "0a0a0a0a0a0a0a0a", "2026-11-14T12:10:00.000Z");
-        var mismatch = VaultCodec.AcceptPairing(vault, scanned, wrong, DateTimeOffset.Parse("2026-11-14T12:05:00.000Z", System.Globalization.CultureInfo.InvariantCulture));
+        var (_, wrong) = stranger.SealPairing(code, "0a0a0a0a0a0a0a0a", "2025-05-22T12:10:00.000Z");
+        var mismatch = VaultCodec.AcceptPairing(vault, scanned, wrong, DateTimeOffset.Parse("2025-05-22T12:05:00.000Z", System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(PairingStatus.KeyCheckMismatch, mismatch.Status);
         Assert.Null(mismatch.VaultKey);
 
-        var otherVault = VaultFile.Check(VaultFile.Create("019a0000-0000-7000-8000-00000000fa02", "2026-11-14T12:00:00.000Z", "0a0a0a0a0a0a0a0a", VaultKey));
+        var otherVault = VaultFile.Check(VaultFile.Create("019a0000-0000-7000-8000-00000000fa02", "2025-05-22T12:00:00.000Z", "0a0a0a0a0a0a0a0a", VaultKey));
         Assert.Equal(SyncErrorCodes.VaultMismatch, Assert.Throws<SyncException>(() => VaultCodec.AcceptPairing(otherVault, scanned, data, DateTimeOffset.UnixEpoch)).Code);
         var otherCode = PairingQr.NewCode();
         Assert.Equal(SyncErrorCodes.AuthFailed, Assert.Throws<SyncException>(() =>
@@ -318,7 +321,7 @@ public class SyncEngineTests
         var keys = new Dictionary<uint, byte[]> { [1] = VaultKey.ToArray() };
         var codec = new VaultCodec(VaultId, keys, 1);
         Array.Clear(keys[1]);
-        var record = new ChangeRecord(SyncEntities.Bill, "019a0000-0000-7000-8000-0000000000b1", "name", SyncValue.String("x"), Hlc.Parse("01a1d9edc200-0000-0a0a0a0a0a0a0a0a"));
+        var record = new ChangeRecord(SyncEntities.Bill, "019a0000-0000-7000-8000-0000000000b1", "name", SyncValue.String("x"), Hlc.Parse("0196f7dd5600-0000-0a0a0a0a0a0a0a0a"));
         var (path, data) = codec.SealChangeFile("0a0a0a0a0a0a0a0a", 1, new[] { record });
         using (var check = NewCodec())
         {

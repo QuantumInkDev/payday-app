@@ -45,16 +45,25 @@ public static class TypeColorService
         return Defaults["Other"];
     }
 
+    /// <summary>
+    /// Saves one type's colour. With sync on (<see cref="ITypeColorWriter"/>) only that type's synced
+    /// colour is written, so a colour another device set since this map was loaded is never reverted;
+    /// with sync off the whole map is saved as it always was.
+    /// </summary>
     public static async Task SetHexAsync(IDatabaseService db, string type, string hex)
     {
         if (string.IsNullOrWhiteSpace(type) || !IsValidHex(hex)) return;
         _overrides[type] = hex.ToUpperInvariant();
+        if (db is ITypeColorWriter writer && await writer.TrySetTypeColorAsync(type, hex.ToUpperInvariant()).ConfigureAwait(false)) return;
         await db.SetSettingAsync(SettingKey, JsonSerializer.Serialize(_overrides)).ConfigureAwait(false);
     }
 
+    /// <summary>Resets one type to its default colour (with sync on, only that type's synced colour is cleared).</summary>
     public static async Task ResetAsync(IDatabaseService db, string type)
     {
-        if (_overrides.Remove(type))
+        var removed = _overrides.Remove(type);
+        if (db is ITypeColorWriter writer && await writer.TrySetTypeColorAsync(type, null).ConfigureAwait(false)) return;
+        if (removed)
         {
             await db.SetSettingAsync(SettingKey, JsonSerializer.Serialize(_overrides)).ConfigureAwait(false);
         }
@@ -89,4 +98,18 @@ public static class TypeColorService
         }
         return true;
     }
+}
+
+/// <summary>
+/// Writes one type's colour on its own. The sync write path implements it: with sync on each colour is
+/// its own synced setting (<c>TypeColor/&lt;type&gt;</c>), and writing the whole map a page loaded
+/// earlier could revert a colour another device changed since.
+/// </summary>
+public interface ITypeColorWriter
+{
+    /// <summary>
+    /// Sets (or with null resets) one type's colour and returns true, or returns false without writing
+    /// anything when this database saves the whole <c>TypeColors</c> map instead (sync off).
+    /// </summary>
+    Task<bool> TrySetTypeColorAsync(string type, string? hex);
 }

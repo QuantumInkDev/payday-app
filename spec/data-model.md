@@ -372,7 +372,7 @@ Stored as `setting` rows. Keys are case-sensitive.
 | `TypeColor/<type>` | string? `#RRGGBB` (uppercase hex) | The built-in colour for that type | Pill colour override for one bill type, for example key `TypeColor/Cards`. One row per type, so colour edits for different types on two devices both survive (decided here). Reset writes `null`. Apps match `<type>` to bill types case-insensitively; if two keys differ only in case, the one whose value record has the greater HLC wins. |
 | `SafeToSpendBuffer` | money | `0` | v1 feature 2: amount kept back from safe-to-spend. |
 | `ReminderDaysBefore` | int | `2` | v1 feature 6: days before a manual bill's due date to notify. |
-| `NotionOwnerDeviceId` | string? (device ID) | `null` (no connector) | The one device that runs the Notion connector (decided here; `sync-protocol.md` section 12.5). |
+| `NotionOwnerDeviceId` | string? (device ID) | `null` (no connector) | The one device that runs the Notion connector (decided here; `sync-protocol.md` section 12.5). Set only by an explicit claim (saving a Notion token, or creating a vault while holding one); cleared by the owner when it leaves the vault. A `null` value is never filled in automatically. |
 | `NotionBillsDb` | string? | `null` | Notion data-source ID of the Bills database. |
 | `NotionPaymentsDb` | string? | `null` | Notion data-source ID of the Payments database. |
 | `NotionSnapshotsDb` | string? | `null` | Notion data-source ID of the Snapshots database. |
@@ -392,6 +392,8 @@ These never appear in a change record. The list is canonical: anything not in 6.
 | Notion token | OS keystore (`NotionToken` in Windows Credential Manager today) | Per device; only the owner device needs one. |
 | `LastNotionSync` | local settings | Owner device only. |
 | Notion last-pushed values | local | Per bill, the Remaining (in cents) the connector last wrote to Notion; used for echo detection (`sync-protocol.md` section 5.3). |
+| Notion owner state | local | Whether this device is a *pending* or *full* owner (has finished one error-free push pass of every live bill), and whether it left a vault and must wait for an explicit reconnect before running the connector (`sync-protocol.md` section 12.5). |
+| Unreadable-file and gap timers | local sync state | First-seen time per unreadable file name and per gap, kept across restarts and pruned when resolved (`sync-protocol.md` section 10.2). |
 | Reminders on/off | local settings | v1 feature 6: on/off is per device. |
 | Drive provider and sign-in tokens | OS keystore | |
 | Vault key(s) | OS keystore (web: non-extractable WebCrypto key in IndexedDB) | Never written to the drive. |
@@ -493,7 +495,7 @@ object of a backup file, hold every value as text (or `null`). The mapping (deci
 | `SafeToSpendBuffer` | `SafeToSpendBuffer` (`money`) | Decimal text (the whole text is `-?[0-9]+(\.[0-9]+)?`) or a JSON number, then `round2`. A value outside the money range (`|x| ≥ 1e13`, section 3) is not used. Otherwise not used. |
 | `ReminderDaysBefore` | `ReminderDaysBefore` (`int`) | Digit text (the whole text is `[0-9]+`) whose value is at most 2^53 − 1, or an integral JSON number ≥ 0 (`sync-protocol.md` section 6.3); otherwise not used. |
 | `NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb` | same key | **Migration only.** A restore never writes or clears them (`sync-protocol.md` section 12.3). |
-| `NotionOwnerDeviceId` | same key | **Never** taken from a table or backup. A device that has a Notion token when it creates the vault writes its own ID. |
+| `NotionOwnerDeviceId` | same key | **Never** taken from a table or backup. A device that has a Notion token when it creates the vault writes its own ID. A device that creates the vault under a new device ID without a token writes `null` if its local data still holds a (stale) value (`sync-protocol.md` section 12.5). |
 | `Theme`, `LastNotionSync`, `SchemaVersion` and other per-device keys (section 6.2) | stay per-device | Not synced. A restore applies them to the restoring device only. |
 | any other key | (ignored) | |
 

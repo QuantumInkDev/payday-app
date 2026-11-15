@@ -14,6 +14,13 @@ namespace PayDay.Tests;
 /// </summary>
 public class AutoSyncTests
 {
+    /// <summary>
+    /// The database the services and view models under test get. The base class passes the fake
+    /// itself; <see cref="SyncOffRouterTests"/> runs every test again through the app's sync write
+    /// path with sync off, which must behave exactly like the plain database.
+    /// </summary>
+    private protected virtual IDatabaseService Wrap(FakeDatabaseService db) => db;
+
     private static FakeDatabaseService SeedDb()
     {
         var db = new FakeDatabaseService();
@@ -40,7 +47,7 @@ public class AutoSyncTests
     public async Task MarkPaid_NoNotionService_StatusStaysNotConfigured()
     {
         var db = SeedDb();
-        var vm = new PayDayPageViewModel(db);
+        var vm = new PayDayPageViewModel(Wrap(db));
         await vm.LoadAsync(new System.DateTime(2025, 5, 15));
 
         var row = vm.UnpaidBills.Single();
@@ -56,8 +63,8 @@ public class AutoSyncTests
     {
         var db = SeedDb();
         var handler = new RecordingHttpHandler();
-        using var notion = new NotionSyncService(db, Creds(withToken: false), handler);
-        var vm = new PayDayPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: false), handler);
+        var vm = new PayDayPageViewModel(Wrap(db), notion);
         await vm.LoadAsync(new System.DateTime(2025, 5, 15));
 
         var row = vm.UnpaidBills.Single();
@@ -77,8 +84,8 @@ public class AutoSyncTests
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "payment-page" }"""));
         // Bill is pre-seeded with NotionPageId; PushBillAsync hits the fast PATCH path.
         handler.OnPatch("v1/pages/page-bill-1", _ => RecordingHttpHandler.Ok("""{ "id": "page-bill-1" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new PayDayPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new PayDayPageViewModel(Wrap(db), notion);
         await vm.LoadAsync(new System.DateTime(2025, 5, 15));
 
         var row = vm.UnpaidBills.Single();
@@ -102,8 +109,8 @@ public class AutoSyncTests
         var db = SeedDb();
         var handler = new RecordingHttpHandler();
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Json(HttpStatusCode.InternalServerError, """{ "code": "boom" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new PayDayPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new PayDayPageViewModel(Wrap(db), notion);
         await vm.LoadAsync(new System.DateTime(2025, 5, 15));
 
         var row = vm.UnpaidBills.Single();
@@ -125,8 +132,8 @@ public class AutoSyncTests
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "p" }"""));
         handler.OnPatch("v1/pages/page-bill-1", _ => RecordingHttpHandler.Ok("""{ "id": "page-bill-1" }"""));
         handler.OnPatch("v1/pages/page-bill-2", _ => RecordingHttpHandler.Ok("""{ "id": "page-bill-2" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new PayDayPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new PayDayPageViewModel(Wrap(db), notion);
         await vm.LoadAsync(new System.DateTime(2025, 5, 15));
 
         await vm.MarkAllPaidCommand.ExecuteAsync(null);
@@ -145,7 +152,7 @@ public class AutoSyncTests
     public async Task SaveSnapshot_NoNotion_StatusStaysNotConfigured()
     {
         var db = SeedDb();
-        var vm = new InsightsPageViewModel(db);
+        var vm = new InsightsPageViewModel(Wrap(db));
         await vm.LoadAsync();
 
         await vm.SaveSnapshotAsync(new System.DateTime(2025, 5, 15));
@@ -160,8 +167,8 @@ public class AutoSyncTests
         var db = SeedDb();
         var handler = new RecordingHttpHandler();
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Ok("""{ "id": "snap-page" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new InsightsPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new InsightsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.SaveSnapshotAsync(new System.DateTime(2025, 5, 15));
@@ -179,8 +186,8 @@ public class AutoSyncTests
         var db = SeedDb();
         var handler = new RecordingHttpHandler();
         handler.OnPost("v1/pages", _ => RecordingHttpHandler.Json(HttpStatusCode.BadRequest, """{ "code": "validation_error" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new InsightsPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new InsightsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         await vm.SaveSnapshotAsync(new System.DateTime(2025, 5, 15));
@@ -199,7 +206,7 @@ public class AutoSyncTests
     public async Task SaveBill_NoNotionService_StatusStaysNotConfigured()
     {
         var db = SeedDb();
-        var vm = new AllBillsPageViewModel(db);
+        var vm = new AllBillsPageViewModel(Wrap(db));
         await vm.LoadAsync();
 
         var bill = db.Bills.Single();
@@ -216,8 +223,8 @@ public class AutoSyncTests
     {
         var db = SeedDb();
         var handler = new RecordingHttpHandler();
-        using var notion = new NotionSyncService(db, Creds(withToken: false), handler);
-        var vm = new AllBillsPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: false), handler);
+        var vm = new AllBillsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         var bill = db.Bills.Single();
@@ -238,8 +245,8 @@ public class AutoSyncTests
         db.Bills.Single().NotionPageId = "page-electric";
         var handler = new RecordingHttpHandler();
         handler.OnPatch("v1/pages/page-electric", _ => RecordingHttpHandler.Ok("""{ "id": "page-electric" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new AllBillsPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new AllBillsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         var bill = db.Bills.Single();
@@ -265,8 +272,8 @@ public class AutoSyncTests
         var handler = new RecordingHttpHandler();
         handler.OnPatch("v1/pages/page-electric",
             _ => RecordingHttpHandler.Json(HttpStatusCode.InternalServerError, """{ "code": "boom" }"""));
-        using var notion = new NotionSyncService(db, Creds(withToken: true), handler);
-        var vm = new AllBillsPageViewModel(db, notion);
+        using var notion = new NotionSyncService(Wrap(db), Creds(withToken: true), handler);
+        var vm = new AllBillsPageViewModel(Wrap(db), notion);
         await vm.LoadAsync();
 
         var bill = db.Bills.Single();

@@ -18,7 +18,7 @@ namespace PayDay.Tests.Sync;
 public class SyncReplicaTests
 {
     private const string VaultId = "019a0000-0000-7000-8000-00000000fa01";
-    private const long T0 = 1794657600000;
+    private const long T0 = 1747915200000;
 
     private static readonly byte[] VaultKey = Convert.FromHexString("f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5");
 
@@ -29,7 +29,10 @@ public class SyncReplicaTests
     /// <summary>The drive: vault-relative path to file bytes.</summary>
     private readonly Dictionary<string, byte[]> _drive = new(StringComparer.Ordinal);
 
-    private SyncReplica NewDevice(ManualTimeProvider time) => SyncReplica.Start(new InMemorySyncStorage(), time, VaultId);
+    /// <summary>The storage every device in these tests uses; the SQLite variants override it.</summary>
+    protected virtual ISyncStorage NewStorage() => new InMemorySyncStorage();
+
+    private SyncReplica NewDevice(ManualTimeProvider time) => SyncReplica.Start(NewStorage(), time, VaultId);
 
     private void Upload(SyncReplica device)
     {
@@ -72,14 +75,14 @@ public class SyncReplicaTests
     [Fact]
     public void Start_GivesANewDeviceIdEveryTime_AndCursorsStartAtZero()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var first = SyncReplica.Start(storage, _timeA, VaultId);
         first.Metadata.SetCursor("0b0b0b0b0b0b0b0b", 9);
         var second = SyncReplica.Start(storage, _timeA, VaultId);
         Assert.NotEqual(first.DeviceId, second.DeviceId);
         Assert.Equal(0, second.Cursor("0b0b0b0b0b0b0b0b"));
         Assert.Equal(VaultId, second.Metadata.VaultId);
-        Assert.Throws<ArgumentException>(() => new SyncReplica(new InMemorySyncStorage(), _timeA));
+        Assert.Throws<ArgumentException>(() => new SyncReplica(NewStorage(), _timeA));
     }
 
     [Fact]
@@ -97,8 +100,8 @@ public class SyncReplicaTests
         // Both pay the same bill for the same period while offline: one payment row (section 5.2).
         _timeA.Advance(1000);
         _timeB.Advance(2000);
-        a.MarkPaid(PaymentKinds.Regular, bill, "2026-11-12", 55, "2026-11-14T12:00:01.000Z");
-        b.MarkPaid(PaymentKinds.Regular, bill, "2026-11-12", 60, "2026-11-14T12:00:02.000Z");
+        a.MarkPaid(PaymentKinds.Regular, bill, "2025-05-15", 55, "2025-05-22T12:00:01.000Z");
+        b.MarkPaid(PaymentKinds.Regular, bill, "2025-05-15", 60, "2025-05-22T12:00:02.000Z");
         Upload(a);
         Upload(b);
         Download(a);
@@ -203,7 +206,7 @@ public class SyncReplicaTests
         var bill = CreateBill(b, "Woodgrove Rewards", 1200);
         Upload(b);
         Download(a);
-        a.MarkPaid(PaymentKinds.Regular, bill, "2026-11-12", 55, null);
+        a.MarkPaid(PaymentKinds.Regular, bill, "2025-05-15", 55, null);
         Upload(a);
 
         var snap = a.PrepareSnapshot();
@@ -225,7 +228,7 @@ public class SyncReplicaTests
     [Fact]
     public void RecoverClock_RaisesTheStateToEveryOwnHlcInTheStore()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var a = SyncReplica.Start(storage, _timeA, VaultId);
         _timeA.Advance(60_000);
         var bill = CreateBill(a, "Woodgrove Rewards", 100);

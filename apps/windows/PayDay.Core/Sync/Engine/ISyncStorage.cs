@@ -4,8 +4,21 @@ using PayDay.Sync.Model;
 
 namespace PayDay.Sync.Engine;
 
-/// <summary>A sealed batch (section 10.1): immutable records with a sequence number that is never reused.</summary>
-public sealed record SealedBatch(long Seq, IReadOnlyList<ChangeRecord> Records, bool Uploaded = false);
+/// <summary>
+/// A sealed batch (section 10.1): immutable records with a sequence number that is never reused.
+/// Two batches are equal when their numbers, upload flags and records (in order) are equal, so a batch
+/// read back from storage equals the one that was sealed.
+/// </summary>
+public sealed record SealedBatch(long Seq, IReadOnlyList<ChangeRecord> Records, bool Uploaded = false)
+{
+    public bool Equals(SealedBatch? other)
+        => other is not null
+            && Seq == other.Seq
+            && Uploaded == other.Uploaded
+            && Records.SequenceEqual(other.Records);
+
+    public override int GetHashCode() => HashCode.Combine(Seq, Uploaded, Records.Count);
+}
 
 /// <summary>
 /// A device's local sync state that is never synced (<c>data-model.md</c> section 6.2): device and

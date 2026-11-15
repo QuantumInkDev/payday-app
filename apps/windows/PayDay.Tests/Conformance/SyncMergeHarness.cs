@@ -29,6 +29,13 @@ internal static class SyncMergeHarness
     public const int SampledPermutations = 2000;
 
     public static void Run(string caseName, JsonObject input, JsonObject expected)
+        => Run(caseName, input, expected, () => new SyncState(), allOrders: true);
+
+    /// <summary>
+    /// The same checks with states made by <paramref name="newState"/> (for example over the SQLite
+    /// record store). With <paramref name="allOrders"/> false only the given order is merged.
+    /// </summary>
+    public static void Run(string caseName, JsonObject input, JsonObject expected, Func<SyncState> newState, bool allOrders)
     {
         Assert.Equal("merge", Str(input["fn"]));
         var raw = input["records"]!.AsArray().ToList();
@@ -38,7 +45,7 @@ internal static class SyncMergeHarness
         if (input["edit"] is JsonObject edit)
         {
             var seenIdx = edit["seen"]!.AsArray().Select(n => (int)Long(n)).ToList();
-            var seen = new SyncState();
+            var seen = newState();
             foreach (var k in seenIdx)
             {
                 if (records[k] is { } r) seen.Merge(r);
@@ -57,10 +64,21 @@ internal static class SyncMergeHarness
         }
 
         // The given order, compared field by field with the fixture.
-        var given = StateOf(final);
+        var given = StateOf(final, newState);
         var stateDiffs = Differences(Without(expected, "emitted"), StateNode(given), "remaining", "setAsideBalance");
         Assert.True(stateDiffs.Count == 0, $"{caseName} (given order):\n  " + string.Join("\n  ", stateDiffs));
         var reference = Fingerprint(given);
+
+        // The in-memory state is the reference for the given order; the other states also give it.
+        var inMemory = Fingerprint(StateOf(final));
+        Assert.True(inMemory == reference, $"{caseName}: this store gives a different state than the in-memory store.\n  expected {inMemory}\n  got      {reference}");
+        if (!allOrders)
+        {
+            var reversed = Enumerable.Reverse(final).ToList();
+            var got = Fingerprint(StateOf(reversed, newState));
+            Assert.True(got == reference, $"{caseName}: the reverse order gives a different state.\n  expected {reference}\n  got      {got}");
+            return;
+        }
 
         // Every other delivery order must give exactly the same state.
         var n = final.Count;
@@ -95,9 +113,11 @@ internal static class SyncMergeHarness
         }
     }
 
-    private static SyncState StateOf(IEnumerable<ChangeRecord?> records)
+    private static SyncState StateOf(IEnumerable<ChangeRecord?> records) => StateOf(records, () => new SyncState());
+
+    private static SyncState StateOf(IEnumerable<ChangeRecord?> records, Func<SyncState> newState)
     {
-        var state = new SyncState();
+        var state = newState();
         foreach (var r in records)
         {
             if (r is not null) state.Merge(r);

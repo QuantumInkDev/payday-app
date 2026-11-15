@@ -178,6 +178,11 @@ public sealed partial class SettingsPageViewModel : ObservableObject
             NotionStatus = NotionPushStatus.NotConfigured;
             NotionStatusLabel = "Paste an integration token to enable sync.";
         }
+        else if ((await _notion.GetConnectorStateAsync().ConfigureAwait(true)).Role == NotionRole.ReconnectRequired)
+        {
+            NotionStatus = NotionPushStatus.NotConfigured;
+            NotionStatusLabel = "This PC left its sync vault. Save the token again to use Notion here.";
+        }
         else
         {
             NotionStatus = NotionPushStatus.Ok;
@@ -187,20 +192,20 @@ public sealed partial class SettingsPageViewModel : ObservableObject
         }
     }
 
-    public Task SaveTokenAsync(string token)
+    public async Task SaveTokenAsync(string token)
     {
-        if (_notion is null) return Task.CompletedTask;
+        if (_notion is null) return;
         if (string.IsNullOrWhiteSpace(token))
         {
             StatusMessage = "Paste a token first.";
-            return Task.CompletedTask;
+            return;
         }
-        _notion.SaveToken(token.Trim());
+        // With sync on, connecting Notion here makes this device the connector's owner.
+        await _notion.ConnectAsync(token.Trim()).ConfigureAwait(true);
         NotionTokenSet = true;
         NotionStatus = NotionPushStatus.Ok;
         NotionStatusLabel = "Token saved. Run 'Test connection' to verify.";
         StatusMessage = "Notion token saved.";
-        return Task.CompletedTask;
     }
 
     public Task ClearTokenAsync()
