@@ -10,7 +10,7 @@ using PayDay.ViewModels;
 
 namespace PayDay.Pages;
 
-public sealed partial class AllBillsPage : Page
+public sealed partial class AllBillsPage : Page, ISyncReloadable
 {
     public AllBillsPageViewModel ViewModel { get; }
 
@@ -26,6 +26,9 @@ public sealed partial class AllBillsPage : Page
     {
         await ViewModel.LoadAsync();
     }
+
+    /// <summary>Another device's changes were merged: show them.</summary>
+    public Task ReloadAfterSyncAsync(bool settingsChanged) => ViewModel.LoadAsync();
 
     private async void OnActiveToggled(object sender, RoutedEventArgs e)
     {

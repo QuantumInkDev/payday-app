@@ -26,6 +26,41 @@ public sealed partial class MainWindow : Window
         _ = ApplyPersistedThemeAsync();
         _ = RefreshLastSyncedLabelAsync();
         Activated += MainWindow_Activated;
+        Closed += (_, _) => App.StopSyncLoop();
+
+        _syncReloadTimer = DispatcherQueue.CreateTimer();
+        _syncReloadTimer.Interval = System.TimeSpan.FromMilliseconds(400);
+        _syncReloadTimer.IsRepeating = false;
+        _syncReloadTimer.Tick += async (_, _) => await ReloadAfterSyncAsync();
+    }
+
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _syncReloadTimer;
+    private bool _syncReloadSettings;
+
+    /// <summary>
+    /// Another device's changes were merged (called on the UI thread for every merge): reload the
+    /// type colours and the current page once things settle, instead of once per merged file.
+    /// </summary>
+    public void ScheduleSyncReload(bool settingsChanged)
+    {
+        _syncReloadSettings |= settingsChanged;
+        _syncReloadTimer.Stop();
+        _syncReloadTimer.Start();
+    }
+
+    private async System.Threading.Tasks.Task ReloadAfterSyncAsync()
+    {
+        var settings = _syncReloadSettings;
+        _syncReloadSettings = false;
+        try
+        {
+            if (settings) await TypeColorService.LoadAsync(App.Database);
+            if (NavFrame.Content is ISyncReloadable page) await page.ReloadAfterSyncAsync(settings);
+        }
+        catch (System.Exception)
+        {
+            // The next merge or navigation reloads again.
+        }
     }
 
     private async void SyncNowButton_Click(object sender, RoutedEventArgs e)
@@ -38,6 +73,14 @@ public sealed partial class MainWindow : Window
             if (!App.Notion.HasToken())
             {
                 await ShowSyncErrorAsync("No Notion token saved. Add one in Settings first.");
+                return;
+            }
+            // With sync on, only the connector's owner runs it; say why instead of doing nothing.
+            var connector = await App.Notion.GetConnectorStateAsync();
+            if (!connector.MayRun)
+            {
+                var refused = await App.Notion.SyncBillsAsync();
+                await ShowSyncErrorAsync(refused.Errors.Count > 0 ? refused.Errors[0] : "Notion doesn't run on this PC.");
                 return;
             }
             await App.Notion.SyncBillsAsync();
@@ -77,6 +120,8 @@ public sealed partial class MainWindow : Window
 
     private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
     {
+        // Returning to the foreground syncs (sync-protocol.md 10.1); in the background only edits do.
+        App.NotifyForeground(args.WindowActivationState != WindowActivationState.Deactivated);
         if (_restorePromptChecked) return;
         _restorePromptChecked = true;
 
@@ -168,6 +213,9 @@ public sealed partial class MainWindow : Window
                     break;
                 case "insights":
                     NavFrame.Navigate(typeof(InsightsPage));
+                    break;
+                case "sync":
+                    NavFrame.Navigate(typeof(SyncPage));
                     break;
                 case "about":
                     NavFrame.Navigate(typeof(AboutPage));

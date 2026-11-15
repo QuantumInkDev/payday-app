@@ -12,7 +12,7 @@ using SkiaSharp;
 
 namespace PayDay.Pages;
 
-public sealed partial class InsightsPage : Page
+public sealed partial class InsightsPage : Page, ISyncReloadable
 {
     public InsightsPageViewModel ViewModel { get; }
 
@@ -25,6 +25,13 @@ public sealed partial class InsightsPage : Page
     }
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.LoadAsync();
+        RebuildCharts();
+    }
+
+    /// <summary>Another device's changes were merged: show them.</summary>
+    public async System.Threading.Tasks.Task ReloadAfterSyncAsync(bool settingsChanged)
     {
         await ViewModel.LoadAsync();
         RebuildCharts();

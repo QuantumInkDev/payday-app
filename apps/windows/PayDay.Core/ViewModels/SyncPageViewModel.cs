@@ -122,7 +122,11 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
     public bool HasInfo => InfoMessage.Length > 0;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AccountText))]
     private string? _accountName;
+
+    /// <summary>"Signed in to OneDrive as …", or empty.</summary>
+    public string AccountText => AccountName is { Length: > 0 } name ? $"Signed in to {ProviderName} as {name}." : string.Empty;
 
     public string NotConfiguredMessage => Sync.Drive.OneDrive.OneDriveConfig.NotConfiguredMessage;
 
@@ -150,7 +154,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
     private bool _hasWarnings;
 
     [ObservableProperty]
-    private string? _notionLine;
+    private string _notionLine = string.Empty;
 
     [ObservableProperty]
     private bool _canRunNotionHere;
@@ -296,7 +300,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
 
     private void RefreshNotionLine()
     {
-        NotionLine = null;
+        NotionLine = string.Empty;
         CanRunNotionHere = false;
         if (_notion is null || _coordinator is null || !_coordinator.IsInVault) return;
         var state = _notion.GetConnectorState();

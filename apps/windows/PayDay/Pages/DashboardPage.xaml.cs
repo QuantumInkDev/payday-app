@@ -8,7 +8,7 @@ using PayDay.ViewModels;
 
 namespace PayDay.Pages;
 
-public sealed partial class DashboardPage : Page
+public sealed partial class DashboardPage : Page, ISyncReloadable
 {
     public DashboardPageViewModel ViewModel { get; }
 
@@ -24,6 +24,9 @@ public sealed partial class DashboardPage : Page
     {
         await ViewModel.LoadAsync();
     }
+
+    /// <summary>Another device's changes were merged: show them.</summary>
+    public Task ReloadAfterSyncAsync(bool settingsChanged) => ViewModel.LoadAsync();
 
     private async void OnDashboardRowTapped(object sender, TappedRoutedEventArgs e)
     {

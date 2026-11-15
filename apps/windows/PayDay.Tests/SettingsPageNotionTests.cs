@@ -170,4 +170,20 @@ public class SettingsPageNotionTests
         Assert.Equal(NotionPushStatus.Failed, vm.NotionStatus);
         Assert.Contains("failed", vm.NotionStatusLabel, System.StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task AfterLeavingASyncVault_TheNotionCardAsksForTheTokenAgain_AndSavingItReconnects()
+    {
+        var (db, _, _, notion) = Setup(seedToken: true);
+        db.Settings[NotionSyncService.ReconnectRequiredSetting] = "1";
+        var vm = new SettingsPageViewModel(Wrap(db), notion);
+        await vm.LoadAsync();
+
+        Assert.Contains("Save the token again", vm.NotionStatusLabel, System.StringComparison.Ordinal);
+
+        await vm.SaveTokenAsync("test-token");
+        Assert.NotEqual("1", db.Settings.GetValueOrDefault(NotionSyncService.ReconnectRequiredSetting));
+        await vm.LoadAsync();
+        Assert.DoesNotContain("Save the token again", vm.NotionStatusLabel, System.StringComparison.Ordinal);
+    }
 }

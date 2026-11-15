@@ -67,6 +67,30 @@ public sealed class SyncSafetyTests : IDisposable
         await new PayPeriodService(_env.Routed).GetPayAnchorAsync();
         _ = _env.Routed.GetNotionState();
 
+        // The sync loop the app starts at launch: client ID lookup, coordinator, scheduler (a launch
+        // sync), the Sync page and the Notion connector's state. With sync off none of it writes.
+        var credentials = new InMemoryCredentialStore();
+        var clientId = PayDay.Sync.Drive.OneDrive.OneDriveConfig.Resolve(null, await _env.Db.GetSettingAsync(PayDay.Sync.Drive.OneDrive.OneDriveConfig.SettingKey));
+        var auth = new PayDay.Sync.Drive.OneDrive.OneDriveAuth(clientId ?? "00000000-0000-0000-0000-00000000c1d0", credentials);
+        var drive = new PayDay.Sync.Drive.InMemoryDriveProvider(_env.Time);
+        using (var coordinator = new PayDay.Sync.Coordination.SyncCoordinator(_env.Sync, drive, new PayDay.Sync.Keys.CredentialVaultKeyStore(credentials), _env.Backups, _env.Db,
+            new PayDay.Sync.Coordination.DeviceInfo("Windows PC", "windows", null), () => false, _env.Time))
+        using (var scheduler = new PayDay.Sync.Coordination.SyncScheduler(ct => coordinator.SyncAsync(ct), _env.Time))
+        using (var notion = new NotionSyncService(_env.Routed, credentials, new RecordingHttpHandler()))
+        using (var page = new SyncPageViewModel(coordinator, auth, notion, _env.Time))
+        {
+            scheduler.Attach(_env.Sync);
+            scheduler.NotifyLaunch();
+            Assert.True(await scheduler.RunDueAsync());
+            Assert.Equal(PayDay.Sync.Coordination.SyncPhase.Off, coordinator.Status.Phase);
+            await page.LoadAsync();
+            Assert.Equal(SyncScreen.Off, page.Screen);
+            Assert.Equal(NotionRole.SyncOff, (await notion.GetConnectorStateAsync()).Role);
+        }
+        Assert.Empty(drive.Paths);
+        Assert.Equal(0, drive.ListCalls);
+        Assert.Empty(credentials.Items);
+
         // And a second start of the same database.
         using (var again = LocalSync.Open(LocalSync.ConnectionStringFor(_env.Path)))
         {

@@ -8,7 +8,7 @@ using Windows.Storage.Pickers;
 
 namespace PayDay.Pages;
 
-public sealed partial class SettingsPage : Page
+public sealed partial class SettingsPage : Page, ISyncReloadable
 {
     public SettingsPageViewModel ViewModel { get; }
 
@@ -39,6 +39,10 @@ public sealed partial class SettingsPage : Page
     {
         await ViewModel.LoadAsync();
     }
+
+    /// <summary>Synced settings (pay anchor, colours) changed on another device: show them.</summary>
+    public System.Threading.Tasks.Task ReloadAfterSyncAsync(bool settingsChanged)
+        => settingsChanged ? ViewModel.LoadAsync() : System.Threading.Tasks.Task.CompletedTask;
 
     private async void OnSavePayAnchorClick(object sender, RoutedEventArgs e)
     {
