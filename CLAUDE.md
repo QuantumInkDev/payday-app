@@ -101,10 +101,11 @@ winapp pack
 ## 💻 Where This Runs
 
 - The app is used **daily on the arm64 Windows VM**.
-- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at `ad169f5`: 194/194, 0 warnings.
+- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at the head of PR #1: 194/194, 0 warnings.
 - The **packaged (appx) launch requires an INTERACTIVE Windows session**. Over SSH or from a service
   context, appx registration fails with `0x80070005`. This is a session constraint, not an app bug.
-- Clones:
+- Clones (the git history was rewritten on 2026-11-14 to remove personal data — the VM and rig clones
+  must be reset or re-cloned before anyone pushes from them; see `SESSION_STATUS.md`):
   - `/Users/quantumdev/Projects/PayDayApp` — this Mac
   - `C:\Projects\PayDayApp` — arm64 VM
   - `P:\Projects-Not-On-Cloud\PayDayApp` — rig (the x64 original)
@@ -117,24 +118,24 @@ revertable:
 
 | Chunk | Commit | What |
 |---|---|---|
-| 7a | `ea494f8` | Sortable All Bills columns |
-| 7b | `cc66e23` | Bill auto-sync on edit |
-| 7c | `d6da8af` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
-| 7d | `59b2e39` | Sync Now at top of nav + Pay decrements Remaining |
-| 7e | `4197e71` | Dashboard polish |
-| 7f | `be38509` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types) |
-| 7g | `d6fa2d5` | Type tag color customization |
-| 7h | `5ea5bfc` | Installments type |
-| 7i | `9f778d2` | Insights snapshot delete/clear + Payoff snowball/avalanche |
-| 7j | `0784767` | Exclude inactive bills from BillGroup subtotals |
-| 7k | `9ef945d` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
+| 7a | `a9138f3` | Sortable All Bills columns |
+| 7b | `d4cc139` | Bill auto-sync on edit |
+| 7c | `d9c1dd7` | Full rename Cost→Payment, Owed→Remaining (model + DB migration + Notion + UI) |
+| 7d | `a1dd6a3` | Sync Now at top of nav + Pay decrements Remaining |
+| 7e | `7de73e8` | Dashboard polish |
+| 7f | `10aa047` | All Bills overhaul (Expander groups, new columns, ordinals, auto-pay icon, custom types) |
+| 7g | `eab350e` | Type tag color customization |
+| 7h | `150439f` | Installments type |
+| 7i | `9d58334` | Insights snapshot delete/clear + Payoff snowball/avalanche |
+| 7j | `c13ba02` | Exclude inactive bills from BillGroup subtotals |
+| 7k | `81a057f` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 Tests went 150 → **194** across Phase 7. Phase 5 (Notion sync) and Phase 6 (backup/restore,
 auto-backup) are closed.
 
 **In flight:** nothing is mid-implementation. Work for the multi-platform design happens on
 `feature/multiplatform` until merged to `main` (repo restructure done: Windows projects moved to
-`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `188fb88`
+`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `d11d0a0`
 (the 2026-05-17 end-of-night status commit that closed Phase 7). The next step is design §9 step 3
 (`planning/2026-11-14-multiplatform-design.md`): scope the new features. **Phase 8 — Ship** (MSIX
 packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8) is now design §9 step 12.
@@ -167,7 +168,7 @@ are blockers.
 3. Add **"Installments"** as a select option on the Bills "Type" column (only if the type will be used).
 
 Reads still tolerate the legacy "Owed" column via a fallback path, but **writes fail with a Notion
-validation error** until the rename happens. Whether the user has done this yet is **unknown**.
+validation error** until the rename happens. `SESSION_STATUS.md` (2026-05-17) records that the user did the renames and added "Installments".
 
 **Contents of `tools/`** — resolved 2026-09-10: `vm-build.sh` plus three PowerShell scripts (see Project Layout).
 

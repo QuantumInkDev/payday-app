@@ -189,7 +189,8 @@ PayDayApp/
   checkpoint: the connector's own write-back to Notion (an echo) and any edit that leaves the value
   unchanged never do, or an offline payment from another device could silently drop out of
   Remaining. "After the checkpoint" compares the payment's HLC with the checkpoint's HLC, not
-  wall-clock `PaidAt`.
+  wall-clock `PaidAt`. A payment that was unmarked and marked again orders by the HLC of its
+  latest mark.
 - **Payments merge as a set.** Each payment is its own row, so concurrent payments all survive.
   The regular "mark paid" payment for a bill in a period gets a **deterministic ID** derived from
   (bill ID, period key), so two devices marking the same bill paid in the same period produce one
