@@ -557,6 +557,7 @@ public sealed class SyncCoordinator : IDisposable
             {
                 if (_sync.Replica is { } replica && replica.Read((_, m) => m.VaultId) is { } vaultId)
                 {
+                    // Format 1 has one generation; leaving may happen offline, so clear a generous range.
                     _keys.Delete(vaultId, Enumerable.Range(1, 16).Select(g => (long)g));
                 }
                 if (_sync.IsOn)
