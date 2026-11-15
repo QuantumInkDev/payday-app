@@ -1,0 +1,3 @@
+# SwiftPM / Xcode build state for the package
+.build/
+.swiftpm/
