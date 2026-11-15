@@ -39,7 +39,7 @@
 - Commit as-is: `CLAUDE.md`, `.serena/project.yml` (uncommitted edits already in the working tree: a CLAUDE.md refresh from the 2026-09-10 session plus this session's path fix, and a Serena-regenerated project file)
 
 **Interfaces:**
-- Produces: `main` and `feature/multiplatform` both containing `4597231`; a clean working tree for Task 2.
+- Produces: `main` and `feature/multiplatform` both containing `01aa660`; a clean working tree for Task 2.
 
 - [ ] **Step 1: Review the two diffs**
 
@@ -57,9 +57,9 @@ git commit -m "Session 2026-11-14: commit pending CLAUDE.md refresh and Serena c
 
 ```bash
 git fetch origin
-git push origin 4597231:main
+git push origin 01aa660:main
 ```
-Expected: push succeeds as a fast-forward (`d11d0a0..4597231`). If it's rejected as non-fast-forward, stop and ask — `main` moved on GitHub.
+Expected: push succeeds as a fast-forward (`1bb7f97..01aa660`). If it's rejected as non-fast-forward, stop and ask — `main` moved on GitHub.
 
 - [ ] **Step 4: Push the feature branch**
 
