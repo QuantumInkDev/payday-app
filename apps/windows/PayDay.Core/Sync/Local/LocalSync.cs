@@ -307,6 +307,25 @@ public sealed class LocalSync : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gives this device a new identity for a new vault while keeping its synced data
+    /// (<c>sync-protocol.md</c> 12.1 step 5): a new device ID, cursors and queue reset, then every
+    /// winning value re-stamped at one tick of the new ID (<see cref="SyncReplica.RestampLocalState"/>),
+    /// so the first change file carries only this device's records. Requires sync on.
+    /// </summary>
+    public void StartNewIdentity(string vaultId, SyncWriteLease held)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        if (held.Owner != this || !held.IsHeld) throw new ArgumentException("That lease is not held on this LocalSync.", nameof(held));
+        lock (_gate)
+        {
+            var (_, storage) = RequireOn();
+            var replica = SyncReplica.Start(storage, _time, vaultId, clearSyncedData: false, Materializer);
+            Replica = replica;
+            replica.RestampLocalState();
+        }
+    }
+
     // ---- Notifications ----------------------------------------------------------------------------------
 
     /// <summary>Raises <see cref="DataChanged"/>. Call it after the merge's transaction committed.</summary>
