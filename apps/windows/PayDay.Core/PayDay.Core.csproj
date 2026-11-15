@@ -15,4 +15,10 @@
     <InternalsVisibleTo Include="PayDay.Tests" />
   </ItemGroup>
 
+  <!-- The BIP39 English wordlist for the recovery phrase (spec/sync-protocol.md section 8), embedded
+       unchanged from spec/ (the one copy in the repository; its SHA-256 is checked at load and in a test). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\spec\bip39-english.txt" LogicalName="PayDay.Sync.Crypto.bip39-english.txt" Link="Sync\Crypto\bip39-english.txt" />
+  </ItemGroup>
+
 </Project>

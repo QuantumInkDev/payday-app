@@ -622,6 +622,17 @@
       }
     },
     {
+      "name": "parse pairing QR with surrounding tabs, CR LF and no-break spaces",
+      "input": {
+        "fn": "parsePairingQr",
+        "qr": "\t FCPAIR:1:3D18F149B2CC241EE71FD888DEED28F8:26163D2E5372606979D1FFD50E7E29A064F8D9DB8E14414C650F4CE5737254A6\r\n "
+      },
+      "expected": {
+        "pairingIdHex": "3d18f149b2cc241ee71fd888deed28f8",
+        "pairingSecretHex": "26163d2e5372606979d1ffd50e7e29a064f8d9db8e14414c650f4ce5737254a6"
+      }
+    },
+    {
       "name": "pairing QR with unknown version is rejected",
       "input": {
         "fn": "parsePairingQr",
@@ -646,6 +657,56 @@
       "input": {
         "fn": "parsePairingQr",
         "qr": "FCPAIRING:1:3D18F149B2CC241EE71FD888DEED28F8:26163D2E5372606979D1FFD50E7E29A064F8D9DB8E14414C650F4CE5737254A6"
+      },
+      "expected": {
+        "error": "badQr"
+      }
+    },
+    {
+      "name": "pairing QR with dotless i (U+0131) is rejected: case folding is ASCII only",
+      "input": {
+        "fn": "parsePairingQr",
+        "qr": "FCPAıR:1:3D18F149B2CC241EE71FD888DEED28F8:26163D2E5372606979D1FFD50E7E29A064F8D9DB8E14414C650F4CE5737254A6"
+      },
+      "expected": {
+        "error": "badQr"
+      }
+    },
+    {
+      "name": "pairing QR with an em space (U+2003) around it is rejected",
+      "input": {
+        "fn": "parsePairingQr",
+        "qr": " FCPAIR:1:3D18F149B2CC241EE71FD888DEED28F8:26163D2E5372606979D1FFD50E7E29A064F8D9DB8E14414C650F4CE5737254A6"
+      },
+      "expected": {
+        "error": "badQr"
+      }
+    },
+    {
+      "name": "pairing QR with an ideographic space (U+3000) around it is rejected",
+      "input": {
+        "fn": "parsePairingQr",
+        "qr": "FCPAIR:1:3D18F149B2CC241EE71FD888DEED28F8:26163D2E5372606979D1FFD50E7E29A064F8D9DB8E14414C650F4CE5737254A6　"
+      },
+      "expected": {
+        "error": "badQr"
+      }
+    },
+    {
+      "name": "pairing QR with a space inside is rejected",
+      "input": {
+        "fn": "parsePairingQr",
+        "qr": "FCPAIR: 1:3D18F149B2CC241EE71FD888DEED28F8:26163D2E5372606979D1FFD50E7E29A064F8D9DB8E14414C650F4CE5737254A6"
+      },
+      "expected": {
+        "error": "badQr"
+      }
+    },
+    {
+      "name": "pairing QR in full-width characters is rejected",
+      "input": {
+        "fn": "parsePairingQr",
+        "qr": "ＦＣＰＡＩＲ：１：３Ｄ１８Ｆ１４９Ｂ２ＣＣ２４１ＥＥ７１ＦＤ８８８ＤＥＥＤ２８Ｆ８：２６１６３Ｄ２Ｅ５３７２６０６９７９Ｄ１ＦＦＤ５０Ｅ７Ｅ２９Ａ０６４Ｆ８Ｄ９ＤＢ８Ｅ１４４１４Ｃ６５０Ｆ４ＣＥ５７３７２５４Ａ６"
       },
       "expected": {
         "error": "badQr"

@@ -20,7 +20,7 @@ types used below:
 
 | Type | JSON | Rules |
 |---|---|---|
-| `string` | string | UTF-8. Any length. Apps do not trim or case-fold on write. |
+| `string` | string | UTF-8. Any length. Apps do not trim or case-fold on write. Every format check on a string (dates, timestamps, IDs, colours, decimal text) matches the whole string in ASCII only (`sync-protocol.md`, "String matching"). |
 | `string?` | string or `null` | `null` means "not set". An empty string is a value, not "not set". |
 | `bool` | `true` / `false` | Never `0`/`1`. |
 | `int` | number with an integer value | Writers write plain digits (`3`). Readers accept any number that is an integer once parsed to binary64 (`3`, `3.0`, `3e0`, `3.0000000000000001` are all 3; `sync-protocol.md` section 6.3). `true`/`false` are booleans, never ints: a boolean in an `int` field is the wrong type (1.2). |
@@ -39,7 +39,9 @@ types used below:
 - A record whose value has the wrong JSON type for a known field (for example a string in a
   `money` field) is still stored and merged; merge never rejects on schema. When the app reads
   that field, it uses the default instead (decided here). This keeps merge identical on every
-  platform even when one app has a bug.
+  platform even when one app has a bug. A `money` value outside the money range (`|x| ≥ 1e13`,
+  section 3) is treated the same way: it reads as the default. Fixture: `merge.json`, "money fields
+  of the wrong type or out of range read as 0".
 - An `enum` value an app does not know (written by a newer version) is kept as-is. Each enum below
   says how an older app treats unknown values.
 
@@ -441,7 +443,7 @@ subtracted from the migrated Remaining a second time. Fixture: `merge.json`, "mi
 | Today | Spec | Rule |
 |---|---|---|
 | `Id` TEXT, `"1"`–`"27"` (seed) or any non-UUID | `bill` row ID | `UUIDv5(namespace, "legacy-bill/" + oldId)`, using the old ID string exactly as stored (decided here). Deterministic, so the same legacy bill on the VM and the rig, or in an old backup, maps to the same ID. |
-| `Id` TEXT, GUID | `bill` row ID | Lowercased. |
+| `Id` TEXT, GUID | `bill` row ID | Lowercased (ASCII `A`–`F` only). "GUID" means the whole string is `8-4-4-4-12` ASCII hex in either case; anything else, even a GUID with a trailing newline or space, is a legacy ID and maps as in the row above, character for character. |
 | `Name`, `Type`, `DueDay`, `Rate`, `AutoPay`, `Active`, `YearlyDate`, `Notes`, `NotionPageId` | same names, camelCase | `AutoPay`/`Active` INTEGER 0/1 become `bool`. |
 | `Payment` (renamed from `Cost` in schema v2) | `payment` | |
 | `Remaining` (renamed from `Owed` in schema v2) | `remainingCheckpoint` | Stamped with the migration HLC. |
@@ -484,12 +486,12 @@ object of a backup file, hold every value as text (or `null`). The mapping (deci
 
 | Key in the table or backup | Becomes | Conversion |
 |---|---|---|
-| `PayAnchor` | `PayAnchor` | Kept if it is a valid `YYYY-MM-DD` date; otherwise not used. |
-| `EarlyStart` | `EarlyStart` (`bool`) | `true` if the text equals `true` ignoring case (as today's C# reads it), otherwise `false`. A JSON boolean is taken as is. |
-| `TypeColors` (JSON object text, type to `#RRGGBB`) | one `TypeColor/<type>` per entry | Each entry whose value is `#` plus 6 hex digits, uppercased; other entries are dropped. Text that is not a JSON object gives no colours (as today's C# reads it). |
+| `PayAnchor` | `PayAnchor` | Kept if the whole text is a valid `YYYY-MM-DD` date in ASCII digits; otherwise not used. |
+| `EarlyStart` | `EarlyStart` (`bool`) | `true` if the whole text is `true` in any mix of ASCII upper and lower case; any other text is `false`. A JSON boolean is taken as is. |
+| `TypeColors` (JSON object text, type to `#RRGGBB`) | one `TypeColor/<type>` per entry | The text is parsed with the strict JSON rules of `sync-protocol.md` section 6.3 (so `NaN`, `Infinity`, duplicate keys or trailing text make it invalid). Valid JSON that is an object: each entry whose type name is not empty and whose value is a string of exactly `#` plus 6 ASCII hex digits becomes that key, uppercased; **only the invalid entries are dropped**, the rest are kept. Invalid JSON, or JSON that is not an object, gives no colours. (Today's C# discards the whole map if any value is not a string; the spec does not.) |
 | `TypeColor/<type>` (a backup made after sync) | same key | `#RRGGBB`, uppercased; otherwise not used. Overrides a `TypeColors` entry for the same type. |
-| `SafeToSpendBuffer` | `SafeToSpendBuffer` (`money`) | Decimal text (`-?digits[.digits]`) or a JSON number, then `round2`; otherwise not used. |
-| `ReminderDaysBefore` | `ReminderDaysBefore` (`int`) | Digit text or an integral JSON number, ≥ 0; otherwise not used. |
+| `SafeToSpendBuffer` | `SafeToSpendBuffer` (`money`) | Decimal text (the whole text is `-?[0-9]+(\.[0-9]+)?`) or a JSON number, then `round2`. A value outside the money range (`|x| ≥ 1e13`, section 3) is not used. Otherwise not used. |
+| `ReminderDaysBefore` | `ReminderDaysBefore` (`int`) | Digit text (the whole text is `[0-9]+`) whose value is at most 2^53 − 1, or an integral JSON number ≥ 0 (`sync-protocol.md` section 6.3); otherwise not used. |
 | `NotionBillsDb`, `NotionPaymentsDb`, `NotionSnapshotsDb` | same key | **Migration only.** A restore never writes or clears them (`sync-protocol.md` section 12.3). |
 | `NotionOwnerDeviceId` | same key | **Never** taken from a table or backup. A device that has a Notion token when it creates the vault writes its own ID. |
 | `Theme`, `LastNotionSync`, `SchemaVersion` and other per-device keys (section 6.2) | stay per-device | Not synced. A restore applies them to the restoring device only. |

@@ -15,6 +15,19 @@ read and write each other's files byte for byte. The data being synced is define
 8 Recovery phrase · 9 QR pairing · 10 Writing and reading · 11 Snapshots and compaction ·
 12 Flows · 13 Security notes · 14 Error codes · 15 Decisions made here
 
+**String matching (applies everywhere in this spec and `data-model.md`).** Every format that a
+string must have (HLC, device ID, UUID, date, timestamp, hex key or key check, `#RRGGBB` colour,
+decimal or digit text, file and path names, the pairing QR text) is matched against the **whole
+string**, using **ASCII only**: a digit is `0`–`9`, hex is `0`–`9` and `a`–`f` (plus `A`–`F` only
+where a format says so). Nothing is trimmed, and nothing is case-folded or digit-converted, unless a
+section says so explicitly (only the recovery phrase, section 8, and the pairing QR, section 9.1).
+So `"<hlc>\n"` is not an HLC, and `٢٠٢٦-١١-١٢` (Arabic-Indic digits) is not a date. Beware regex
+`$` (in Python, Java and .NET it also matches before a final newline; use `\z`, `\Z` in Python,
+or a full-match function) and `\d` (matches non-ASCII digits in .NET and in Python); likewise,
+parse dates and numbers only after the ASCII pattern has matched. Fixtures: trailing-newline and
+non-ASCII-digit cases in `hlc.json`, `ids.json`, `files.json`, `crypto.json` and `merge.json`
+(decided here).
+
 ---
 
 ## 1. Devices
@@ -333,6 +346,11 @@ if the payment's kind counts against Remaining (Regular or Extra, data-model.md 
     emit bill.remainingCheckpoint = max(0, u + cents(amountPaid)) / 100 at the same hlc
 ```
 
+If the bill is not live (deleted, or pending because its create has not arrived), unmark writes only
+`payment.deleted = true` and leaves the checkpoint as it is; undeleting the bill later shows that
+checkpoint unchanged (fixtures: "unmark on a deleted bill...", "unmark when the bill's create has not
+arrived..."). The rule also does nothing for an absorbed SetAside or an unknown kind.
+
 The new checkpoint uses the unclamped value, so a Remaining that was showing 0 because of an
 overpayment comes back correctly (fixture: "unmark while Remaining is clamped at zero..."). Writing
 the checkpoint at `hlc` absorbs every payment this device currently counts, which is correct because
@@ -428,9 +446,24 @@ before writing).
 - is not exactly one JSON value (whitespace around it is fine; anything else after it is not);
 - contains an object with the same key twice, at any depth (many parsers, including `JSON.parse`,
   keep the last one silently; use a parser or a pass that detects duplicates);
-- contains a string escape that leaves an unpaired UTF-16 surrogate (`"\ud800"` alone; a valid pair
-  such as `"\ud83d\ude00"` is fine);
-- contains `NaN`, `Infinity` or other non-JSON tokens.
+- contains an unpaired UTF-16 surrogate escape, in a string value or an object key. A lead
+  surrogate escape (`\uD800`–`\uDBFF`, hex digits in either case) MUST be immediately followed by a
+  trail surrogate escape (`\uDC00`–`\uDFFF`); a lead followed by anything else (another `\u`
+  escape such as `\u0041`, a plain character, another escape such as `\n`, the closing quote) and a
+  trail with no lead before it are malformed. A valid pair (`\ud83d\ude00`, or `\uD83D\uDE00`) and
+  a literal 4-byte UTF-8 character are fine. Many JSON parsers, including Python's and
+  `JSON.parse`, accept lone surrogates silently, so check after parsing or use a validating
+  parser. After parsing, look for an **unpaired** surrogate: in UTF-16 strings (JavaScript, C#,
+  Kotlin) a lead code unit not followed by a trail, or a trail not preceded by a lead (a valid pair
+  stays as two code units there); in Python, where a valid pair decodes to one code point, any code
+  point U+D800–U+DFFF;
+- contains `NaN`, `Infinity` or other non-JSON tokens;
+- contains a number that overflows binary64 (`1e400`, or an integer with hundreds of digits). Every
+  JSON number in this protocol is the IEEE-754 binary64 value it parses to (round to nearest, as
+  `JSON.parse` does); a value that cannot be represented cannot be merged the same way everywhere.
+
+The root of a payload and of `vault.json` MUST be a JSON object; an array, string, number, `true`,
+`false` or `null` root is `malformed`.
 
 The same rules apply to `vault.json`. Fixtures: `files.json` (`payloadText`, `payloadHex`,
 `vaultText` cases).
@@ -473,7 +506,9 @@ records (`data-model.md` section 1.1).
 **Pairing file**: section 9.
 
 Envelope checks, after decryption and before merging, run in this order; the first failure is
-reported (fixtures: `files.json`, `checkEnvelope`):
+reported, so a payload wrong in several ways reports the lowest-numbered check (for example a wrong
+`vaultId` and a wrong `deviceId` is `vaultMismatch`). Fixtures: `files.json`, `checkEnvelope`,
+including the "check order: ..." cases.
 
 | # | Check | Error |
 |---|---|---|
@@ -603,14 +638,20 @@ Fixtures: `crypto.json` (`seal`, `open`), including tamper cases that must fail.
 |---|---|
 | `type` | Always `"futurecheck-vault"`. |
 | `formatVersion` | Sync format version (section 6.3). A reader that does not support it stops syncing and asks for an update. |
-| `vaultId` | UUIDv7, made when the vault is created. Every payload names it, so files from a different vault (for example one deleted and recreated) are rejected. |
+| `vaultId` | UUIDv7, made when the vault is created. Every payload names it, so files from a different vault (for example one deleted and recreated) are rejected. A reader MUST check that it is a canonical lowercase UUID (any version: `8-4-4-4-12` lowercase hex, the whole string); anything else, including a missing value, is `malformed` (decided here). |
 | `createdAt`, `createdBy` | When and by which device the vault was created. Informational. |
 | `currentGeneration` | The generation new files are encrypted with. MUST be listed in `generations`. |
 | `generations[].id` | Key generation number, integer ≥ 1, unique. |
 | `generations[].createdAt` | When it was created. |
 | `generations[].keyCheck` | Key check value: HKDF output (section 6.5), 16 bytes, lowercase hex. |
 
-Readers ignore unknown fields. Fixtures: `files.json` (`checkVault`).
+Validation, in this order, each failure `malformed` unless noted: the root is an object; `type` is
+exactly `"futurecheck-vault"`; `formatVersion` (integer rules of section 6.3; a valid integer other
+than 1 is `unsupportedFormat`); `vaultId`; `generations` is a non-empty array whose items each have
+an integer `id` ≥ 1 and a `keyCheck` of exactly 32 lowercase hex digits; ids are unique; and
+`currentGeneration` is an integer listed among them. `createdAt`, `createdBy` and
+`generations[].createdAt` are informational and not validated (except for the duplicate rule in
+section 12.1). Readers ignore unknown fields. Fixtures: `files.json` (`checkVault`).
 
 ### 7.2 Key check value
 
@@ -693,8 +734,13 @@ and Dropbox leaves the file recoverable from the recycle bin or deleted-file his
 
 On the new device:
 
-1. Scan the QR code inside the app (never through a URL scheme, which could log it). Parsing is
-   case-insensitive and ignores surrounding whitespace; anything else is `badQr`.
+1. Scan the QR code inside the app (never through a URL scheme, which could log it). Parse it
+   exactly like this (decided here): remove leading and trailing characters from the recovery
+   phrase's separator set (space, tab, CR, LF, U+00A0; section 8) and nothing else; change ASCII
+   `a`–`z` to `A`–`Z` and no other character; then the whole string must match
+   `FCPAIR:1:<32 hex>:<64 hex>` with uppercase hex. Anything else is `badQr`, including non-ASCII
+   letters that some case-mapping functions turn into ASCII (dotless `ı` U+0131 becomes `I` under
+   Unicode uppercasing), other Unicode spaces, and spaces inside the text.
 2. Download `pairing/<pairingId>.pair`, open it with the pairing key, run the envelope checks,
    reject it if `expiresAt` has passed (by the local clock).
 3. Check `vaultKey` against vault.json's key check value for `generation` (section 7.2), store it
@@ -902,17 +948,18 @@ Fixtures: `compaction.json` (`deletableChangeFiles`).
 
 1. User picks a provider and signs in (design section 6.5).
 2. If `PayDay/vault.json` already exists, stop and offer "join" instead.
-3. If the local database is from today's Windows app, run the migration (`data-model.md`
-   section 8). It takes one HLC for all migrated records.
-4. Generate the vault key (32 bytes), `vaultId` (UUIDv7) and a device ID. Store the key in the
-   keystore.
+3. Generate a device ID (section 1) and start the clock state (section 2.3). Generate the vault key
+   (32 bytes) and `vaultId` (UUIDv7). Store the key in the keystore.
+4. If the local database is from today's Windows app, run the migration (`data-model.md`
+   section 8). It takes one HLC (one `tick` with the new device ID) for all migrated records.
 5. Upload `devices/<me>/000001.chg` with every record of the local state plus this device's
    `device` row.
 6. Upload `vault.json` **last**, so a vault.json always means the first data is already there.
    Use the provider's "fail if the file exists" option where it has one (OneDrive does; Google
    Drive does not enforce unique names). If two vault.json files are found, every device uses the
    one with the earliest `createdAt`, ties broken by the smaller `vaultId` (decided here); the
-   other creator is told to join.
+   other creator is told to join. For this comparison a `createdAt` that is not a valid timestamp
+   sorts after every valid one.
 7. Show the recovery phrase and say plainly that losing every device and the phrase loses the
    synced data; offer a JSON export (design section 6.4).
 
@@ -945,7 +992,11 @@ Design section 6.5: restore means "make every device look like this backup". Fix
      every field of every row in the backup (including fields equal to the current value: a restore
      re-stamps everything) plus `deleted: false`;
    - for the same five entities: `deleted: true` for every row this device knows that is not in the
-     backup and is not already tombstoned (live or pending rows);
+     backup and is not already tombstoned (live or pending rows). A row whose winning `deleted` value
+     is already `true` gets **no** record, so its existing tombstone keeps its HLC; a row that is in the
+     backup but tombstoned locally comes back through the `deleted: false` above. Fixtures:
+     `merge.json`, "restore does not re-tombstone a row that is already deleted", "restore brings
+     back a deleted row that is in the backup";
    - every **plan setting** the mapping produced: `PayAnchor`, `EarlyStart`, `SafeToSpendBuffer`,
      `ReminderDaysBefore` and `TypeColor/<type>` keys;
    - `value: null` for every plan setting this device knows that the mapping did not produce and that
@@ -1043,7 +1094,9 @@ the contract.
 | 11 | Echo detection by comparing the Notion value with the connector's last pushed value | 5.3 |
 | 11a | Unmarking an absorbed payment raises the checkpoint by its amount (unclamped); "mark paid" on a live payment writes only `amountPaid` and `paidAt` | 5.3 |
 | 11b | Known limitations of checkpoints with concurrent offline edits are accepted, not fixed | 5.4 |
-| 12 | Plaintext JSON is never hashed or byte-compared, so no canonical JSON; strict parsing (no BOM, no duplicate keys, no lone surrogates); integers written as digits, read as any integral number, never booleans | 6.3 |
+| 12 | Plaintext JSON is never hashed or byte-compared, so no canonical JSON; strict parsing (no BOM, no duplicate keys, no lone surrogates, no binary64 overflow, object root); integers written as digits, read as any integral number, never booleans | 6.3 |
+| 12a | Every string format is matched against the whole string in ASCII; no trimming or folding unless stated | top of document |
+| 12b | `vaultId` must be a canonical lowercase UUID | 7.1 |
 | 13 | Change files carry only their own device's records | 6.3 |
 | 14 | No compression | 6.4 |
 | 15 | HKDF-SHA256 sub-keys (file key, key check, pairing key) | 6.5 |

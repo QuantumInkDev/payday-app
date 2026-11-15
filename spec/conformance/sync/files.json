@@ -232,6 +232,66 @@
       }
     },
     {
+      "name": "parse path 'devices/0a0a0a0a0a0a0a0a/000001.chg\\n'",
+      "input": {
+        "fn": "parsePath",
+        "path": "devices/0a0a0a0a0a0a0a0a/000001.chg\n"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap\\n'",
+      "input": {
+        "fn": "parsePath",
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap\n"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'pairing/abababababababababababababababab.pair\\n'",
+      "input": {
+        "fn": "parsePath",
+        "path": "pairing/abababababababababababababababab.pair\n"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'devices/0a0a0a0a0a0a0a0a/٠٠٠٠٠١.chg'",
+      "input": {
+        "fn": "parsePath",
+        "path": "devices/0a0a0a0a0a0a0a0a/٠٠٠٠٠١.chg"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'devices/0a0a0a0a0a0a0a0a\\n/000001.chg'",
+      "input": {
+        "fn": "parsePath",
+        "path": "devices/0a0a0a0a0a0a0a0a\n/000001.chg"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a\\n.snap'",
+      "input": {
+        "fn": "parsePath",
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a\n.snap"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
       "name": "valid change file envelope",
       "input": {
         "fn": "checkEnvelope",
@@ -881,6 +941,422 @@
       }
     },
     {
+      "name": "check order: wrong vaultId and wrong deviceId reports vaultMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa02",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "seq": 3,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "vaultMismatch"
+      },
+      "note": "Envelope checks run in table order (sync-protocol.md 6.3): vaultId (4) before deviceId (5)"
+    },
+    {
+      "name": "check order: wrong vaultId and wrong deviceId in a snapshot reports vaultMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa02",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "hlc": "01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a",
+          "covers": {
+            "0a0a0a0a0a0a0a0a": 3,
+            "0b0b0b0b0b0b0b0b": 7
+          },
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            }
+          ]
+        },
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "vaultMismatch"
+      }
+    },
+    {
+      "name": "check order: wrong type and wrong formatVersion reports typeMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 2,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "seq": 3,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "typeMismatch"
+      }
+    },
+    {
+      "name": "check order: wrong formatVersion and wrong vaultId reports unsupportedFormat",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 2,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa02",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "seq": 3,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "unsupportedFormat"
+      }
+    },
+    {
+      "name": "check order: wrong deviceId and wrong seq reports deviceMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "seq": 4,
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "deviceMismatch"
+      }
+    },
+    {
+      "name": "check order: wrong seq and records not an array reports seqMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "changes",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "seq": 4,
+          "records": {}
+        },
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "seqMismatch"
+      }
+    },
+    {
+      "name": "check order: snapshot with wrong deviceId and wrong hlc reports deviceMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0b0b0b0b0b0b0b0b",
+          "hlc": "01a1d9f6eda8-0000-0a0a0a0a0a0a0a0a",
+          "covers": {
+            "0a0a0a0a0a0a0a0a": 3,
+            "0b0b0b0b0b0b0b0b": 7
+          },
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            }
+          ]
+        },
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "deviceMismatch"
+      }
+    },
+    {
+      "name": "check order: snapshot with wrong hlc and bad covers reports hlcMismatch",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "snapshot",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "hlc": "01a1d9f6eda8-0000-0a0a0a0a0a0a0a0a",
+          "covers": {
+            "0a0a0a0a0a0a0a0a": true
+          },
+          "records": [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "deleted",
+              "value": false,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "Woodgrove Rewards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "payment",
+              "value": 55.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "remainingCheckpoint",
+              "value": 1200.0,
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            },
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "type",
+              "value": "Cards",
+              "hlc": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+            }
+          ]
+        },
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "hlcMismatch"
+      }
+    },
+    {
       "name": "integer field written as 3.0 is accepted",
       "input": {
         "fn": "checkEnvelope",
@@ -1515,6 +1991,121 @@
       }
     },
     {
+      "name": "a lead surrogate followed by a non-trail \\u escape is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800\\u0041\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lead surrogate followed by a plain character is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800A\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lone trail surrogate is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\udc00\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lead surrogate followed by another escape is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800\\n\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "two lead surrogates is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800\\ud800\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a trail surrogate before a lead surrogate is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\udc00\\ud800\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lone surrogate in an object key is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"\\ud800\":1}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a surrogate pair in uppercase hex escapes is fine",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\uD83D\\uDE00\"}"
+      },
+      "expected": {
+        "ignoredRecords": []
+      }
+    },
+    {
+      "name": "a literal emoji (4-byte UTF-8) is fine",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"😀\"}"
+      },
+      "expected": {
+        "ignoredRecords": []
+      }
+    },
+    {
       "name": "a byte-order mark is malformed",
       "input": {
         "fn": "checkEnvelope",
@@ -1618,6 +2209,56 @@
         "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
         "vaultId": "019a0000-0000-7000-8000-00000000fa01",
         "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":1e400,\"records\":[]}"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "a payload that is a JSON array is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "[]"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "The root must be an object; this branch was reached by no fixture before"
+    },
+    {
+      "name": "a payload that is a JSON string is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "\"changes\""
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "a record value that overflows binary64 makes the payload malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[{\"entity\":\"bill\",\"id\":\"019a0000-0000-7000-8000-0000000000b1\",\"field\":\"payment\",\"value\":1e400,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}]}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Every JSON number is the binary64 value it parses to; one that overflows cannot be merged the same way everywhere, so the whole payload is rejected"
+    },
+    {
+      "name": "a 400-digit integer record value makes the payload malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[{\"entity\":\"bill\",\"id\":\"019a0000-0000-7000-8000-0000000000b1\",\"field\":\"payment\",\"value\":9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}]}"
       },
       "expected": {
         "error": "malformed"
@@ -1739,6 +2380,86 @@
           "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
           "deviceId": "0a0a0a0a0a0a0a0a",
           "expiresAt": "in ten minutes"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing expiresAt with a trailing newline is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "expiresAt": "2026-11-14T12:10:00.000Z\n"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing expiresAt in non-ASCII digits is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "expiresAt": "٢٠٢٦-١١-١٤T١٢:١٠:٠٠.٠٠٠Z"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing vault key with a trailing newline is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5\n",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "expiresAt": "2026-11-14T12:10:00.000Z"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing device ID with a trailing newline is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
+          "deviceId": "0a0a0a0a0a0a0a0a\n",
+          "expiresAt": "2026-11-14T12:10:00.000Z"
         },
         "path": "pairing/abababababababababababababababab.pair",
         "vaultId": "019a0000-0000-7000-8000-00000000fa01"
@@ -1898,6 +2619,210 @@
         "generations": [
           1
         ]
+      }
+    },
+    {
+      "name": "vault.json type must be exactly futurecheck-vault",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault2",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json that is not an object is malformed",
+      "input": {
+        "fn": "checkVault",
+        "vaultText": "[]"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId is required",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId must be lowercase",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "019A0000-0000-7000-8000-00000000FA01",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId must be a string",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": 12345,
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId must be a UUID",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "my-vault",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId with a trailing newline is malformed",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01\n",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId may be any canonical UUID version",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "currentGeneration": 1,
+        "generations": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "vault.json keyCheck with a trailing newline is malformed",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9\n"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
       }
     },
     {

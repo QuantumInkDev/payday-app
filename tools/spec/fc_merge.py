@@ -2,7 +2,6 @@
 for mark paid / unmark / editing Remaining. Spec: spec/sync-protocol.md sections 4 and 5.
 """
 
-import json
 import math
 import re
 
@@ -271,9 +270,10 @@ TYPE_COLOR_PREFIX = "TypeColor/"
 # Connector state, not plan data: a restore never writes or clears these (sync-protocol.md 12.3).
 NOTION_KEYS = {"NotionOwnerDeviceId", "NotionBillsDb", "NotionPaymentsDb", "NotionSnapshotsDb"}
 
-_HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
-_DECIMAL = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
-_DIGITS = re.compile(r"^[0-9]+$")
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+_DECIMAL = re.compile(r"-?[0-9]+(\.[0-9]+)?")
+_DIGITS = re.compile(r"[0-9]+")
+# Every pattern is matched against the WHOLE string (fullmatch) and uses ASCII classes only.
 
 
 def is_restorable_setting(key):
@@ -290,20 +290,23 @@ def _map_one(key, raw):
     if key == "EarlyStart":
         if isinstance(raw, bool):
             return raw
-        return raw.lower() == "true" if isinstance(raw, str) else None  # as today's C# reads it
+        return fc_ids.ascii_lower(raw) == "true" if isinstance(raw, str) else None
     if key == "SafeToSpendBuffer":
-        if isinstance(raw, str) and _DECIMAL.match(raw):
+        if isinstance(raw, str) and _DECIMAL.fullmatch(raw):
             raw = float(raw)
         if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
             return None
+        if abs(raw) >= fc_money.MAX_ABS:
+            return None  # outside the money range (data-model.md 3): not used
         return fc_money.round2(raw)
     if key == "ReminderDaysBefore":
-        if isinstance(raw, str) and _DIGITS.match(raw):
-            return int(raw)
+        if isinstance(raw, str) and _DIGITS.fullmatch(raw):
+            v = int(raw)
+            return v if v <= fc_files.MAX_SAFE_INT else None
         v = fc_files.as_int(raw)
         return v if v is not None and v >= 0 else None
     if key.startswith(TYPE_COLOR_PREFIX):
-        return raw.upper() if isinstance(raw, str) and _HEX_COLOR.match(raw) else None
+        return raw.upper() if isinstance(raw, str) and _HEX_COLOR.fullmatch(raw) else None
     return None
 
 
@@ -314,9 +317,11 @@ def map_backup_settings(raw_settings):
     out = {}
     colors = raw_settings.get("TypeColors")
     if isinstance(colors, str):
+        # Same strict JSON rules as a payload (sync-protocol.md 6.3): NaN/Infinity, duplicate keys,
+        # lone surrogates or trailing text make the whole value invalid, giving no colours.
         try:
-            parsed = json.loads(colors)
-        except ValueError:
+            parsed = fc_files.parse_json_bytes(colors.encode("utf-8", "surrogatepass"))
+        except fc_files.FileError:
             parsed = None
         if isinstance(parsed, dict):
             for type_name, hex_ in parsed.items():

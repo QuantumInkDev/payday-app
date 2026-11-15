@@ -7140,6 +7140,3860 @@
       }
     },
     {
+      "name": "restore does not re-tombstone a row that is already deleted",
+      "note": "BILL_2 is already tombstoned (by B at +20s) and BILL_3 is live; neither is in the backup. The restore writes deleted=true only for BILL_3. A row whose winning deleted value is already true gets no new record (sync-protocol.md 12.3), so B's tombstone keeps its HLC.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "name",
+            "value": "Contoso Card",
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "payment",
+            "value": 40.0,
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "remainingCheckpoint",
+            "value": 900.0,
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9ee1020-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b3",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b3",
+            "field": "name",
+            "value": "Home Insurance",
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b3",
+            "field": "payment",
+            "value": 480.0,
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b3",
+            "field": "remainingCheckpoint",
+            "value": 600.0,
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b3",
+            "field": "type",
+            "value": "Bills",
+            "hlc": "01a1d9ee3730-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {}
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            },
+            "019a0000-0000-7000-8000-0000000000b2": {
+              "deleted": true,
+              "name": "Contoso Card",
+              "payment": 40.0,
+              "remainingCheckpoint": 900.0,
+              "type": "Cards"
+            },
+            "019a0000-0000-7000-8000-0000000000b3": {
+              "deleted": true,
+              "name": "Home Insurance",
+              "payment": 480.0,
+              "remainingCheckpoint": 600.0,
+              "type": "Bills"
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b3",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore brings back a deleted row that is in the backup",
+      "note": "The backup has BILL_1, which is tombstoned locally: the restore writes deleted=false with the rest.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9ee1020-0000-0b0b0b0b0b0b0b0b"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {}
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unmark on a deleted bill writes only the payment tombstone",
+      "note": "The payment is absorbed (same HLC as the checkpoint), but its bill is not live, so no checkpoint is written: unmark raises a checkpoint only for a live bill (sync-protocol.md 5.3). The bill keeps checkpoint 1145, so undeleting it later shows 1145, not 1200.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "amountPaid",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "paidAt",
+            "value": "2026-11-14T12:00:00.000Z",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "periodKey",
+            "value": "2026-10-29",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9ee8550-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "op": {
+            "op": "unmarkPaid",
+            "billId": "019a0000-0000-7000-8000-0000000000b1",
+            "periodKey": "2026-10-29",
+            "kind": "Regular",
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": true,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "payment": {
+            "594ced47-4d2d-5e0b-bd50-662365bb214c": {
+              "amountPaid": 55.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": true,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:00:00.000Z",
+              "periodKey": "2026-10-29"
+            }
+          }
+        },
+        "live": {
+          "bill": [],
+          "payment": []
+        },
+        "remaining": {},
+        "setAsideBalance": {},
+        "emitted": [
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unmark when the bill's create has not arrived writes only the payment tombstone",
+      "note": "A pending bill (no deleted record yet) is not live either.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "amountPaid",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "kind",
+            "value": "Regular",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "paidAt",
+            "value": "2026-11-14T12:00:00.000Z",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "periodKey",
+            "value": "2026-10-29",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "op": {
+            "op": "unmarkPaid",
+            "billId": "019a0000-0000-7000-8000-0000000000b1",
+            "periodKey": "2026-10-29",
+            "kind": "Regular",
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "remainingCheckpoint": 1145.0
+            }
+          },
+          "payment": {
+            "594ced47-4d2d-5e0b-bd50-662365bb214c": {
+              "amountPaid": 55.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": true,
+              "kind": "Regular",
+              "paidAt": "2026-11-14T12:00:00.000Z",
+              "periodKey": "2026-10-29"
+            }
+          }
+        },
+        "live": {
+          "bill": [],
+          "payment": []
+        },
+        "remaining": {},
+        "setAsideBalance": {},
+        "emitted": [
+          {
+            "entity": "payment",
+            "id": "594ced47-4d2d-5e0b-bd50-662365bb214c",
+            "field": "deleted",
+            "value": true,
+            "hlc": "01a1d9ef48a0-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore ignores out-of-range money in a backup setting",
+      "note": "1e13 is outside the money range (data-model.md 3), so the value is not used: the setting is treated as missing from the backup and reset to its default. It must not crash or be written.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "SafeToSpendBuffer": "10000000000000",
+              "PayAnchor": "2025-03-20"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": "2025-03-20"
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-20",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore ignores out-of-range money given as a JSON number",
+      "note": "Same rule for a numeric value.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "SafeToSpendBuffer": -10000000000000.0
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore setting text must match the whole value, in ASCII",
+      "note": "A trailing newline or non-ASCII digits make the text unusable (not used, so reset). EarlyStart is 'true' only for exactly t-r-u-e in any ASCII case; anything else is false.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "PayAnchor": "2025-03-20\n",
+              "SafeToSpendBuffer": "75.5\n",
+              "ReminderDaysBefore": "٣",
+              "TypeColor/Cards": "#FD79A8\n",
+              "EarlyStart": "true\n"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": false
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore accepts typed setting values and ASCII case-insensitive true",
+      "note": "An integral JSON number is an int; a JSON number is money (rounded to cents).",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "EarlyStart": "TRUE",
+              "ReminderDaysBefore": 4.0,
+              "SafeToSpendBuffer": 12.345,
+              "PayAnchor": "2025-03-20"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": true
+            },
+            "PayAnchor": {
+              "value": "2025-03-20"
+            },
+            "ReminderDaysBefore": {
+              "value": 4
+            },
+            "SafeToSpendBuffer": {
+              "value": 12.35
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-20",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 4,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 12.35,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore accepts a JSON boolean EarlyStart",
+      "note": "A backup written by a later version may hold typed values.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "EarlyStart": false
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": false
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore drops a negative or too-large reminder setting",
+      "note": "Digit text above 2^53 - 1 is not used, like an integer field (sync-protocol.md 6.3).",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "ReminderDaysBefore": "99999999999999999999"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy TypeColors: only invalid entries are dropped",
+      "note": "A number, a value with a trailing newline, an empty type name and null are each dropped; the valid Cards entry is kept. (Today's C# would discard the whole map when one value is not a string; the spec keeps the valid entries.)",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "TypeColors": "{\"Cards\":\"#fd79a8\",\"Loans\":5,\"Bills\":\"#B2945B\\n\",\"\":\"#000000\",\"Gym\":null}"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": "#FD79A8"
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#FD79A8",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy TypeColors with NaN gives no colours",
+      "note": "TypeColors is parsed with the strict JSON rules (sync-protocol.md 6.3). Invalid JSON, or JSON that is not an object, gives no colours, so every colour resets.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "TypeColors": "{\"Cards\":\"#FD79A8\",\"Loans\":NaN}"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy TypeColors with Infinity gives no colours",
+      "note": "TypeColors is parsed with the strict JSON rules (sync-protocol.md 6.3). Invalid JSON, or JSON that is not an object, gives no colours, so every colour resets.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "TypeColors": "{\"Cards\":\"#FD79A8\",\"x\":Infinity}"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy TypeColors with a duplicate key gives no colours",
+      "note": "TypeColors is parsed with the strict JSON rules (sync-protocol.md 6.3). Invalid JSON, or JSON that is not an object, gives no colours, so every colour resets.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "TypeColors": "{\"Cards\":\"#FD79A8\",\"Cards\":\"#000000\"}"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy TypeColors with trailing text gives no colours",
+      "note": "TypeColors is parsed with the strict JSON rules (sync-protocol.md 6.3). Invalid JSON, or JSON that is not an object, gives no colours, so every colour resets.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "TypeColors": "{\"Cards\":\"#FD79A8\"} x"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "legacy TypeColors with not an object gives no colours",
+      "note": "TypeColors is parsed with the strict JSON rules (sync-protocol.md 6.3). Invalid JSON, or JSON that is not an object, gives no colours, so every colour resets.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": "2025-03-27",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": true,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": 100.0,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": 5,
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": "#123456",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": "#6C5CE7",
+            "hlc": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a"
+          }
+        ],
+        "edit": {
+          "seen": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "op": {
+            "op": "restore",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a",
+            "rows": {
+              "bill": {
+                "019a0000-0000-7000-8000-0000000000b1": {
+                  "name": "Woodgrove Rewards",
+                  "type": "Cards",
+                  "payment": 55.0,
+                  "remainingCheckpoint": 1145.0
+                }
+              }
+            },
+            "settings": {
+              "TypeColors": "[\"#FD79A8\"]"
+            }
+          }
+        }
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1145.0,
+              "type": "Cards"
+            }
+          },
+          "setting": {
+            "EarlyStart": {
+              "value": null
+            },
+            "PayAnchor": {
+              "value": null
+            },
+            "ReminderDaysBefore": {
+              "value": null
+            },
+            "SafeToSpendBuffer": {
+              "value": null
+            },
+            "TypeColor/Cards": {
+              "value": null
+            },
+            "TypeColor/Loans": {
+              "value": null
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ],
+          "setting": [
+            "EarlyStart",
+            "PayAnchor",
+            "ReminderDaysBefore",
+            "SafeToSpendBuffer",
+            "TypeColor/Cards",
+            "TypeColor/Loans"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1145.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        },
+        "emitted": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1145.0,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "EarlyStart",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "PayAnchor",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "ReminderDaysBefore",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "SafeToSpendBuffer",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Cards",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "setting",
+            "id": "TypeColor/Loans",
+            "field": "value",
+            "value": null,
+            "hlc": "01a1d9fd0440-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      }
+    },
+    {
+      "name": "records that are not objects are ignored",
+      "note": "Each element of records must be an object; anything else is an invalid record and is skipped.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "name",
+            "value": "Woodgrove Rewards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "payment",
+            "value": 55.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1200.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "type",
+            "value": "Cards",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          "bill",
+          5,
+          null,
+          [
+            {
+              "entity": "bill",
+              "id": "019a0000-0000-7000-8000-0000000000b1",
+              "field": "name",
+              "value": "x",
+              "hlc": "01a1d9ede528-0000-0a0a0a0a0a0a0a0a"
+            }
+          ]
+        ]
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "name": "Woodgrove Rewards",
+              "payment": 55.0,
+              "remainingCheckpoint": 1200.0,
+              "type": "Cards"
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1200.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0
+        }
+      }
+    },
+    {
+      "name": "money fields of the wrong type or out of range read as 0",
+      "note": "A string amount and an amount at or above 1e13 read as the default 0 (data-model.md 1.2 and 3); a string checkpoint reads as 0.",
+      "input": {
+        "fn": "merge",
+        "records": [
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b1",
+            "field": "remainingCheckpoint",
+            "value": 1000.0,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "bill",
+            "id": "019a0000-0000-7000-8000-0000000000b2",
+            "field": "remainingCheckpoint",
+            "value": "900",
+            "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e1",
+            "field": "amountPaid",
+            "value": "100",
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e1",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e1",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e1",
+            "field": "kind",
+            "value": "Extra",
+            "hlc": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e2",
+            "field": "amountPaid",
+            "value": 10000000000000.0,
+            "hlc": "01a1d9edecf8-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e2",
+            "field": "billId",
+            "value": "019a0000-0000-7000-8000-0000000000b1",
+            "hlc": "01a1d9edecf8-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e2",
+            "field": "deleted",
+            "value": false,
+            "hlc": "01a1d9edecf8-0000-0a0a0a0a0a0a0a0a"
+          },
+          {
+            "entity": "payment",
+            "id": "019a0000-0000-7000-8000-0000000000e2",
+            "field": "kind",
+            "value": "Extra",
+            "hlc": "01a1d9edecf8-0000-0a0a0a0a0a0a0a0a"
+          }
+        ]
+      },
+      "expected": {
+        "rows": {
+          "bill": {
+            "019a0000-0000-7000-8000-0000000000b1": {
+              "deleted": false,
+              "remainingCheckpoint": 1000.0
+            },
+            "019a0000-0000-7000-8000-0000000000b2": {
+              "deleted": false,
+              "remainingCheckpoint": "900"
+            }
+          },
+          "payment": {
+            "019a0000-0000-7000-8000-0000000000e1": {
+              "amountPaid": "100",
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": false,
+              "kind": "Extra"
+            },
+            "019a0000-0000-7000-8000-0000000000e2": {
+              "amountPaid": 10000000000000.0,
+              "billId": "019a0000-0000-7000-8000-0000000000b1",
+              "deleted": false,
+              "kind": "Extra"
+            }
+          }
+        },
+        "live": {
+          "bill": [
+            "019a0000-0000-7000-8000-0000000000b1",
+            "019a0000-0000-7000-8000-0000000000b2"
+          ],
+          "payment": [
+            "019a0000-0000-7000-8000-0000000000e1",
+            "019a0000-0000-7000-8000-0000000000e2"
+          ]
+        },
+        "remaining": {
+          "019a0000-0000-7000-8000-0000000000b1": 1000.0,
+          "019a0000-0000-7000-8000-0000000000b2": 0.0
+        },
+        "setAsideBalance": {
+          "019a0000-0000-7000-8000-0000000000b1": 0.0,
+          "019a0000-0000-7000-8000-0000000000b2": 0.0
+        }
+      }
+    },
+    {
       "name": "known limitation: unmarking an absorbed payment also absorbs another device's unmerged payment",
       "note": "A marks 100, types 880, then unmarks (+300s), raising the checkpoint to 980 at +300s. B's offline 50 payment (+250s), which A had not merged, is now before the checkpoint and absorbed: 980 instead of 930 (sync-protocol.md 5.4).",
       "input": {

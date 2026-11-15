@@ -638,6 +638,156 @@
       "expected": {
         "valid": false
       }
+    },
+    {
+      "name": "regular payment ID rejects a period key with a trailing newline",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-11-12\n"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "regular payment ID rejects a period key in non-ASCII digits",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "٢٠٢٦-١١-١٢"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "regular payment ID rejects a bill ID with a trailing newline",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1\n",
+        "periodKey": "2026-11-12"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "paycheck ID rejects a pay date in full-width digits",
+      "input": {
+        "fn": "paycheckId",
+        "incomeSourceId": "019a0000-0000-7000-8000-0000000000c1",
+        "payDate": "２０２６-１１-２０"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "legacy payment ID rejects a paidAt with a trailing newline",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "2026-10-30T15:04:05.000Z\n",
+        "occurrence": 1
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "legacy payment ID rejects a paidAt in non-ASCII digits",
+      "input": {
+        "fn": "legacyPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29",
+        "amountCents": 5500,
+        "paidAt": "٢٠٢٦-١٠-٣٠T١٥:٠٤:٠٥.٠٠٠Z",
+        "occurrence": 1
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "legacy balance snapshot ID rejects a date with a trailing newline",
+      "input": {
+        "fn": "legacySnapshotId",
+        "snapshotDate": "2026-10-29\n",
+        "totalCents": 1,
+        "occurrence": 1
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "migrate bill ID '019a0000-0000-7000-8000-0000000000b1\\n' (not a UUID, so a legacy ID kept exactly)",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "019a0000-0000-7000-8000-0000000000b1\n"
+      },
+      "expected": {
+        "name": "legacy-bill/019a0000-0000-7000-8000-0000000000b1\n",
+        "id": "986f7f32-d983-5aa3-a58f-874ef27dd4f6"
+      },
+      "note": "Whole-string matching: a UUID with a trailing newline is not UUID-shaped; the legacy name keeps every character, so this differs from the ID without it"
+    },
+    {
+      "name": "migrate bill ID '13\\n' (not a UUID, so a legacy ID kept exactly)",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "13\n"
+      },
+      "expected": {
+        "name": "legacy-bill/13\n",
+        "id": "a513ecfd-7873-5c53-b4a6-9c184bb1ec44"
+      },
+      "note": "Whole-string matching: a UUID with a trailing newline is not UUID-shaped; the legacy name keeps every character, so this differs from the ID without it"
+    },
+    {
+      "name": "migrate bill ID ' 13' (not a UUID, so a legacy ID kept exactly)",
+      "input": {
+        "fn": "migrateBillId",
+        "id": " 13"
+      },
+      "expected": {
+        "name": "legacy-bill/ 13",
+        "id": "11dffc88-f675-5e99-87d0-c12a2f5553c4"
+      },
+      "note": "Whole-string matching: a UUID with a trailing newline is not UUID-shaped; the legacy name keeps every character, so this differs from the ID without it"
+    },
+    {
+      "name": "inspect a UUID with a trailing newline",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "019a0000-0000-7000-8000-0000000000b1\n"
+      },
+      "expected": {
+        "canonical": false
+      }
+    },
+    {
+      "name": "device ID '0a0a0a0a0a0a0a0a\\n'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "0a0a0a0a0a0a0a0a\n"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "device ID '٠a٠a٠a٠a٠a٠a٠a٠a'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "٠a٠a٠a٠a٠a٠a٠a٠a"
+      },
+      "expected": {
+        "valid": false
+      }
     }
   ]
 }
