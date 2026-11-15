@@ -9,8 +9,13 @@
 ## Session 2026-11-14: multi-platform design and repo restructure
 
 - Multi-platform design approved (`planning/2026-11-14-multiplatform-design.md`); product name locked in as **FutureCheck** (code name PayDay stays in the code).
-- Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` untouched so the installed app keeps its data). New root `README.md`.
-- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `ecd3059`: 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `3b08f76` was a silent no-op caused by a `vm-build.sh` bug that `ecd3059` fixed.
+- Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` unchanged). New root `README.md`.
+- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `01d328e`: 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `ee1f8eb` was a silent no-op caused by a `vm-build.sh` bug that `01d328e` fixed.
+
+- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes and two tests held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind) and placeholder Notion IDs (`00000000-…`). All branches on GitHub were force-pushed. **Every commit ID from before this changed**, so older IDs quoted in these notes (for example the Phase 7 chunk table) no longer resolve; the old-to-new map and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
+- `tools/notion-diagnose.ps1` now compares against placeholder IDs; pass your real data-source IDs if you use it. Installed apps keep their own Notion settings in their local database, so live sync is unaffected.
+
+**Old clones must not push.** The rig (`P:\Projects-Not-On-Cloud\PayDayApp`), the VM daily clone (`C:\Projects\PayDayApp`) and any other copy still hold the old history with the real data. Pushing any branch from them would put it back on GitHub. Before doing anything else in an old clone, run `git fetch --prune origin`, then for each local branch `git switch <branch> && git reset --hard origin/<branch>` or simply re-clone. If an old clone has uncommitted edits you want to keep, copy those files out by hand first, because the reset discards them.
 
 **On the rig and the VM daily clone** (these hold live data, so follow the steps in order):
 
@@ -21,7 +26,7 @@
 5. Only then delete the old root `PayDay`, `PayDay.Core` and `PayDay.Tests` folders. They hold only `bin/` and `obj/` plus any untracked files such as publish profiles.
 6. If registration fails ("already installed from a different location"), do NOT uninstall the app, because that deletes LocalState. Stop and ask, or use `Remove-AppxPackage -PreserveApplicationData` only if you know what it does.
 
-The package identity is unchanged (necessary for the installed app to keep its data), and following the steps above in order keeps the data safe.
+The package identity is unchanged, which is necessary but not enough on its own: following the steps above in order is what keeps the data safe.
 
 ---
 

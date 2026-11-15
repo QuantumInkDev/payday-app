@@ -101,7 +101,7 @@ winapp pack
 ## 💻 Where This Runs
 
 - The app is used **daily on the arm64 Windows VM**.
-- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at `ecd3059`: 194/194, 0 warnings.
+- **arm64 verified 2026-09-09**: `dotnet build` clean, **194/194 tests pass**. Re-verified 2026-11-14 via `tools/vm-build.sh` at `01d328e`: 194/194, 0 warnings.
 - The **packaged (appx) launch requires an INTERACTIVE Windows session**. Over SSH or from a service
   context, appx registration fails with `0x80070005`. This is a session constraint, not an app bug.
 - Clones:
@@ -134,7 +134,7 @@ auto-backup) are closed.
 
 **In flight:** nothing is mid-implementation. Work for the multi-platform design happens on
 `feature/multiplatform` until merged to `main` (repo restructure done: Windows projects moved to
-`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `f800119`
+`apps/windows/`). That branch grew from the `wip/backup-2026-09-09` line, which sits on top of `d9943c9`
 (the 2026-05-17 end-of-night status commit that closed Phase 7). The next step is design §9 step 3
 (`planning/2026-11-14-multiplatform-design.md`): scope the new features. **Phase 8 — Ship** (MSIX
 packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8) is now design §9 step 12.
