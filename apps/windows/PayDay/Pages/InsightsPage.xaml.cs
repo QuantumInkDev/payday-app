@@ -18,7 +18,7 @@ public sealed partial class InsightsPage : Page
 
     public InsightsPage()
     {
-        ViewModel = new InsightsPageViewModel(DatabaseService.Instance, App.Notion, App.Backups);
+        ViewModel = new InsightsPageViewModel(App.Database, App.Notion, App.Backups);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;

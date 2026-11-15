@@ -16,7 +16,7 @@ public sealed partial class AllBillsPage : Page
 
     public AllBillsPage()
     {
-        ViewModel = new AllBillsPageViewModel(DatabaseService.Instance, App.Notion);
+        ViewModel = new AllBillsPageViewModel(App.Database, App.Notion);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;

@@ -28,8 +28,11 @@ public class SyncEngineTests
 
     private readonly ManualTimeProvider _time = new(T0);
 
+    /// <summary>The storage every device in these tests uses; the SQLite variant overrides it.</summary>
+    protected virtual ISyncStorage NewStorage() => new InMemorySyncStorage();
+
     private SyncReplica NewDevice(ISyncMaterializer? materializer = null)
-        => SyncReplica.Start(new InMemorySyncStorage(), _time, VaultId, materializer: materializer);
+        => SyncReplica.Start(NewStorage(), _time, VaultId, materializer: materializer);
 
     private static VaultCodec NewCodec() => new(VaultId, new Dictionary<uint, byte[]> { [1] = VaultKey }, 1);
 
@@ -160,7 +163,7 @@ public class SyncEngineTests
     [Fact]
     public void Start_CanClearSyncedData_ForTheJoinFlow()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var first = SyncReplica.Start(storage, _time, VaultId);
         CreateBill(first, 100);
         Assert.NotEqual(0, storage.Records.Count);
@@ -199,7 +202,7 @@ public class SyncEngineTests
     [Fact]
     public void RestampLocalState_MakesEveryRecordThisDevicesOwn_ForANewVault()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var other = NewDevice();
         var bill = CreateBill(other, 1200);
         other.CreateRow(SyncEntities.Device, other.DeviceId, new Dictionary<string, SyncValue> { ["name"] = SyncValue.String("Old PC") });

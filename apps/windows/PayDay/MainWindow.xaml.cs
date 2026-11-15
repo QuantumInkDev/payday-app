@@ -80,7 +80,7 @@ public sealed partial class MainWindow : Window
         if (_restorePromptChecked) return;
         _restorePromptChecked = true;
 
-        var prompt = new BackupRestorePrompt(DatabaseService.Instance, App.Backups);
+        var prompt = new BackupRestorePrompt(App.Database, App.Backups);
         var candidate = await prompt.GetCandidateAsync();
         if (candidate is null) return;
 
@@ -124,7 +124,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Reads the saved theme from the DB and applies it to <see cref="RootGrid"/>.</summary>
     public async System.Threading.Tasks.Task ApplyPersistedThemeAsync()
     {
-        var raw = await DatabaseService.Instance.GetSettingAsync(SettingsPageViewModel.ThemeKey);
+        var raw = await App.Database.GetSettingAsync(SettingsPageViewModel.ThemeKey);
         ApplyTheme(System.Enum.TryParse<AppTheme>(raw, ignoreCase: true, out var t) ? t : AppTheme.System);
     }
 

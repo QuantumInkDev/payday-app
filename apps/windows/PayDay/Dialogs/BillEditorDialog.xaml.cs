@@ -37,7 +37,7 @@ public sealed partial class BillEditorDialog : ContentDialog
 
     private static async Task<IEnumerable<string>> GetExistingCustomTypesAsync()
     {
-        var bills = await DatabaseService.Instance.GetAllBillsAsync();
+        var bills = await App.Database.GetAllBillsAsync();
         return bills.Select(b => b.Type).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct();
     }
 }

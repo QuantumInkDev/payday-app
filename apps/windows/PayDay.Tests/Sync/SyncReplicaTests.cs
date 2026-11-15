@@ -29,7 +29,10 @@ public class SyncReplicaTests
     /// <summary>The drive: vault-relative path to file bytes.</summary>
     private readonly Dictionary<string, byte[]> _drive = new(StringComparer.Ordinal);
 
-    private SyncReplica NewDevice(ManualTimeProvider time) => SyncReplica.Start(new InMemorySyncStorage(), time, VaultId);
+    /// <summary>The storage every device in these tests uses; the SQLite variants override it.</summary>
+    protected virtual ISyncStorage NewStorage() => new InMemorySyncStorage();
+
+    private SyncReplica NewDevice(ManualTimeProvider time) => SyncReplica.Start(NewStorage(), time, VaultId);
 
     private void Upload(SyncReplica device)
     {
@@ -72,14 +75,14 @@ public class SyncReplicaTests
     [Fact]
     public void Start_GivesANewDeviceIdEveryTime_AndCursorsStartAtZero()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var first = SyncReplica.Start(storage, _timeA, VaultId);
         first.Metadata.SetCursor("0b0b0b0b0b0b0b0b", 9);
         var second = SyncReplica.Start(storage, _timeA, VaultId);
         Assert.NotEqual(first.DeviceId, second.DeviceId);
         Assert.Equal(0, second.Cursor("0b0b0b0b0b0b0b0b"));
         Assert.Equal(VaultId, second.Metadata.VaultId);
-        Assert.Throws<ArgumentException>(() => new SyncReplica(new InMemorySyncStorage(), _timeA));
+        Assert.Throws<ArgumentException>(() => new SyncReplica(NewStorage(), _timeA));
     }
 
     [Fact]
@@ -225,7 +228,7 @@ public class SyncReplicaTests
     [Fact]
     public void RecoverClock_RaisesTheStateToEveryOwnHlcInTheStore()
     {
-        var storage = new InMemorySyncStorage();
+        var storage = NewStorage();
         var a = SyncReplica.Start(storage, _timeA, VaultId);
         _timeA.Advance(60_000);
         var bill = CreateBill(a, "Woodgrove Rewards", 100);
