@@ -1,0 +1,418 @@
+{
+  "version": 1,
+  "description": "Recovery phrase: BIP39 English, 24 words, encoding the 256-bit vault key (sync-protocol.md section 8). Wordlist: spec/bip39-english.txt.",
+  "cases": [
+    {
+      "name": "encode all-zero key (BIP39 reference vector)",
+      "input": {
+        "fn": "encode",
+        "keyHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected": {
+        "words": [
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "abandon",
+          "art"
+        ],
+        "phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
+      }
+    },
+    {
+      "name": "decode all-zero key (BIP39 reference vector)",
+      "input": {
+        "fn": "decode",
+        "phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
+      },
+      "expected": {
+        "keyHex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "name": "encode 0x7f repeated (BIP39 reference vector)",
+      "input": {
+        "fn": "encode",
+        "keyHex": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+      },
+      "expected": {
+        "words": [
+          "legal",
+          "winner",
+          "thank",
+          "year",
+          "wave",
+          "sausage",
+          "worth",
+          "useful",
+          "legal",
+          "winner",
+          "thank",
+          "year",
+          "wave",
+          "sausage",
+          "worth",
+          "useful",
+          "legal",
+          "winner",
+          "thank",
+          "year",
+          "wave",
+          "sausage",
+          "worth",
+          "title"
+        ],
+        "phrase": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title"
+      }
+    },
+    {
+      "name": "decode 0x7f repeated (BIP39 reference vector)",
+      "input": {
+        "fn": "decode",
+        "phrase": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title"
+      },
+      "expected": {
+        "keyHex": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+      }
+    },
+    {
+      "name": "encode 0x80 repeated (BIP39 reference vector)",
+      "input": {
+        "fn": "encode",
+        "keyHex": "8080808080808080808080808080808080808080808080808080808080808080"
+      },
+      "expected": {
+        "words": [
+          "letter",
+          "advice",
+          "cage",
+          "absurd",
+          "amount",
+          "doctor",
+          "acoustic",
+          "avoid",
+          "letter",
+          "advice",
+          "cage",
+          "absurd",
+          "amount",
+          "doctor",
+          "acoustic",
+          "avoid",
+          "letter",
+          "advice",
+          "cage",
+          "absurd",
+          "amount",
+          "doctor",
+          "acoustic",
+          "bless"
+        ],
+        "phrase": "letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic bless"
+      }
+    },
+    {
+      "name": "decode 0x80 repeated (BIP39 reference vector)",
+      "input": {
+        "fn": "decode",
+        "phrase": "letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic bless"
+      },
+      "expected": {
+        "keyHex": "8080808080808080808080808080808080808080808080808080808080808080"
+      }
+    },
+    {
+      "name": "encode 0xff repeated (BIP39 reference vector)",
+      "input": {
+        "fn": "encode",
+        "keyHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "expected": {
+        "words": [
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "zoo",
+          "vote"
+        ],
+        "phrase": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote"
+      }
+    },
+    {
+      "name": "decode 0xff repeated (BIP39 reference vector)",
+      "input": {
+        "fn": "decode",
+        "phrase": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote"
+      },
+      "expected": {
+        "keyHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    },
+    {
+      "name": "encode BIP39 reference vector 68a79eac...",
+      "input": {
+        "fn": "encode",
+        "keyHex": "68a79eaca2324873eacc50cb9c6eca8cc68ea5d936f98787c60c7ebc74e6ce7c"
+      },
+      "expected": {
+        "words": [
+          "hamster",
+          "diagram",
+          "private",
+          "dutch",
+          "cause",
+          "delay",
+          "private",
+          "meat",
+          "slide",
+          "toddler",
+          "razor",
+          "book",
+          "happy",
+          "fancy",
+          "gospel",
+          "tennis",
+          "maple",
+          "dilemma",
+          "loan",
+          "word",
+          "shrug",
+          "inflict",
+          "delay",
+          "length"
+        ],
+        "phrase": "hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length"
+      }
+    },
+    {
+      "name": "decode BIP39 reference vector 68a79eac...",
+      "input": {
+        "fn": "decode",
+        "phrase": "hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length"
+      },
+      "expected": {
+        "keyHex": "68a79eaca2324873eacc50cb9c6eca8cc68ea5d936f98787c60c7ebc74e6ce7c"
+      }
+    },
+    {
+      "name": "encode fixture vault key generation 1",
+      "input": {
+        "fn": "encode",
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      },
+      "expected": {
+        "words": [
+          "vibrant",
+          "tail",
+          "shell",
+          "vague",
+          "across",
+          "call",
+          "stone",
+          "half",
+          "foot",
+          "violin",
+          "room",
+          "flat",
+          "depart",
+          "mystery",
+          "pulp",
+          "twice",
+          "jelly",
+          "elite",
+          "venture",
+          "joke",
+          "trim",
+          "fragile",
+          "damage",
+          "promote"
+        ],
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      }
+    },
+    {
+      "name": "decode fixture vault key generation 1",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      }
+    },
+    {
+      "name": "encode fixture vault key generation 2",
+      "input": {
+        "fn": "encode",
+        "keyHex": "e4f52f6476fc680de20c6571c666ea71ea47e287ccdb86bcbdc5ca10d4d904c9"
+      },
+      "expected": {
+        "words": [
+          "top",
+          "practice",
+          "suit",
+          "unknown",
+          "shoot",
+          "alone",
+          "market",
+          "million",
+          "impact",
+          "creek",
+          "ritual",
+          "toilet",
+          "piece",
+          "vanish",
+          "busy",
+          "opinion",
+          "mammal",
+          "tourist",
+          "imitate",
+          "neither",
+          "ask",
+          "hold",
+          "basket",
+          "curtain"
+        ],
+        "phrase": "top practice suit unknown shoot alone market million impact creek ritual toilet piece vanish busy opinion mammal tourist imitate neither ask hold basket curtain"
+      }
+    },
+    {
+      "name": "decode fixture vault key generation 2",
+      "input": {
+        "fn": "decode",
+        "phrase": "top practice suit unknown shoot alone market million impact creek ritual toilet piece vanish busy opinion mammal tourist imitate neither ask hold basket curtain"
+      },
+      "expected": {
+        "keyHex": "e4f52f6476fc680de20c6571c666ea71ea47e287ccdb86bcbdc5ca10d4d904c9"
+      }
+    },
+    {
+      "name": "decode accepts any case and any whitespace between words",
+      "input": {
+        "fn": "decode",
+        "phrase": "  vibrant tail shell vague across call\nSTONE HALF FOOT VIOLIN ROOM FLAT\ndepart mystery pulp twice jelly elite\nVENTURE JOKE TRIM FRAGILE DAMAGE PROMOTE\t"
+      },
+      "expected": {
+        "keyHex": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5"
+      }
+    },
+    {
+      "name": "decode rejects a wrong final word (checksum)",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage proof"
+      },
+      "expected": {
+        "error": "badChecksum"
+      }
+    },
+    {
+      "name": "decode rejects two swapped words (checksum)",
+      "input": {
+        "fn": "decode",
+        "phrase": "tail vibrant shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "badChecksum"
+      }
+    },
+    {
+      "name": "decode rejects 23 words",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      }
+    },
+    {
+      "name": "decode rejects 25 words",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote abandon"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      }
+    },
+    {
+      "name": "decode rejects a valid 12-word BIP39 phrase",
+      "input": {
+        "fn": "decode",
+        "phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      }
+    },
+    {
+      "name": "decode rejects a word not in the list",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibrant tail shell vague across payday stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "unknownWord"
+      }
+    },
+    {
+      "name": "decode rejects a 4-letter prefix (apps may autocomplete, decode needs full words)",
+      "input": {
+        "fn": "decode",
+        "phrase": "vibr tail shell vague across call stone half foot violin room flat depart mystery pulp twice jelly elite venture joke trim fragile damage promote"
+      },
+      "expected": {
+        "error": "unknownWord"
+      }
+    },
+    {
+      "name": "decode rejects an empty phrase",
+      "input": {
+        "fn": "decode",
+        "phrase": ""
+      },
+      "expected": {
+        "error": "wrongWordCount"
+      }
+    }
+  ]
+}

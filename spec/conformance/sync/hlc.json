@@ -1,0 +1,642 @@
+{
+  "version": 1,
+  "description": "Hybrid logical clock encoding, comparison and update rules (sync-protocol.md section 2).",
+  "cases": [
+    {
+      "name": "encode zero",
+      "input": {
+        "fn": "encode",
+        "wall": 0,
+        "counter": 0,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "000000000000-0000-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "encode fixture base time",
+      "input": {
+        "fn": "encode",
+        "wall": 1794657600000,
+        "counter": 0,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "encode with counter",
+      "input": {
+        "fn": "encode",
+        "wall": 1794657600000,
+        "counter": 1,
+        "deviceId": "0b0b0b0b0b0b0b0b"
+      },
+      "expected": {
+        "hlc": "01a1d9edc200-0001-0b0b0b0b0b0b0b0b"
+      }
+    },
+    {
+      "name": "encode counter uses 4 lowercase hex digits",
+      "input": {
+        "fn": "encode",
+        "wall": 1794657600001,
+        "counter": 171,
+        "deviceId": "0c0c0c0c0c0c0c0c"
+      },
+      "expected": {
+        "hlc": "01a1d9edc201-00ab-0c0c0c0c0c0c0c0c"
+      }
+    },
+    {
+      "name": "encode maximum wall and counter",
+      "input": {
+        "fn": "encode",
+        "wall": 281474976710655,
+        "counter": 65535,
+        "deviceId": "ffffffffffffffff"
+      },
+      "expected": {
+        "hlc": "ffffffffffff-ffff-ffffffffffffffff"
+      }
+    },
+    {
+      "name": "encode rejects wall above 48 bits",
+      "input": {
+        "fn": "encode",
+        "wall": 281474976710656,
+        "counter": 0,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "wallOutOfRange"
+      }
+    },
+    {
+      "name": "encode rejects negative wall",
+      "input": {
+        "fn": "encode",
+        "wall": -1,
+        "counter": 0,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "wallOutOfRange"
+      }
+    },
+    {
+      "name": "encode rejects counter above 16 bits",
+      "input": {
+        "fn": "encode",
+        "wall": 1794657600000,
+        "counter": 65536,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "counterOutOfRange"
+      }
+    },
+    {
+      "name": "encode rejects uppercase device ID",
+      "input": {
+        "fn": "encode",
+        "wall": 1794657600000,
+        "counter": 0,
+        "deviceId": "0A0A0A0A0A0A0A0A"
+      },
+      "expected": {
+        "error": "badDeviceId"
+      }
+    },
+    {
+      "name": "encode rejects short device ID",
+      "input": {
+        "fn": "encode",
+        "wall": 1794657600000,
+        "counter": 0,
+        "deviceId": "0a0a0a0a0a0a0a0"
+      },
+      "expected": {
+        "error": "badDeviceId"
+      }
+    },
+    {
+      "name": "decode 01a1d9edc200-0000-0a0a0a0a0a0a0a0a",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "wall": 1794657600000,
+        "counter": 0,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "decode 01a1d9edc5e8-0002-0b0b0b0b0b0b0b0b",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc5e8-0002-0b0b0b0b0b0b0b0b"
+      },
+      "expected": {
+        "wall": 1794657601000,
+        "counter": 2,
+        "deviceId": "0b0b0b0b0b0b0b0b"
+      }
+    },
+    {
+      "name": "decode 000000000000-0000-0000000000000000",
+      "input": {
+        "fn": "decode",
+        "hlc": "000000000000-0000-0000000000000000"
+      },
+      "expected": {
+        "wall": 0,
+        "counter": 0,
+        "deviceId": "0000000000000000"
+      }
+    },
+    {
+      "name": "decode ffffffffffff-ffff-ffffffffffffffff",
+      "input": {
+        "fn": "decode",
+        "hlc": "ffffffffffff-ffff-ffffffffffffffff"
+      },
+      "expected": {
+        "wall": 281474976710655,
+        "counter": 65535,
+        "deviceId": "ffffffffffffffff"
+      }
+    },
+    {
+      "name": "decode rejects uppercase hex",
+      "input": {
+        "fn": "decode",
+        "hlc": "01A1D9EDC200-0000-0A0A0A0A0A0A0A0A"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects missing separators",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc20000000a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects wrong separator",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc200:0000:0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects short wall",
+      "input": {
+        "fn": "decode",
+        "hlc": "1a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects trailing whitespace",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a "
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects leading whitespace",
+      "input": {
+        "fn": "decode",
+        "hlc": " 01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects non-hex device",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0g"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects empty string",
+      "input": {
+        "fn": "decode",
+        "hlc": ""
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects 13-digit wall",
+      "input": {
+        "fn": "decode",
+        "hlc": "001a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "compare: smaller wall is earlier",
+      "input": {
+        "fn": "compare",
+        "a": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a",
+        "b": "01a1d9edc5e8-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "result": -1
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "compare: wall dominates counter",
+      "input": {
+        "fn": "compare",
+        "a": "01a1d9edc200-ffff-0a0a0a0a0a0a0a0a",
+        "b": "01a1d9edc201-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "result": -1
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "compare: same wall, counter decides",
+      "input": {
+        "fn": "compare",
+        "a": "01a1d9edc200-0001-0b0b0b0b0b0b0b0b",
+        "b": "01a1d9edc200-0002-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "result": -1
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "compare: same wall and counter, device ID decides",
+      "input": {
+        "fn": "compare",
+        "a": "01a1d9edd588-0000-0a0a0a0a0a0a0a0a",
+        "b": "01a1d9edd588-0000-0b0b0b0b0b0b0b0b"
+      },
+      "expected": {
+        "result": -1
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "compare: equal",
+      "input": {
+        "fn": "compare",
+        "a": "01a1d9edd588-0003-0c0c0c0c0c0c0c0c",
+        "b": "01a1d9edd588-0003-0c0c0c0c0c0c0c0c"
+      },
+      "expected": {
+        "result": 0
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "compare: later is greater",
+      "input": {
+        "fn": "compare",
+        "a": "01a1d9ede528-0000-0a0a0a0a0a0a0a0a",
+        "b": "01a1d9ede140-ffff-0c0c0c0c0c0c0c0c"
+      },
+      "expected": {
+        "result": 1
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "compare: hex digit boundary (0x0fff... vs 0x1000...)",
+      "input": {
+        "fn": "compare",
+        "a": "0fffffffffff-0000-0a0a0a0a0a0a0a0a",
+        "b": "100000000000-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "result": -1
+      },
+      "note": "result is -1 if a < b, 0 if equal, 1 if a > b; equals byte-wise comparison of the strings"
+    },
+    {
+      "name": "tick with no previous state starts at now, counter 0",
+      "input": {
+        "fn": "tick",
+        "last": null,
+        "now": 1794657600000,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "tick when the clock moved forward resets the counter",
+      "input": {
+        "fn": "tick",
+        "last": "01a1d9edc200-0005-0a0a0a0a0a0a0a0a",
+        "now": 1794657601000,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edc5e8-0000-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "tick in the same millisecond increments the counter",
+      "input": {
+        "fn": "tick",
+        "last": "01a1d9edc200-0005-0a0a0a0a0a0a0a0a",
+        "now": 1794657600000,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edc200-0006-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "tick when the clock went backwards keeps the wall time and increments",
+      "input": {
+        "fn": "tick",
+        "last": "01a1d9ede910-0000-0a0a0a0a0a0a0a0a",
+        "now": 1794657600000,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9ede910-0001-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "tick at counter 0xffff carries into the wall time",
+      "input": {
+        "fn": "tick",
+        "last": "01a1d9edc200-ffff-0a0a0a0a0a0a0a0a",
+        "now": 1794657600000,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edc201-0000-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "tick after observing a future remote clock keeps the remote wall time",
+      "input": {
+        "fn": "tick",
+        "last": "01a1da24b080-0007-0a0a0a0a0a0a0a0a",
+        "now": 1794657600000,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1da24b080-0008-0a0a0a0a0a0a0a0a"
+      }
+    },
+    {
+      "name": "tick fails if the wall time would exceed 48 bits",
+      "input": {
+        "fn": "tick",
+        "last": "ffffffffffff-ffff-0a0a0a0a0a0a0a0a",
+        "now": 0,
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "wallOutOfRange"
+      }
+    },
+    {
+      "name": "observe with no previous state adopts the remote wall and counter",
+      "input": {
+        "fn": "observe",
+        "last": null,
+        "remote": "01a1d9edcdb8-0002-0b0b0b0b0b0b0b0b",
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edcdb8-0002-0a0a0a0a0a0a0a0a"
+      },
+      "note": "the state always carries the local device ID; observe never increments"
+    },
+    {
+      "name": "observe a later remote wall time",
+      "input": {
+        "fn": "observe",
+        "last": "01a1d9edc200-0009-0a0a0a0a0a0a0a0a",
+        "remote": "01a1d9edcdb8-0002-0b0b0b0b0b0b0b0b",
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edcdb8-0002-0a0a0a0a0a0a0a0a"
+      },
+      "note": "the state always carries the local device ID; observe never increments"
+    },
+    {
+      "name": "observe an earlier remote: state unchanged",
+      "input": {
+        "fn": "observe",
+        "last": "01a1d9ede910-0001-0a0a0a0a0a0a0a0a",
+        "remote": "01a1d9edcdb8-0002-0b0b0b0b0b0b0b0b",
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9ede910-0001-0a0a0a0a0a0a0a0a"
+      },
+      "note": "the state always carries the local device ID; observe never increments"
+    },
+    {
+      "name": "observe same wall, higher counter",
+      "input": {
+        "fn": "observe",
+        "last": "01a1d9edcdb8-0001-0a0a0a0a0a0a0a0a",
+        "remote": "01a1d9edcdb8-0002-0b0b0b0b0b0b0b0b",
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edcdb8-0002-0a0a0a0a0a0a0a0a"
+      },
+      "note": "the state always carries the local device ID; observe never increments"
+    },
+    {
+      "name": "observe same wall and counter from another device: unchanged",
+      "input": {
+        "fn": "observe",
+        "last": "01a1d9edcdb8-0002-0a0a0a0a0a0a0a0a",
+        "remote": "01a1d9edcdb8-0002-0b0b0b0b0b0b0b0b",
+        "deviceId": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "hlc": "01a1d9edcdb8-0002-0a0a0a0a0a0a0a0a"
+      },
+      "note": "the state always carries the local device ID; observe never increments"
+    },
+    {
+      "name": "sequence: local edits in one millisecond, then a later millisecond",
+      "input": {
+        "fn": "sequence",
+        "deviceId": "0a0a0a0a0a0a0a0a",
+        "steps": [
+          {
+            "op": "tick",
+            "now": 1794657600000
+          },
+          {
+            "op": "tick",
+            "now": 1794657600000
+          },
+          {
+            "op": "tick",
+            "now": 1794657600000
+          },
+          {
+            "op": "tick",
+            "now": 1794657600001
+          }
+        ]
+      },
+      "expected": {
+        "states": [
+          "01a1d9edc200-0000-0a0a0a0a0a0a0a0a",
+          "01a1d9edc200-0001-0a0a0a0a0a0a0a0a",
+          "01a1d9edc200-0002-0a0a0a0a0a0a0a0a",
+          "01a1d9edc201-0000-0a0a0a0a0a0a0a0a"
+        ]
+      }
+    },
+    {
+      "name": "sequence: observe a device that is ahead, then edit; the edit sorts after the remote",
+      "input": {
+        "fn": "sequence",
+        "deviceId": "0a0a0a0a0a0a0a0a",
+        "steps": [
+          {
+            "op": "tick",
+            "now": 1794657600000
+          },
+          {
+            "op": "observe",
+            "remote": "01a1d9ef96c0-0004-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "op": "tick",
+            "now": 1794657600005
+          }
+        ]
+      },
+      "expected": {
+        "states": [
+          "01a1d9edc200-0000-0a0a0a0a0a0a0a0a",
+          "01a1d9ef96c0-0004-0a0a0a0a0a0a0a0a",
+          "01a1d9ef96c0-0005-0a0a0a0a0a0a0a0a"
+        ]
+      }
+    },
+    {
+      "name": "sequence: observe an equal remote, then edit",
+      "input": {
+        "fn": "sequence",
+        "deviceId": "0a0a0a0a0a0a0a0a",
+        "steps": [
+          {
+            "op": "observe",
+            "remote": "01a1d9edc200-0000-0b0b0b0b0b0b0b0b"
+          },
+          {
+            "op": "tick",
+            "now": 1794657600000
+          }
+        ]
+      },
+      "expected": {
+        "states": [
+          "01a1d9edc200-0000-0a0a0a0a0a0a0a0a",
+          "01a1d9edc200-0001-0a0a0a0a0a0a0a0a"
+        ]
+      }
+    },
+    {
+      "name": "sequence: clock jumps back an hour; edits stay ordered",
+      "input": {
+        "fn": "sequence",
+        "deviceId": "0a0a0a0a0a0a0a0a",
+        "steps": [
+          {
+            "op": "tick",
+            "now": 1794661200000
+          },
+          {
+            "op": "tick",
+            "now": 1794657600000
+          },
+          {
+            "op": "tick",
+            "now": 1794657600001
+          }
+        ]
+      },
+      "expected": {
+        "states": [
+          "01a1da24b080-0000-0a0a0a0a0a0a0a0a",
+          "01a1da24b080-0001-0a0a0a0a0a0a0a0a",
+          "01a1da24b080-0002-0a0a0a0a0a0a0a0a"
+        ]
+      }
+    },
+    {
+      "name": "skew warning: remote 10 minutes ahead exactly is not flagged",
+      "input": {
+        "fn": "skewWarning",
+        "remote": "01a1d9f6e9c0-0000-0b0b0b0b0b0b0b0b",
+        "now": 1794657600000
+      },
+      "expected": {
+        "warning": false
+      }
+    },
+    {
+      "name": "skew warning: remote more than 10 minutes ahead is flagged",
+      "input": {
+        "fn": "skewWarning",
+        "remote": "01a1d9f6e9c1-0000-0b0b0b0b0b0b0b0b",
+        "now": 1794657600000
+      },
+      "expected": {
+        "warning": true
+      }
+    },
+    {
+      "name": "skew warning: remote behind is not flagged",
+      "input": {
+        "fn": "skewWarning",
+        "remote": "01a1d4c76600-0000-0b0b0b0b0b0b0b0b",
+        "now": 1794657600000
+      },
+      "expected": {
+        "warning": false
+      }
+    }
+  ]
+}

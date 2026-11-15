@@ -32,7 +32,20 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 ## 🔴 CONTINUE HERE
 
-**Design section 9 step 3: scope the new features.** (Steps 1 and 2, repo restructure and the FutureCheck name, are done.) The Phase 7 notes below are history.
+**Design section 9 step 5: sync in the Windows app**, with the Mac app's `PayDayKit` able to start in parallel now that `spec/` exists. Steps 1–4 are done:
+
+- Step 3: v1 features decided in `planning/2026-11-14-feature-scope.md`.
+- Step 4: `spec/data-model.md`, `spec/sync-protocol.md`, `spec/conformance/core/` (157 cases generated from the C# code and run by `PayDay.Tests`, 353 tests in all) and `spec/conformance/sync/` (237 cases, checked by the Python reference in `tools/spec/check_fixtures.py`; the C# sync engine will run them in step 5).
+- The C# core and tests now build on the Mac too: .NET 9 SDK in `~/.dotnet` (`export PATH=~/.dotnet:$PATH`). The VM stays the gate for the WinUI app.
+
+**Decide before freezing the rules** (C# quirks the core fixtures currently record as-is; see `spec/conformance/core/README.md`):
+1. Restoring an old backup zeroes snapshot totals (`totalOwed` isn't migrated). Real data-loss bug: fix.
+2. `EarlyStart` is saved but never read; the 3 PM shift always applies.
+3. Due days past a month's end overflow into the next month (31st in April → May 1) instead of clamping.
+4. Rate and type matching is case-sensitive.
+5. Any payment, even 0, marks a bill paid on the PayDay page.
+
+The Phase 7 notes below are history.
 
 ---
 

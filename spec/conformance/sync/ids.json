@@ -1,0 +1,423 @@
+{
+  "version": 1,
+  "description": "Deterministic IDs (UUIDv5), UUIDv7 layout, legacy ID migration, device IDs (sync-protocol.md section 3; data-model.md section 8).",
+  "cases": [
+    {
+      "name": "regular payment ID for 019a0000-0000-7000-8000-0000000000b1 / 2026-10-29",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29"
+      },
+      "expected": {
+        "name": "payment/regular/019a0000-0000-7000-8000-0000000000b1/2026-10-29",
+        "id": "594ced47-4d2d-5e0b-bd50-662365bb214c"
+      }
+    },
+    {
+      "name": "regular payment ID for 019a0000-0000-7000-8000-0000000000b1 / 2026-11-12",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-11-12"
+      },
+      "expected": {
+        "name": "payment/regular/019a0000-0000-7000-8000-0000000000b1/2026-11-12",
+        "id": "92c8e9ed-5f91-50a0-b203-103ace1a06d1"
+      }
+    },
+    {
+      "name": "regular payment ID for 019a0000-0000-7000-8000-0000000000b2 / 2026-11-12",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b2",
+        "periodKey": "2026-11-12"
+      },
+      "expected": {
+        "name": "payment/regular/019a0000-0000-7000-8000-0000000000b2/2026-11-12",
+        "id": "3c8b0fb7-6838-5e2b-850c-db4da09f9e30"
+      }
+    },
+    {
+      "name": "regular payment ID for 00000000-0000-0000-0000-000000000000 / 2025-03-20",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "00000000-0000-0000-0000-000000000000",
+        "periodKey": "2025-03-20"
+      },
+      "expected": {
+        "name": "payment/regular/00000000-0000-0000-0000-000000000000/2025-03-20",
+        "id": "3d8f20a3-f5a8-5c77-a088-0d73d545ec82"
+      }
+    },
+    {
+      "name": "set-aside ID for 019a0000-0000-7000-8000-0000000000b3 / 2026-10-29",
+      "input": {
+        "fn": "setAsideId",
+        "billId": "019a0000-0000-7000-8000-0000000000b3",
+        "periodKey": "2026-10-29"
+      },
+      "expected": {
+        "name": "payment/setaside/019a0000-0000-7000-8000-0000000000b3/2026-10-29",
+        "id": "d9fa4065-8070-523b-9e52-82fe178ed4ad"
+      }
+    },
+    {
+      "name": "set-aside ID for 019a0000-0000-7000-8000-0000000000b3 / 2026-11-12",
+      "input": {
+        "fn": "setAsideId",
+        "billId": "019a0000-0000-7000-8000-0000000000b3",
+        "periodKey": "2026-11-12"
+      },
+      "expected": {
+        "name": "payment/setaside/019a0000-0000-7000-8000-0000000000b3/2026-11-12",
+        "id": "8a48079e-4a4f-554d-b888-8d7ad4803db5"
+      }
+    },
+    {
+      "name": "regular and set-aside IDs differ for the same bill and period",
+      "input": {
+        "fn": "setAsideId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-10-29"
+      },
+      "expected": {
+        "name": "payment/setaside/019a0000-0000-7000-8000-0000000000b1/2026-10-29",
+        "id": "faff9725-0f5c-5b58-8320-005c3ad81d3e"
+      },
+      "note": "compare with the regular payment ID 594ced47-4d2d-5e0b-bd50-662365bb214c"
+    },
+    {
+      "name": "paycheck ID for 019a0000-0000-7000-8000-0000000000c1 / 2026-11-20",
+      "input": {
+        "fn": "paycheckId",
+        "incomeSourceId": "019a0000-0000-7000-8000-0000000000c1",
+        "payDate": "2026-11-20"
+      },
+      "expected": {
+        "name": "paycheck/019a0000-0000-7000-8000-0000000000c1/2026-11-20",
+        "id": "c5e2bf05-c3ee-50e9-b38e-3c77c6e4d073"
+      }
+    },
+    {
+      "name": "paycheck ID for 019a0000-0000-7000-8000-0000000000c1 / 2026-12-04",
+      "input": {
+        "fn": "paycheckId",
+        "incomeSourceId": "019a0000-0000-7000-8000-0000000000c1",
+        "payDate": "2026-12-04"
+      },
+      "expected": {
+        "name": "paycheck/019a0000-0000-7000-8000-0000000000c1/2026-12-04",
+        "id": "328dc279-529e-5d6e-a551-3c868e0620d5"
+      }
+    },
+    {
+      "name": "regular payment ID rejects an uppercase bill ID (canonicalize first)",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019A0000-0000-7000-8000-0000000000B1",
+        "periodKey": "2026-10-29"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "regular payment ID rejects a legacy bill ID (migrate first)",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "13",
+        "periodKey": "2026-10-29"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "regular payment ID rejects an unpadded date",
+      "input": {
+        "fn": "regularPaymentId",
+        "billId": "019a0000-0000-7000-8000-0000000000b1",
+        "periodKey": "2026-11-5"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "set-aside ID rejects an impossible date",
+      "input": {
+        "fn": "setAsideId",
+        "billId": "019a0000-0000-7000-8000-0000000000b3",
+        "periodKey": "2026-02-30"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "paycheck ID rejects a timestamp instead of a date",
+      "input": {
+        "fn": "paycheckId",
+        "incomeSourceId": "019a0000-0000-7000-8000-0000000000c1",
+        "payDate": "2026-11-20T00:00:00Z"
+      },
+      "expected": {
+        "error": "badInput"
+      }
+    },
+    {
+      "name": "migrate legacy bill ID '1'",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "1"
+      },
+      "expected": {
+        "name": "legacy-bill/1",
+        "id": "b4a3f0d7-9280-5275-9888-765116e35321"
+      }
+    },
+    {
+      "name": "migrate legacy bill ID '13'",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "13"
+      },
+      "expected": {
+        "name": "legacy-bill/13",
+        "id": "ac253b5d-8ef2-5489-a207-2d390f5a7d44"
+      }
+    },
+    {
+      "name": "migrate legacy bill ID '27'",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "27"
+      },
+      "expected": {
+        "name": "legacy-bill/27",
+        "id": "9c5b5617-f6e5-5bf2-a55f-d89cf6bb715f"
+      }
+    },
+    {
+      "name": "migrate legacy bill ID 'Legacy Bill'",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "Legacy Bill"
+      },
+      "expected": {
+        "name": "legacy-bill/Legacy Bill",
+        "id": "0dede7eb-8301-5934-b7c5-030649638031"
+      }
+    },
+    {
+      "name": "migrate GUID bill ID 9F6C1E2A-3B4D-4E5F-8A6B-7C8D9E0F1A2B",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "9F6C1E2A-3B4D-4E5F-8A6B-7C8D9E0F1A2B"
+      },
+      "expected": {
+        "id": "9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b"
+      },
+      "note": "GUID-shaped IDs keep their value and are lowercased"
+    },
+    {
+      "name": "migrate GUID bill ID 9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b",
+      "input": {
+        "fn": "migrateBillId",
+        "id": "9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b"
+      },
+      "expected": {
+        "id": "9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b"
+      },
+      "note": "GUID-shaped IDs keep their value and are lowercased"
+    },
+    {
+      "name": "uuid7 from 1794657600000 ms and random 00000000000000000000",
+      "input": {
+        "fn": "uuid7",
+        "unixMs": 1794657600000,
+        "randomHex": "00000000000000000000"
+      },
+      "expected": {
+        "id": "01a1d9ed-c200-7000-8000-000000000000"
+      }
+    },
+    {
+      "name": "uuid7 from 1794657600000 ms and random ffffffffffffffffffff",
+      "input": {
+        "fn": "uuid7",
+        "unixMs": 1794657600000,
+        "randomHex": "ffffffffffffffffffff"
+      },
+      "expected": {
+        "id": "01a1d9ed-c200-7fff-bfff-ffffffffffff"
+      }
+    },
+    {
+      "name": "uuid7 from 1794657600001 ms and random 0123456789abcdef0123",
+      "input": {
+        "fn": "uuid7",
+        "unixMs": 1794657600001,
+        "randomHex": "0123456789abcdef0123"
+      },
+      "expected": {
+        "id": "01a1d9ed-c201-7123-8567-89abcdef0123"
+      }
+    },
+    {
+      "name": "uuid7 from 0 ms and random a5a5a5a5a5a5a5a5a5a5",
+      "input": {
+        "fn": "uuid7",
+        "unixMs": 0,
+        "randomHex": "a5a5a5a5a5a5a5a5a5a5"
+      },
+      "expected": {
+        "id": "00000000-0000-75a5-a5a5-a5a5a5a5a5a5"
+      }
+    },
+    {
+      "name": "inspect 01a1d9ed-c200-7123-8567-89abcdef0123",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "01a1d9ed-c200-7123-8567-89abcdef0123"
+      },
+      "expected": {
+        "canonical": true,
+        "version": 7,
+        "rfc9562Variant": true,
+        "unixMs": 1794657600000
+      }
+    },
+    {
+      "name": "inspect 019a0000-0000-7000-8000-0000000000b1",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "019a0000-0000-7000-8000-0000000000b1"
+      },
+      "expected": {
+        "canonical": true,
+        "version": 7,
+        "rfc9562Variant": true,
+        "unixMs": 1760936591360
+      }
+    },
+    {
+      "name": "inspect 594ced47-4d2d-5e0b-bd50-662365bb214c",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "594ced47-4d2d-5e0b-bd50-662365bb214c"
+      },
+      "expected": {
+        "canonical": true,
+        "version": 5,
+        "rfc9562Variant": true
+      }
+    },
+    {
+      "name": "inspect 9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b"
+      },
+      "expected": {
+        "canonical": true,
+        "version": 4,
+        "rfc9562Variant": true
+      }
+    },
+    {
+      "name": "inspect 9F6C1E2A-3B4D-4E5F-8A6B-7C8D9E0F1A2B",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "9F6C1E2A-3B4D-4E5F-8A6B-7C8D9E0F1A2B"
+      },
+      "expected": {
+        "canonical": false
+      }
+    },
+    {
+      "name": "inspect 019a0000-0000-7000-c000-000000000000",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "019a0000-0000-7000-c000-000000000000"
+      },
+      "expected": {
+        "canonical": true,
+        "version": 7,
+        "rfc9562Variant": false,
+        "unixMs": 1760936591360
+      }
+    },
+    {
+      "name": "inspect 019a00000000-7000-8000-000000000000",
+      "input": {
+        "fn": "inspectUuid",
+        "id": "019a00000000-7000-8000-000000000000"
+      },
+      "expected": {
+        "canonical": false
+      }
+    },
+    {
+      "name": "device ID '0a0a0a0a0a0a0a0a'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "device ID '9c2e44f0a1b3d5e7'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "9c2e44f0a1b3d5e7"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "device ID '0A0A0A0A0A0A0A0A'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "0A0A0A0A0A0A0A0A"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "device ID '0a0a0a0a0a0a0a0'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "0a0a0a0a0a0a0a0"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "device ID '0a0a0a0a0a0a0a0a0'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "0a0a0a0a0a0a0a0a0"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "device ID '0a0a0a0a-0a0a0a0a'",
+      "input": {
+        "fn": "isDeviceId",
+        "id": "0a0a0a0a-0a0a0a0a"
+      },
+      "expected": {
+        "valid": false
+      }
+    }
+  ]
+}

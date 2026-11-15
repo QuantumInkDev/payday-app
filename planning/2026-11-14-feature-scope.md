@@ -13,7 +13,7 @@ screen for it comes later.
 |---|---|---|---|
 | 1 | **Income** | One or more income sources (yours, a partner's, a side job). Each has a cadence: weekly, biweekly, semimonthly, monthly or irregular. Expected amounts fill the forecast; recording what actually arrived overrides the estimate for that paycheck. | `IncomeSource` rows; `Paycheck` rows (actuals only) |
 | 2 | **Forecast and safe-to-spend** | For This / Next / Following period: income minus bills due minus set-asides, and one "safe to spend" number for the current period. | Synced setting `SafeToSpendBuffer` (amount kept back) |
-| 3 | **Set-asides** | Yearly, quarterly or irregular bills spread across the paychecks before they're due ("set aside $40 this check for insurance"). Marking a set-aside done is like marking a bill paid. | `Payment.Kind = SetAside` rows; they never lower Remaining |
+| 3 | **Set-asides** | Yearly bills spread across the paychecks before they're due ("set aside $40 this check for insurance"). Marking a set-aside done is like marking a bill paid. v1 applies set-asides to every bill with rate `Yearly`; a per-bill opt-in field and other rates can be added later without breaking the format. | `Payment.Kind = SetAside` rows; they never lower Remaining |
 | 4 | **Extra payments and target-date payoff** | Pay extra on a card or loan at any time; set a payoff date and see the payment per period needed to hit it. | `Payment.Kind = Extra` rows (random IDs); `Bill.TargetPayoffDate` |
 | 5 | **Confirmation numbers and CSV export** | Store a confirmation number and a note on any payment; export bills and payments to CSV. | `Payment.ConfirmationNumber`, `Payment.Note` |
 | 6 | **Due-date reminders** | A notification a set number of days before a manual bill is due, with "Mark paid" on the notification where the platform allows it. | Synced setting `ReminderDaysBefore` (default 2); on/off is per device |
@@ -26,10 +26,9 @@ screen for it comes later.
 
 ## Rules the spec must encode
 
-- Payment kinds: `Regular` (deterministic ID from bill + period, as in design §6.2), `Extra` and
-  `SetAside` (random UUIDv7). Only `Regular` and `Extra` count against Remaining.
-- A set-aside for a bill is deterministic per (bill, period), like a regular payment, so two
-  devices marking it done produce one row.
+- Payment kinds: `Regular` and `SetAside` get deterministic IDs from (bill, period), as in design
+  §6.2; `Extra` gets a random UUIDv7. Only `Regular` and `Extra` count against Remaining.
+- Because a set-aside's ID comes from (bill, period), two devices marking it done produce one row.
 - The set-aside balance for a bill is the sum of its `SetAside` payments since its last `Regular`
   payment.
 - `Paycheck` IDs are deterministic from (income source, pay date), so recording the same paycheck
