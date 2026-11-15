@@ -1991,6 +1991,121 @@
       }
     },
     {
+      "name": "a lead surrogate followed by a non-trail \\u escape is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800\\u0041\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lead surrogate followed by a plain character is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800A\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lone trail surrogate is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\udc00\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lead surrogate followed by another escape is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800\\n\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "two lead surrogates is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\ud800\\ud800\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a trail surrogate before a lead surrogate is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\udc00\\ud800\"}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a lone surrogate in an object key is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"\\ud800\":1}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Only a lead surrogate escape immediately followed by a trail surrogate escape is valid (sync-protocol.md 6.3)"
+    },
+    {
+      "name": "a surrogate pair in uppercase hex escapes is fine",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"\\uD83D\\uDE00\"}"
+      },
+      "expected": {
+        "ignoredRecords": []
+      }
+    },
+    {
+      "name": "a literal emoji (4-byte UTF-8) is fine",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[],\"note\":\"😀\"}"
+      },
+      "expected": {
+        "ignoredRecords": []
+      }
+    },
+    {
       "name": "a byte-order mark is malformed",
       "input": {
         "fn": "checkEnvelope",

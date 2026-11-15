@@ -446,8 +446,17 @@ before writing).
 - is not exactly one JSON value (whitespace around it is fine; anything else after it is not);
 - contains an object with the same key twice, at any depth (many parsers, including `JSON.parse`,
   keep the last one silently; use a parser or a pass that detects duplicates);
-- contains a string escape that leaves an unpaired UTF-16 surrogate (`"\ud800"` alone; a valid pair
-  such as `"\ud83d\ude00"` is fine);
+- contains an unpaired UTF-16 surrogate escape, in a string value or an object key. A lead
+  surrogate escape (`\uD800`–`\uDBFF`, hex digits in either case) MUST be immediately followed by a
+  trail surrogate escape (`\uDC00`–`\uDFFF`); a lead followed by anything else (another `\u`
+  escape such as `\u0041`, a plain character, another escape such as `\n`, the closing quote) and a
+  trail with no lead before it are malformed. A valid pair (`\ud83d\ude00`, or `\uD83D\uDE00`) and
+  a literal 4-byte UTF-8 character are fine. Many JSON parsers, including Python's and
+  `JSON.parse`, accept lone surrogates silently, so check after parsing or use a validating
+  parser. After parsing, look for an **unpaired** surrogate: in UTF-16 strings (JavaScript, C#,
+  Kotlin) a lead code unit not followed by a trail, or a trail not preceded by a lead (a valid pair
+  stays as two code units there); in Python, where a valid pair decodes to one code point, any code
+  point U+D800–U+DFFF;
 - contains `NaN`, `Infinity` or other non-JSON tokens;
 - contains a number that overflows binary64 (`1e400`, or an integer with hundreds of digits). Every
   JSON number in this protocol is the IEEE-754 binary64 value it parses to (round to nearest, as
