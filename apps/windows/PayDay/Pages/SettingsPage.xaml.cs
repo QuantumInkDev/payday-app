@@ -14,7 +14,7 @@ public sealed partial class SettingsPage : Page
 
     public SettingsPage()
     {
-        ViewModel = new SettingsPageViewModel(DatabaseService.Instance, App.Notion);
+        ViewModel = new SettingsPageViewModel(App.Database, App.Notion);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;

@@ -11,7 +11,7 @@ public sealed partial class PayoffTrackerPage : Page
 
     public PayoffTrackerPage()
     {
-        ViewModel = new PayoffTrackerPageViewModel(DatabaseService.Instance);
+        ViewModel = new PayoffTrackerPageViewModel(App.Database);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;

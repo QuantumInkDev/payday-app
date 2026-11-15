@@ -14,7 +14,7 @@ public sealed partial class DashboardPage : Page
 
     public DashboardPage()
     {
-        ViewModel = new DashboardPageViewModel(DatabaseService.Instance, App.Notion);
+        ViewModel = new DashboardPageViewModel(App.Database, App.Notion);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;

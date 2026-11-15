@@ -12,7 +12,7 @@ public sealed partial class PayDayPage : Page
 
     public PayDayPage()
     {
-        ViewModel = new PayDayPageViewModel(DatabaseService.Instance, App.Notion, App.Backups);
+        ViewModel = new PayDayPageViewModel(App.Database, App.Notion, App.Backups);
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;
