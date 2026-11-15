@@ -752,6 +752,24 @@ def gen_files():
             chg_text("3").replace(b'"records":[]', b'"records":[{"entity":"bill","entity":"payment"}]'), chg_path)
     raw_env("an unpaired surrogate escape is malformed", chg_text("3", ',"note":"\\ud800"'), chg_path)
     raw_env("a paired surrogate escape is fine", chg_text("3", ',"note":"\\ud83d\\ude00"'), chg_path)
+    for label, esc in [
+        ("a lead surrogate followed by a non-trail \\u escape", r"\ud800\u0041"),
+        ("a lead surrogate followed by a plain character", r"\ud800A"),
+        ("a lone trail surrogate", r"\udc00"),
+        ("a lead surrogate followed by another escape", r"\ud800\n"),
+        ("two lead surrogates", r"\ud800\ud800"),
+        ("a trail surrogate before a lead surrogate", r"\udc00\ud800"),
+        ("a lone surrogate in an object key", None),
+    ]:
+        if esc is None:
+            data = chg_text("3", r',"\ud800":1')
+        else:
+            data = chg_text("3", ',"note":"%s"' % esc)
+        raw_env(f"{label} is malformed", data, chg_path,
+                note="Only a lead surrogate escape immediately followed by a trail surrogate escape is valid "
+                     "(sync-protocol.md 6.3)")
+    raw_env("a surrogate pair in uppercase hex escapes is fine", chg_text("3", r',"note":"\uD83D\uDE00"'), chg_path)
+    raw_env("a literal emoji (4-byte UTF-8) is fine", chg_text("3", ',"note":"\U0001F600"'), chg_path)
     raw_env("a byte-order mark is malformed", b"\xef\xbb\xbf" + chg_text("3"), chg_path, as_text=False)
     raw_env("invalid UTF-8 is malformed", chg_text("3").replace(b'"records":[]', b'"records":[],"note":"\xff"'),
             chg_path, as_text=False)
