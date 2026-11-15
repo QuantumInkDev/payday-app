@@ -273,8 +273,8 @@ public class SyncConformanceTests
             case "deriveKeys":
             {
                 var key = Hex(i["vaultKeyHex"]);
-                Assert.Equal(Str(e["fileKeyHex"]), Convert.ToHexStringLower(HmacOnlyHkdf(key, SyncKeys.FileKeyInfo, 32)));
-                Assert.Equal(Str(e["keyCheckHex"]), Convert.ToHexStringLower(HmacOnlyHkdf(key, SyncKeys.KeyCheckInfo, 16)));
+                Assert.Equal(Str(e["fileKeyHex"]), Convert.ToHexStringLower(HmacOnlyHkdf(key, SyncKeys.FileKeyInfo.ToArray(), 32)));
+                Assert.Equal(Str(e["keyCheckHex"]), Convert.ToHexStringLower(HmacOnlyHkdf(key, SyncKeys.KeyCheckInfo.ToArray(), 16)));
                 return new JsonObject
                 {
                     ["fileKeyHex"] = Convert.ToHexStringLower(SyncKeys.FileKey(key)),
@@ -284,7 +284,7 @@ public class SyncConformanceTests
             case "derivePairingKey":
             {
                 var secret = Hex(i["pairingSecretHex"]);
-                Assert.Equal(Str(e["pairingKeyHex"]), Convert.ToHexStringLower(HmacOnlyHkdf(secret, SyncKeys.PairingKeyInfo, 32)));
+                Assert.Equal(Str(e["pairingKeyHex"]), Convert.ToHexStringLower(HmacOnlyHkdf(secret, SyncKeys.PairingKeyInfo.ToArray(), 32)));
                 return new JsonObject { ["pairingKeyHex"] = Convert.ToHexStringLower(SyncKeys.PairingKey(secret)) };
             }
             case "seal":

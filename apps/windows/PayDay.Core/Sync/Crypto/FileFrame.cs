@@ -64,10 +64,12 @@ public static class FileFrame
     }
 
     /// <summary>
-    /// Seals a file. <paramref name="secret"/> is the vault key of <paramref name="generation"/> for
-    /// change files and snapshots, or the pairing secret for a pairing file (generation 0).
+    /// Seals a file with a caller-supplied nonce. Internal: only the conformance tests pin a nonce;
+    /// every real file gets a fresh random one (section 6.6) through the public overload.
+    /// <paramref name="secret"/> is the vault key of <paramref name="generation"/> for change files
+    /// and snapshots, or the pairing secret for a pairing file (generation 0).
     /// </summary>
-    public static byte[] Seal(ReadOnlySpan<byte> secret, SyncFileKind kind, uint generation, ReadOnlySpan<byte> nonce, string path, ReadOnlySpan<byte> plaintext)
+    internal static byte[] Seal(ReadOnlySpan<byte> secret, SyncFileKind kind, uint generation, ReadOnlySpan<byte> nonce, string path, ReadOnlySpan<byte> plaintext)
     {
         if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown file kind.");
         if ((kind == SyncFileKind.Pairing) != (generation == 0))
@@ -75,21 +77,32 @@ public static class FileFrame
             throw new ArgumentException("Pairing files use key generation 0; other files a generation of at least 1.", nameof(generation));
         }
         if (KindForPath(path) != kind) throw new ArgumentException("The path's extension does not match the file kind.", nameof(path));
-        var key = kind == SyncFileKind.Pairing ? SyncKeys.PairingKey(secret) : SyncKeys.FileKey(secret);
         var header = Header(kind, generation, nonce);
-        var output = new byte[HeaderLength + plaintext.Length + TagLength];
-        header.CopyTo(output, 0);
-        using var aes = new AesGcm(key, TagLength);
-        aes.Encrypt(
-            nonce,
-            plaintext,
-            output.AsSpan(HeaderLength, plaintext.Length),
-            output.AsSpan(HeaderLength + plaintext.Length, TagLength),
-            Aad(header, path));
-        return output;
+        var key = kind == SyncFileKind.Pairing ? SyncKeys.PairingKey(secret) : SyncKeys.FileKey(secret);
+        try
+        {
+            var output = new byte[HeaderLength + plaintext.Length + TagLength];
+            header.CopyTo(output, 0);
+            using var aes = new AesGcm(key, TagLength);
+            aes.Encrypt(
+                nonce,
+                plaintext,
+                output.AsSpan(HeaderLength, plaintext.Length),
+                output.AsSpan(HeaderLength + plaintext.Length, TagLength),
+                Aad(header, path));
+            return output;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
     }
 
-    /// <summary>Seals a file with a fresh random nonce (every file written, including every upload retry).</summary>
+    /// <summary>
+    /// Seals a file with a fresh random nonce (every file written, including every upload retry).
+    /// <paramref name="secret"/> is the vault key of <paramref name="generation"/> for change files
+    /// and snapshots, or the pairing secret for a pairing file (generation 0).
+    /// </summary>
     public static byte[] Seal(ReadOnlySpan<byte> secret, SyncFileKind kind, uint generation, string path, ReadOnlySpan<byte> plaintext)
         => Seal(secret, kind, generation, RandomNumberGenerator.GetBytes(NonceLength), path, plaintext);
 
@@ -144,7 +157,12 @@ public static class FileFrame
         }
         catch (CryptographicException ex)
         {
+            CryptographicOperations.ZeroMemory(plaintext);
             throw new SyncException(SyncErrorCodes.AuthFailed, "GCM authentication failed", ex);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
         }
         return plaintext;
     }

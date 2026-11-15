@@ -57,11 +57,11 @@ public static class RowWriter
         return ChangeRecord.SortByKey(output);
     }
 
-    /// <summary>A delete: one <c>deleted: true</c> record, or nothing when the row is already tombstoned.</summary>
+    /// <summary>A delete: one <c>deleted: true</c> record, or nothing when the row is already tombstoned. Not for payments (see <see cref="PaymentWriter.DeletePayment"/>).</summary>
     public static IReadOnlyList<ChangeRecord> Delete(SyncState state, string entity, string id, Hlc hlc)
         => SetDeleted(state, entity, id, deleted: true, hlc);
 
-    /// <summary>An undelete: one <c>deleted: false</c> record, or nothing when the row is already live.</summary>
+    /// <summary>An undelete: one <c>deleted: false</c> record, or nothing when the row is already live. Not for payments (see <see cref="PaymentWriter.MarkPaid"/>).</summary>
     public static IReadOnlyList<ChangeRecord> Undelete(SyncState state, string entity, string id, Hlc hlc)
         => SetDeleted(state, entity, id, deleted: false, hlc);
 
@@ -78,6 +78,14 @@ public static class RowWriter
     {
         ArgumentNullException.ThrowIfNull(state);
         if (entity == SyncEntities.Setting) throw new ArgumentException("Settings have no tombstone; write value: null.", nameof(entity));
+        if (entity == SyncEntities.Payment)
+        {
+            // A payment's tombstone is its mark (sync-protocol.md 5.3): unmarking an absorbed payment
+            // must raise the checkpoint, and re-marking must write every mark field.
+            throw new ArgumentException(
+                "Payments are deleted with PaymentWriter.DeletePayment or UnmarkPaid and re-marked with PaymentWriter.MarkPaid, never with RowWriter.",
+                nameof(entity));
+        }
         if (state.Value(entity, id, SyncEntities.DeletedField) is { IsBool: true } cur && cur.BoolValue == deleted)
         {
             return Array.Empty<ChangeRecord>();

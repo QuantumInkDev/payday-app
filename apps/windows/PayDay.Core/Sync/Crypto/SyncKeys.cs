@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 
 namespace PayDay.Sync.Crypto;
 
@@ -12,9 +11,14 @@ public static class SyncKeys
     public const int KeyLength = 32;
     public const int KeyCheckLength = 16;
 
-    public static readonly byte[] FileKeyInfo = Encoding.ASCII.GetBytes("futurecheck/v1/file-key");
-    public static readonly byte[] KeyCheckInfo = Encoding.ASCII.GetBytes("futurecheck/v1/key-check");
-    public static readonly byte[] PairingKeyInfo = Encoding.ASCII.GetBytes("futurecheck/v1/pairing-key");
+    /// <summary>HKDF <c>info</c> for the file key (ASCII, no terminator).</summary>
+    public static ReadOnlySpan<byte> FileKeyInfo => "futurecheck/v1/file-key"u8;
+
+    /// <summary>HKDF <c>info</c> for the key check value.</summary>
+    public static ReadOnlySpan<byte> KeyCheckInfo => "futurecheck/v1/key-check"u8;
+
+    /// <summary>HKDF <c>info</c> for the pairing key.</summary>
+    public static ReadOnlySpan<byte> PairingKeyInfo => "futurecheck/v1/pairing-key"u8;
 
     private static readonly byte[] ZeroSalt = new byte[32];
 
@@ -25,7 +29,18 @@ public static class SyncKeys
     public static byte[] KeyCheck(ReadOnlySpan<byte> vaultKey) => Derive(vaultKey, KeyCheckInfo, KeyCheckLength);
 
     /// <summary>The key check value as vault.json stores it: 32 lowercase hex digits.</summary>
-    public static string KeyCheckHex(ReadOnlySpan<byte> vaultKey) => Convert.ToHexStringLower(KeyCheck(vaultKey));
+    public static string KeyCheckHex(ReadOnlySpan<byte> vaultKey)
+    {
+        var check = KeyCheck(vaultKey);
+        try
+        {
+            return Convert.ToHexStringLower(check);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(check);
+        }
+    }
 
     /// <summary>The AES-256-GCM key of a pairing file, from the 32-byte pairing secret in the QR code.</summary>
     public static byte[] PairingKey(ReadOnlySpan<byte> pairingSecret) => Derive(pairingSecret, PairingKeyInfo, KeyLength);
@@ -33,7 +48,7 @@ public static class SyncKeys
     /// <summary>A new random 32-byte vault key or pairing secret.</summary>
     public static byte[] NewKey() => RandomNumberGenerator.GetBytes(KeyLength);
 
-    private static byte[] Derive(ReadOnlySpan<byte> inputKey, byte[] info, int length)
+    private static byte[] Derive(ReadOnlySpan<byte> inputKey, ReadOnlySpan<byte> info, int length)
     {
         if (inputKey.Length != KeyLength) throw new SyncException(SyncErrorCodes.BadKeyLength);
         var output = new byte[length];

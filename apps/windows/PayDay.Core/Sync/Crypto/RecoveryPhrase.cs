@@ -48,14 +48,24 @@ public static class RecoveryPhrase
     {
         if (key.Length != 32) throw new SyncException(SyncErrorCodes.BadKeyLength);
         var bits = new byte[33];
-        key.CopyTo(bits);
-        bits[32] = SHA256.HashData(key)[0];
-        var words = new string[WordCount];
-        for (var i = 0; i < WordCount; i++)
+        Span<byte> hash = stackalloc byte[32];
+        try
         {
-            words[i] = List.Value.Words[ReadBits(bits, i * 11, 11)];
+            key.CopyTo(bits);
+            SHA256.HashData(key, hash);
+            bits[32] = hash[0];
+            var words = new string[WordCount];
+            for (var i = 0; i < WordCount; i++)
+            {
+                words[i] = List.Value.Words[ReadBits(bits, i * 11, 11)];
+            }
+            return words;
         }
-        return words;
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bits);
+            CryptographicOperations.ZeroMemory(hash);
+        }
     }
 
     /// <summary>The phrase as shown: the words joined by single spaces.</summary>
@@ -100,14 +110,23 @@ public static class RecoveryPhrase
         var words = Normalize(phrase);
         if (words.Count != WordCount) throw new SyncException(SyncErrorCodes.WrongWordCount);
         var bits = new byte[33];
-        for (var i = 0; i < WordCount; i++)
+        Span<byte> hash = stackalloc byte[32];
+        try
         {
-            if (!List.Value.Index.TryGetValue(words[i], out var index)) throw new SyncException(SyncErrorCodes.UnknownWord);
-            WriteBits(bits, i * 11, 11, index);
+            for (var i = 0; i < WordCount; i++)
+            {
+                if (!List.Value.Index.TryGetValue(words[i], out var index)) throw new SyncException(SyncErrorCodes.UnknownWord);
+                WriteBits(bits, i * 11, 11, index);
+            }
+            SHA256.HashData(bits.AsSpan(0, 32), hash);
+            if (hash[0] != bits[32]) throw new SyncException(SyncErrorCodes.BadChecksum);
+            return bits.AsSpan(0, 32).ToArray();
         }
-        var key = bits.AsSpan(0, 32).ToArray();
-        if (SHA256.HashData(key)[0] != bits[32]) throw new SyncException(SyncErrorCodes.BadChecksum);
-        return key;
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bits);
+            CryptographicOperations.ZeroMemory(hash);
+        }
     }
 
     private static int ReadBits(byte[] data, int start, int count)
