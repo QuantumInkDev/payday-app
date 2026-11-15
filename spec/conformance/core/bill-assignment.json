@@ -1,0 +1,1866 @@
+{
+  "version": 1,
+  "description": "Which bills land in which pay period, and on what due date. Two kinds of case. kind 'periods': input { kind, anchor: date, now: local date-time, bills: [Bill] } (Bill shape and defaults in README.md). The three periods come from the pay-periods rules; expected { periods: [ { label, key, start, end, bills: [ { id, dueDate } ] } ] }. Rules by bill.rate (case-sensitive): 'Monthly' is due on the first of (previous, same, next) month relative to the period's start month whose due date falls inside [start, end]; a due date is month-start + (dueDay - 1) days, so a day past the month's end overflows into the next month (31 in April is May 1, 29/30/31 in Feb 2025 are Mar 1/2/3) and is never clamped. 'Bi-Weekly' is in every period with dueDate = period start, whatever dueDay says. 'Yearly' uses yearlyDate 'MM-DD' in the period start's year, then the next year, with the same overflow (02-29 in 2025 is Mar 1); a yearlyDate that does not split into exactly two integers, or whose month is outside 1..12, never lands. 'Once' and any other rate never land. Inactive bills never land. Within a period bills are ordered by dueDate ascending; equal dates keep input order. kind 'monthlyDueDate': input { kind, dueDay, periodStart, periodEnd } -> expected { dueDate: date or null }, the Monthly rule on its own for an arbitrary window (first match in the order previous, same, next month).",
+  "cases": [
+    {
+      "name": "no bills gives three empty periods",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": []
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "monthly bills spread over the three periods",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "phone",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 65,
+            "dueDay": 5,
+            "rate": "Monthly"
+          },
+          {
+            "id": "contoso",
+            "name": "Contoso Card",
+            "type": "Cards",
+            "payment": 40,
+            "dueDay": 12,
+            "rate": "Monthly"
+          },
+          {
+            "id": "woodgrove",
+            "name": "Woodgrove Rewards",
+            "type": "Cards",
+            "payment": 35,
+            "dueDay": 28,
+            "rate": "Monthly"
+          },
+          {
+            "id": "water",
+            "name": "Water",
+            "type": "Bills",
+            "payment": 30,
+            "dueDay": 14,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "electric",
+                "dueDate": "2025-05-20"
+              },
+              {
+                "id": "woodgrove",
+                "dueDate": "2025-05-28"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "phone",
+                "dueDate": "2025-06-05"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "contoso",
+                "dueDate": "2025-06-12"
+              },
+              {
+                "id": "water",
+                "dueDate": "2025-06-14"
+              },
+              {
+                "id": "electric",
+                "dueDate": "2025-06-20"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "monthly due on the period's first and last day",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "last-day",
+            "name": "Internet",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 28,
+            "rate": "Monthly"
+          },
+          {
+            "id": "first-day",
+            "name": "Phone",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 15,
+            "rate": "Monthly"
+          },
+          {
+            "id": "day-before",
+            "name": "Water",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 14,
+            "rate": "Monthly"
+          },
+          {
+            "id": "day-after",
+            "name": "Gym",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 29,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "first-day",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "last-day",
+                "dueDate": "2025-05-28"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "day-after",
+                "dueDate": "2025-05-29"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "day-before",
+                "dueDate": "2025-06-14"
+              },
+              {
+                "id": "first-day",
+                "dueDate": "2025-06-15"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "monthly due days 28 to 31 in February 2025 overflow into March",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-02-25T12:00:00",
+        "bills": [
+          {
+            "id": "d31",
+            "name": "Day 31",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 31,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d30",
+            "name": "Day 30",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 30,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d29",
+            "name": "Day 29",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 29,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d28",
+            "name": "Day 28",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 28,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d1",
+            "name": "Day 1",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d3",
+            "name": "Day 3",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 3,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-02-20",
+            "start": "2025-02-20",
+            "end": "2025-03-05",
+            "bills": [
+              {
+                "id": "d28",
+                "dueDate": "2025-02-28"
+              },
+              {
+                "id": "d29",
+                "dueDate": "2025-03-01"
+              },
+              {
+                "id": "d1",
+                "dueDate": "2025-03-01"
+              },
+              {
+                "id": "d30",
+                "dueDate": "2025-03-02"
+              },
+              {
+                "id": "d31",
+                "dueDate": "2025-03-03"
+              },
+              {
+                "id": "d3",
+                "dueDate": "2025-03-03"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-03-06",
+            "start": "2025-03-06",
+            "end": "2025-03-19",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-03-20",
+            "start": "2025-03-20",
+            "end": "2025-04-02",
+            "bills": [
+              {
+                "id": "d28",
+                "dueDate": "2025-03-28"
+              },
+              {
+                "id": "d29",
+                "dueDate": "2025-03-29"
+              },
+              {
+                "id": "d30",
+                "dueDate": "2025-03-30"
+              },
+              {
+                "id": "d31",
+                "dueDate": "2025-03-31"
+              },
+              {
+                "id": "d1",
+                "dueDate": "2025-04-01"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "monthly due day 31 in a 30-day month lands on the 1st of the next month",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-04-20T12:00:00",
+        "bills": [
+          {
+            "id": "d31",
+            "name": "Day 31",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 31,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d30",
+            "name": "Day 30",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 30,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d1",
+            "name": "Day 1",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-04-17",
+            "start": "2025-04-17",
+            "end": "2025-04-30",
+            "bills": [
+              {
+                "id": "d30",
+                "dueDate": "2025-04-30"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-01",
+            "start": "2025-05-01",
+            "end": "2025-05-14",
+            "bills": [
+              {
+                "id": "d31",
+                "dueDate": "2025-05-01"
+              },
+              {
+                "id": "d1",
+                "dueDate": "2025-05-01"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "year boundary: monthly bills across December and January",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-12-28T12:00:00",
+        "bills": [
+          {
+            "id": "d25",
+            "name": "Day 25",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 25,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d31",
+            "name": "Day 31",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 31,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d1",
+            "name": "Day 1",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d7",
+            "name": "Day 7",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 7,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d8",
+            "name": "Day 8",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 8,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d20",
+            "name": "Day 20",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d22",
+            "name": "Day 22",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 22,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-12-25",
+            "start": "2025-12-25",
+            "end": "2026-01-07",
+            "bills": [
+              {
+                "id": "d25",
+                "dueDate": "2025-12-25"
+              },
+              {
+                "id": "d31",
+                "dueDate": "2025-12-31"
+              },
+              {
+                "id": "d1",
+                "dueDate": "2026-01-01"
+              },
+              {
+                "id": "d7",
+                "dueDate": "2026-01-07"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2026-01-08",
+            "start": "2026-01-08",
+            "end": "2026-01-21",
+            "bills": [
+              {
+                "id": "d8",
+                "dueDate": "2026-01-08"
+              },
+              {
+                "id": "d20",
+                "dueDate": "2026-01-20"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2026-01-22",
+            "start": "2026-01-22",
+            "end": "2026-02-04",
+            "bills": [
+              {
+                "id": "d22",
+                "dueDate": "2026-01-22"
+              },
+              {
+                "id": "d25",
+                "dueDate": "2026-01-25"
+              },
+              {
+                "id": "d31",
+                "dueDate": "2026-01-31"
+              },
+              {
+                "id": "d1",
+                "dueDate": "2026-02-01"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "leap year: due days 28 to 31 in February 2028",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-04-01",
+        "now": "2028-02-20T12:00:00",
+        "bills": [
+          {
+            "id": "d28",
+            "name": "Day 28",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 28,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d29",
+            "name": "Day 29",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 29,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d30",
+            "name": "Day 30",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 30,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d31",
+            "name": "Day 31",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 31,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2028-02-15",
+            "start": "2028-02-15",
+            "end": "2028-02-28",
+            "bills": [
+              {
+                "id": "d28",
+                "dueDate": "2028-02-28"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2028-02-29",
+            "start": "2028-02-29",
+            "end": "2028-03-13",
+            "bills": [
+              {
+                "id": "d29",
+                "dueDate": "2028-02-29"
+              },
+              {
+                "id": "d30",
+                "dueDate": "2028-03-01"
+              },
+              {
+                "id": "d31",
+                "dueDate": "2028-03-02"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2028-03-14",
+            "start": "2028-03-14",
+            "end": "2028-03-27",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "bi-weekly bills are in every period, due on the period start, ignoring dueDay",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "electric",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 16,
+            "rate": "Monthly"
+          },
+          {
+            "id": "savings",
+            "name": "Savings Transfer",
+            "type": "Other",
+            "payment": 100,
+            "dueDay": 25,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "allowance",
+            "name": "Allowance",
+            "type": "People",
+            "payment": 20,
+            "dueDay": 1,
+            "rate": "Bi-Weekly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "savings",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "allowance",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "electric",
+                "dueDate": "2025-05-16"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "savings",
+                "dueDate": "2025-05-29"
+              },
+              {
+                "id": "allowance",
+                "dueDate": "2025-05-29"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "savings",
+                "dueDate": "2025-06-12"
+              },
+              {
+                "id": "allowance",
+                "dueDate": "2025-06-12"
+              },
+              {
+                "id": "electric",
+                "dueDate": "2025-06-16"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "yearly bills land only in the period containing MM-DD",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-06-30T12:00:00",
+        "bills": [
+          {
+            "id": "domain",
+            "name": "Domain Renewal",
+            "type": "Subscriptions",
+            "payment": 15,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "07-04"
+          },
+          {
+            "id": "insurance",
+            "name": "Car Insurance",
+            "type": "Bills",
+            "payment": 600,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "07-20"
+          },
+          {
+            "id": "license",
+            "name": "Software License",
+            "type": "Subscriptions",
+            "payment": 99,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "01-15"
+          },
+          {
+            "id": "unpadded",
+            "name": "Club Dues",
+            "type": "Bills",
+            "payment": 45,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "7-8"
+          },
+          {
+            "id": "start-day",
+            "name": "Storage",
+            "type": "Bills",
+            "payment": 60,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "06-26"
+          },
+          {
+            "id": "end-day",
+            "name": "Magazine",
+            "type": "Bills",
+            "payment": 12,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "07-09"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-06-26",
+            "start": "2025-06-26",
+            "end": "2025-07-09",
+            "bills": [
+              {
+                "id": "start-day",
+                "dueDate": "2025-06-26"
+              },
+              {
+                "id": "domain",
+                "dueDate": "2025-07-04"
+              },
+              {
+                "id": "unpadded",
+                "dueDate": "2025-07-08"
+              },
+              {
+                "id": "end-day",
+                "dueDate": "2025-07-09"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-07-10",
+            "start": "2025-07-10",
+            "end": "2025-07-23",
+            "bills": [
+              {
+                "id": "insurance",
+                "dueDate": "2025-07-20"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-07-24",
+            "start": "2025-07-24",
+            "end": "2025-08-06",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "year boundary: yearly dates in December and January, and 12-32 overflow",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-12-28T12:00:00",
+        "bills": [
+          {
+            "id": "dec31",
+            "name": "Year-end Fee",
+            "type": "Bills",
+            "payment": 25,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "12-31"
+          },
+          {
+            "id": "jan02",
+            "name": "New Year Renewal",
+            "type": "Bills",
+            "payment": 30,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "01-02"
+          },
+          {
+            "id": "jan30",
+            "name": "Late January",
+            "type": "Bills",
+            "payment": 35,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "01-30"
+          },
+          {
+            "id": "dec32",
+            "name": "Overflow Day",
+            "type": "Bills",
+            "payment": 40,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "12-32"
+          },
+          {
+            "id": "dec20",
+            "name": "Already Passed",
+            "type": "Bills",
+            "payment": 45,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "12-20"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-12-25",
+            "start": "2025-12-25",
+            "end": "2026-01-07",
+            "bills": [
+              {
+                "id": "dec31",
+                "dueDate": "2025-12-31"
+              },
+              {
+                "id": "dec32",
+                "dueDate": "2026-01-01"
+              },
+              {
+                "id": "jan02",
+                "dueDate": "2026-01-02"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2026-01-08",
+            "start": "2026-01-08",
+            "end": "2026-01-21",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2026-01-22",
+            "start": "2026-01-22",
+            "end": "2026-02-04",
+            "bills": [
+              {
+                "id": "jan30",
+                "dueDate": "2026-01-30"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "yearly 02-29 in a non-leap year lands on March 1",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-02-25T12:00:00",
+        "bills": [
+          {
+            "id": "feb29",
+            "name": "Leap Day Renewal",
+            "type": "Bills",
+            "payment": 29,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "02-29"
+          },
+          {
+            "id": "mar01",
+            "name": "March First",
+            "type": "Bills",
+            "payment": 31,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "03-01"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-02-20",
+            "start": "2025-02-20",
+            "end": "2025-03-05",
+            "bills": [
+              {
+                "id": "feb29",
+                "dueDate": "2025-03-01"
+              },
+              {
+                "id": "mar01",
+                "dueDate": "2025-03-01"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-03-06",
+            "start": "2025-03-06",
+            "end": "2025-03-19",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-03-20",
+            "start": "2025-03-20",
+            "end": "2025-04-02",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "yearly 02-29 in a leap year lands on February 29",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-04-01",
+        "now": "2028-02-20T12:00:00",
+        "bills": [
+          {
+            "id": "feb29",
+            "name": "Leap Day Renewal",
+            "type": "Bills",
+            "payment": 29,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "02-29"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2028-02-15",
+            "start": "2028-02-15",
+            "end": "2028-02-28",
+            "bills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2028-02-29",
+            "start": "2028-02-29",
+            "end": "2028-03-13",
+            "bills": [
+              {
+                "id": "feb29",
+                "dueDate": "2028-02-29"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2028-03-14",
+            "start": "2028-03-14",
+            "end": "2028-03-27",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "yearly bills with unusable yearlyDate never land",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-06-30T12:00:00",
+        "bills": [
+          {
+            "id": "month13",
+            "name": "Bad Month",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "13-01"
+          },
+          {
+            "id": "month00",
+            "name": "Zero Month",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "00-04"
+          },
+          {
+            "id": "text",
+            "name": "Text",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "July 4"
+          },
+          {
+            "id": "three-parts",
+            "name": "With Year",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "2025-07-04"
+          },
+          {
+            "id": "empty",
+            "name": "Empty",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": ""
+          },
+          {
+            "id": "missing",
+            "name": "Missing",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": null
+          },
+          {
+            "id": "ok",
+            "name": "Valid Control",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "07-04"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-06-26",
+            "start": "2025-06-26",
+            "end": "2025-07-09",
+            "bills": [
+              {
+                "id": "ok",
+                "dueDate": "2025-07-04"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-07-10",
+            "start": "2025-07-10",
+            "end": "2025-07-23",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-07-24",
+            "start": "2025-07-24",
+            "end": "2025-08-06",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "once, unknown and wrong-case rates never land",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "once",
+            "name": "One-off Repair",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Once"
+          },
+          {
+            "id": "weekly",
+            "name": "Weekly Thing",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Weekly"
+          },
+          {
+            "id": "lower",
+            "name": "Lowercase Monthly",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "monthly"
+          },
+          {
+            "id": "biweekly-nodash",
+            "name": "Biweekly",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Biweekly"
+          },
+          {
+            "id": "ok",
+            "name": "Valid Control",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "ok",
+                "dueDate": "2025-05-20"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "ok",
+                "dueDate": "2025-06-20"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "inactive bills never land",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "active",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "inactive-monthly",
+            "name": "Old Phone",
+            "type": "Bills",
+            "payment": 65,
+            "dueDay": 20,
+            "rate": "Monthly",
+            "active": false
+          },
+          {
+            "id": "inactive-biweekly",
+            "name": "Old Transfer",
+            "type": "Bills",
+            "payment": 100,
+            "dueDay": 1,
+            "rate": "Bi-Weekly",
+            "active": false
+          },
+          {
+            "id": "inactive-yearly",
+            "name": "Old Domain",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "05-20",
+            "active": false
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "active",
+                "dueDate": "2025-05-20"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "active",
+                "dueDate": "2025-06-20"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "bills due the same day keep input order",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "zeta",
+            "name": "Zeta Bill",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "alpha",
+            "name": "Alpha Bill",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 20,
+            "rate": "Monthly"
+          },
+          {
+            "id": "mid",
+            "name": "Mid Bill",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 18,
+            "rate": "Monthly"
+          },
+          {
+            "id": "bw-b",
+            "name": "Transfer B",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "bw-a",
+            "name": "Transfer A",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 1,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "first",
+            "name": "First Day Monthly",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 15,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "bw-b",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "bw-a",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "first",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "mid",
+                "dueDate": "2025-05-18"
+              },
+              {
+                "id": "zeta",
+                "dueDate": "2025-05-20"
+              },
+              {
+                "id": "alpha",
+                "dueDate": "2025-05-20"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "bw-b",
+                "dueDate": "2025-05-29"
+              },
+              {
+                "id": "bw-a",
+                "dueDate": "2025-05-29"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "bw-b",
+                "dueDate": "2025-06-12"
+              },
+              {
+                "id": "bw-a",
+                "dueDate": "2025-06-12"
+              },
+              {
+                "id": "first",
+                "dueDate": "2025-06-15"
+              },
+              {
+                "id": "mid",
+                "dueDate": "2025-06-18"
+              },
+              {
+                "id": "zeta",
+                "dueDate": "2025-06-20"
+              },
+              {
+                "id": "alpha",
+                "dueDate": "2025-06-20"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unvalidated due days 0 and 32 overflow backwards and forwards",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "d0",
+            "name": "Day 0",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 0,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d32",
+            "name": "Day 32",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 32,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": []
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "d0",
+                "dueDate": "2025-05-31"
+              },
+              {
+                "id": "d32",
+                "dueDate": "2025-06-01"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "mixed rates in one period sort by due date",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-22T12:00:00",
+        "bills": [
+          {
+            "id": "yearly",
+            "name": "Domain Renewal",
+            "type": "Bills",
+            "payment": 15,
+            "dueDay": 1,
+            "rate": "Yearly",
+            "yearlyDate": "05-21"
+          },
+          {
+            "id": "monthly",
+            "name": "Electric",
+            "type": "Bills",
+            "payment": 120,
+            "dueDay": 17,
+            "rate": "Monthly"
+          },
+          {
+            "id": "biweekly",
+            "name": "Savings Transfer",
+            "type": "Bills",
+            "payment": 100,
+            "dueDay": 1,
+            "rate": "Bi-Weekly"
+          },
+          {
+            "id": "once",
+            "name": "One-off",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 16,
+            "rate": "Once"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-15",
+            "start": "2025-05-15",
+            "end": "2025-05-28",
+            "bills": [
+              {
+                "id": "biweekly",
+                "dueDate": "2025-05-15"
+              },
+              {
+                "id": "monthly",
+                "dueDate": "2025-05-17"
+              },
+              {
+                "id": "yearly",
+                "dueDate": "2025-05-21"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "biweekly",
+                "dueDate": "2025-05-29"
+              }
+            ]
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": [
+              {
+                "id": "biweekly",
+                "dueDate": "2025-06-12"
+              },
+              {
+                "id": "monthly",
+                "dueDate": "2025-06-17"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "early start after 3 PM shifts which bills are current",
+      "input": {
+        "kind": "periods",
+        "anchor": "2025-03-20",
+        "now": "2025-05-28T15:00:00",
+        "bills": [
+          {
+            "id": "d27",
+            "name": "Day 27",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 27,
+            "rate": "Monthly"
+          },
+          {
+            "id": "d29",
+            "name": "Day 29",
+            "type": "Bills",
+            "payment": 50,
+            "dueDay": 29,
+            "rate": "Monthly"
+          }
+        ]
+      },
+      "expected": {
+        "periods": [
+          {
+            "label": "This Pay Period",
+            "key": "2025-05-29",
+            "start": "2025-05-29",
+            "end": "2025-06-11",
+            "bills": [
+              {
+                "id": "d29",
+                "dueDate": "2025-05-29"
+              }
+            ]
+          },
+          {
+            "label": "Next Pay Period",
+            "key": "2025-06-12",
+            "start": "2025-06-12",
+            "end": "2025-06-25",
+            "bills": []
+          },
+          {
+            "label": "Following Period",
+            "key": "2025-06-26",
+            "start": "2025-06-26",
+            "end": "2025-07-09",
+            "bills": [
+              {
+                "id": "d27",
+                "dueDate": "2025-06-27"
+              },
+              {
+                "id": "d29",
+                "dueDate": "2025-06-29"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "day 15 inside a mid-month window",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 15,
+        "periodStart": "2025-03-14",
+        "periodEnd": "2025-03-27"
+      },
+      "expected": {
+        "dueDate": "2025-03-15"
+      }
+    },
+    {
+      "name": "day 31 in a February window overflows to March 3",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 31,
+        "periodStart": "2025-02-20",
+        "periodEnd": "2025-03-05"
+      },
+      "expected": {
+        "dueDate": "2025-03-03"
+      }
+    },
+    {
+      "name": "day 20 outside the window gives null",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 20,
+        "periodStart": "2025-04-01",
+        "periodEnd": "2025-04-14"
+      },
+      "expected": {
+        "dueDate": null
+      }
+    },
+    {
+      "name": "day 31 found via the previous month: April 31 is May 1",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 31,
+        "periodStart": "2025-05-01",
+        "periodEnd": "2025-05-14"
+      },
+      "expected": {
+        "dueDate": "2025-05-01"
+      }
+    },
+    {
+      "name": "day 1 in a window across the year end",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 1,
+        "periodStart": "2025-12-25",
+        "periodEnd": "2026-01-07"
+      },
+      "expected": {
+        "dueDate": "2026-01-01"
+      }
+    },
+    {
+      "name": "day 31 in a window across the year end",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 31,
+        "periodStart": "2025-12-25",
+        "periodEnd": "2026-01-07"
+      },
+      "expected": {
+        "dueDate": "2025-12-31"
+      }
+    },
+    {
+      "name": "day 30 at the start of a window spanning January and February",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 30,
+        "periodStart": "2025-01-30",
+        "periodEnd": "2025-02-12"
+      },
+      "expected": {
+        "dueDate": "2025-01-30"
+      }
+    },
+    {
+      "name": "day 29 in Feb 15-28 2025 has no date in the window",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 29,
+        "periodStart": "2025-02-15",
+        "periodEnd": "2025-02-28"
+      },
+      "expected": {
+        "dueDate": null
+      }
+    },
+    {
+      "name": "day 29 in Feb 16-29 2028 is Feb 29",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 29,
+        "periodStart": "2028-02-16",
+        "periodEnd": "2028-02-29"
+      },
+      "expected": {
+        "dueDate": "2028-02-29"
+      }
+    },
+    {
+      "name": "one-day window on the due date",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 10,
+        "periodStart": "2025-06-10",
+        "periodEnd": "2025-06-10"
+      },
+      "expected": {
+        "dueDate": "2025-06-10"
+      }
+    },
+    {
+      "name": "one-day window the day before the due date",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 10,
+        "periodStart": "2025-06-09",
+        "periodEnd": "2025-06-09"
+      },
+      "expected": {
+        "dueDate": null
+      }
+    },
+    {
+      "name": "long window with two candidates returns the earlier month's",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 10,
+        "periodStart": "2025-01-05",
+        "periodEnd": "2025-02-14"
+      },
+      "expected": {
+        "dueDate": "2025-01-10"
+      }
+    },
+    {
+      "name": "window starting late in a month finds the next month's date",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 3,
+        "periodStart": "2025-07-28",
+        "periodEnd": "2025-08-10"
+      },
+      "expected": {
+        "dueDate": "2025-08-03"
+      }
+    },
+    {
+      "name": "unvalidated day 0 is the last day of the previous month",
+      "input": {
+        "kind": "monthlyDueDate",
+        "dueDay": 0,
+        "periodStart": "2025-02-25",
+        "periodEnd": "2025-03-10"
+      },
+      "expected": {
+        "dueDate": "2025-02-28"
+      }
+    }
+  ]
+}
