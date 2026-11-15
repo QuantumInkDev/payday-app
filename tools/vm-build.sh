@@ -25,13 +25,22 @@ else
   ROOT='.'
 fi
 
-CMD="if not exist $DIR\\.git git clone --quiet $REPO_URL $DIR"
+CMD="(if not exist $DIR\\.git git clone --quiet $REPO_URL $DIR)"
 CMD="$CMD && git -C $DIR fetch --quiet origin"
 CMD="$CMD && git -C $DIR checkout --quiet --force --detach $SHA"
 CMD="$CMD && git -C $DIR clean -fdxq"
 CMD="$CMD && $DOTNET build $DIR\\$ROOT\\PayDay\\PayDay.csproj -nologo -p:TreatWarningsAsErrors=true"
 CMD="$CMD && $DOTNET test $DIR\\$ROOT\\PayDay.Tests -nologo -p:TreatWarningsAsErrors=true"
 
-prlctl exec "$FC_VM" cmd /c "$CMD"
+LOG=$(mktemp)
+trap 'rm -f "$LOG"' EXIT
+
+# pipefail makes the pipeline status the guest's exit code (tee always succeeds)
+prlctl exec "$FC_VM" cmd /c "$CMD" 2>&1 | tee "$LOG"
+
+if ! grep -q 'Passed!' "$LOG"; then
+  echo "VM run produced no test summary; treating as failure." >&2
+  exit 1
+fi
 
 echo "VM build OK at $SHORT ($ROOT)"
