@@ -33,11 +33,17 @@ internal sealed class FakeNotion : HttpMessageHandler
         public required string Parent { get; init; }
         public required JsonObject Properties { get; set; }
         public DateTimeOffset LastEdited { get; set; }
+
+        /// <summary>Moved to Notion's trash (`in_trash: true`): queries no longer return it.</summary>
+        public bool InTrash { get; set; }
     }
 
     public List<Page> Pages { get; } = new();
 
     public List<string> Calls { get; } = new();
+
+    /// <summary>Updates of these pages fail (503), like a Notion outage for one page.</summary>
+    public HashSet<string> FailingPages { get; } = new(StringComparer.Ordinal);
 
     public IEnumerable<Page> BillPages => Pages.Where(p => p.Parent == BillsDb);
 
@@ -78,7 +84,7 @@ internal sealed class FakeNotion : HttpMessageHandler
         if (request.Method == HttpMethod.Post && path.StartsWith("v1/data_sources/", StringComparison.Ordinal) && path.EndsWith("/query", StringComparison.Ordinal))
         {
             var db = path.Split('/')[2];
-            var pages = Pages.Where(p => p.Parent == db).ToList();
+            var pages = Pages.Where(p => p.Parent == db && !p.InTrash).ToList();
             if (body?["filter"]?["rich_text"]?["equals"]?.GetValue<string>() is { } billId)
             {
                 pages = pages.Where(p => Text(p, "Bill ID") == billId).Take(1).ToList();
@@ -103,7 +109,12 @@ internal sealed class FakeNotion : HttpMessageHandler
             var id = path["v1/pages/".Length..];
             var page = Pages.SingleOrDefault(p => p.Id == id);
             if (page is null) return new HttpResponseMessage(HttpStatusCode.NotFound);
-            foreach (var (k, v) in body!["properties"]!.AsObject()) page.Properties[k] = v?.DeepClone();
+            if (FailingPages.Contains(id)) return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            if (body!["in_trash"] is JsonNode trash) page.InTrash = trash.GetValue<bool>();
+            if (body["properties"] is JsonObject props)
+            {
+                foreach (var (k, v) in props) page.Properties[k] = v?.DeepClone();
+            }
             page.LastEdited = _now();
             return Ok(ToJson(page));
         }
@@ -115,7 +126,8 @@ internal sealed class FakeNotion : HttpMessageHandler
         ["object"] = "page",
         ["id"] = page.Id,
         ["last_edited_time"] = page.LastEdited.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
-        ["archived"] = false,
+        ["archived"] = page.InTrash,
+        ["in_trash"] = page.InTrash,
         ["properties"] = page.Properties.DeepClone(),
     };
 

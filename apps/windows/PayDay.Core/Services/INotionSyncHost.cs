@@ -20,12 +20,23 @@ public enum NotionRole
 
     /// <summary>Another device owns the connector: this one neither pushes nor pulls ("Notion: connected on &lt;device&gt;").</summary>
     OtherDevice,
+
+    /// <summary>
+    /// Sync is off because this device left a vault while it had a Notion token: the connector waits
+    /// until the user connects Notion again here, so it does not run beside the vault's owner.
+    /// </summary>
+    ReconnectRequired,
 }
+
+/// <summary>A deleted bill and the Notion page it had (null when it never had one).</summary>
+public sealed record DeletedNotionBill(string BillId, string? NotionPageId);
 
 /// <summary>The connector's role on this device, and the owner device when there is one.</summary>
 public sealed record NotionConnectorState(NotionRole Role, string? OwnerDeviceId = null, string? OwnerDeviceName = null)
 {
     public static readonly NotionConnectorState SyncOff = new(NotionRole.SyncOff);
+
+    public static readonly NotionConnectorState ReconnectRequired = new(NotionRole.ReconnectRequired);
 
     /// <summary>True when this device may call Notion.</summary>
     public bool MayRun => Role is NotionRole.SyncOff or NotionRole.Owner or NotionRole.OwnerMustPushFirst;
@@ -57,6 +68,15 @@ public interface INotionSyncHost
 
     /// <summary>Records that the connector just wrote <paramref name="remaining"/> to the bill's Notion page.</summary>
     void RecordNotionPush(string billId, double remaining);
+
+    /// <summary>
+    /// Records that a push pass over every bill finished with no error. A new owner becomes a full
+    /// <see cref="NotionRole.Owner"/> (allowed to pull) only through this, never through single pushes.
+    /// </summary>
+    void RecordNotionFullPush();
+
+    /// <summary>Bills deleted (tombstoned) in the vault, with their Notion page when known: their pages are archived, never pulled back.</summary>
+    IReadOnlyList<DeletedNotionBill> GetDeletedBills();
 
     /// <summary>The local bill ID a Notion page's "Bill ID" text stands for (a legacy ID maps to its synced ID).</summary>
     string MapNotionBillId(string notionBillId);

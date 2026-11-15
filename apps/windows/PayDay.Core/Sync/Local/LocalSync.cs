@@ -418,15 +418,40 @@ public sealed class LocalSync : IDisposable
         });
     }
 
-    /// <summary>Forgets every last-pushed value (this device just became the connector's owner and must push before it pulls).</summary>
+    /// <summary><c>sync_device</c> key: "1" once the connector pushed every bill without an error since this device became the owner.</summary>
+    public const string NotionFullPushDoneKey = "notionFullPushDone";
+
+    /// <summary>
+    /// Forgets every last-pushed value and the "pushed every bill" mark, in one transaction (this
+    /// device just became the connector's owner and must push every bill before it pulls, 12.5).
+    /// </summary>
     public void ClearNotionLastPushed()
     {
         if (Replica is not { } replica || _storage is not { } storage) return;
         replica.Update(_ =>
         {
-            using var cmd = storage.CreateCommand("DELETE FROM sync_notion_pushed;");
-            cmd.ExecuteNonQuery();
+            using (var cmd = storage.CreateCommand("DELETE FROM sync_notion_pushed;"))
+            {
+                cmd.ExecuteNonQuery();
+            }
+            using var flag = storage.CreateCommand("DELETE FROM sync_device WHERE key = $k;");
+            flag.Parameters.AddWithValue("$k", NotionFullPushDoneKey);
+            flag.ExecuteNonQuery();
         });
+    }
+
+    /// <summary>
+    /// True once this device's connector finished a push pass over every bill with no error since it
+    /// became the owner (12.5): only then are its last-pushed values known and may it pull. A single
+    /// push (an auto-push after an edit, or a pass where one bill failed) does not count.
+    /// </summary>
+    public bool NotionFullPushDone => GetDeviceSetting(NotionFullPushDoneKey) == "1";
+
+    /// <summary>Records that a push pass over every bill finished without an error. Does nothing while sync is off.</summary>
+    public void SetNotionFullPushDone()
+    {
+        if (!IsOn) return;
+        SetDeviceSetting(NotionFullPushDoneKey, "1");
     }
 
     /// <summary>
@@ -454,21 +479,9 @@ public sealed class LocalSync : IDisposable
                 cmd.Parameters.AddWithValue("$c", s.RemainingCents(bill));
                 cmd.ExecuteNonQuery();
             }
+            // Its last-pushed values are known: it is a full owner at once.
+            LegacyMigration.SetDeviceSetting(storage, NotionFullPushDoneKey, "1");
         });
-    }
-
-    /// <summary>True when this device's connector has pushed at least one bill since it became the owner.</summary>
-    public bool HasNotionPushes
-    {
-        get
-        {
-            if (Replica is not { } replica || _storage is not { } storage) return false;
-            return replica.Read((_, _) =>
-            {
-                using var cmd = storage.CreateCommand("SELECT COUNT(*) FROM sync_notion_pushed;");
-                return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
-            });
-        }
     }
 
     public void Dispose()

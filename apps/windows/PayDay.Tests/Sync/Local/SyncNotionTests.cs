@@ -259,12 +259,120 @@ public sealed class SyncNotionTests : IDisposable
     }
 
     [Fact]
-    public async Task AVaultWithNoOwner_IsClaimedByTheFirstDeviceThatUsesNotion()
+    public async Task AVaultWithNoOwner_IsNotClaimedByUsingNotion_OnlyByConnecting()
     {
         await OnWithPagesAsync();
         Assert.Equal(NotionRole.NoOwner, _service.GetConnectorState().Role);
         _env.Time.Advance(1000);
+        var result = await _service.SyncBillsAsync();
+        var bill = (await _env.Routed.GetAllBillsAsync()).First();
+        await _service.PushBillAsync(bill);
+
+        Assert.Contains("isn't connected on any device", Assert.Single(result.Errors), StringComparison.Ordinal);
+        Assert.Empty(_notion.Calls);
+        Assert.Equal(NotionRole.NoOwner, _service.GetConnectorState().Role);
+        Assert.Null(_env.Value(SyncEntities.Setting, SyncSettingKeys.NotionOwnerDeviceId, SyncEntities.ValueField));
+
+        await _service.ConnectAsync("secret_fictional_token");
+        Assert.Equal(NotionRole.OwnerMustPushFirst, _service.GetConnectorState().Role);
+    }
+
+    [Fact]
+    public async Task ANewOwner_IsNotAFullOwnerAfterOnePush_OrAfterAPassWithAFailedPush()
+    {
+        await OnWithPagesAsync();
+        await _service.ConnectAsync("secret_fictional_token");
+
+        // One auto-push after an edit is not "every bill pushed".
+        _env.Time.Advance(1000);
+        await _service.PushBillAsync((await _env.Routed.GetAllBillsAsync()).Single(b => b.Id == B27));
+        Assert.Equal(NotionRole.OwnerMustPushFirst, _service.GetConnectorState().Role);
+
+        // A pass in which one bill's push failed is not either; and nothing is pulled meanwhile.
+        _notion.FailingPages.Add("page-13");
+        var stale = _notion.BillPages.Single(p => p.Id == "page-1");
+        _notion.EditInNotion(stale, "Remaining", JsonNode.Parse("""{"number":999}""")!);
+        var before = Pending();
+        _env.Time.Advance(1000);
+        var failed = await _service.SyncBillsAsync();
+        Assert.True(failed.HasErrors);
+        Assert.Equal(0, failed.Pulled);
+        Assert.Equal(NotionRole.OwnerMustPushFirst, _service.GetConnectorState().Role);
+        Assert.DoesNotContain(PendingSince(before), r => r.Field == "remainingCheckpoint");
+        Assert.Equal(1200, FakeNotion.Number(stale, "Remaining")); // pushed over, not pulled
+
+        // A clean pass over every bill makes it the owner.
+        _notion.FailingPages.Clear();
+        _env.Time.Advance(1000);
+        var clean = await _service.SyncBillsAsync();
+        Assert.False(clean.HasErrors, string.Join("; ", clean.Errors));
+        Assert.Equal(NotionRole.Owner, _service.GetConnectorState().Role);
+    }
+
+    [Fact]
+    public async Task SavingTheTokenAgainOnTheOwner_ChangesNothing()
+    {
+        await OnWithPagesAsync();
+        await _service.ConnectAsync("secret_fictional_token");
+        _env.Time.Advance(1000);
         await _service.SyncBillsAsync();
         Assert.Equal(NotionRole.Owner, _service.GetConnectorState().Role);
+        var pushed = _env.Sync.GetNotionLastPushed(B1);
+        var before = Pending();
+
+        await _service.ConnectAsync("secret_fictional_token");
+
+        Assert.Equal(NotionRole.Owner, _service.GetConnectorState().Role);
+        Assert.Equal(pushed, _env.Sync.GetNotionLastPushed(B1));
+        Assert.Empty(PendingSince(before));
+    }
+
+    [Fact]
+    public async Task ABillDeletedOnAnotherDevice_IsArchivedInNotion_AndNeverComesBack()
+    {
+        await OnWithPagesAsync();
+        await _service.ConnectAsync("secret_fictional_token");
+        _env.Time.Advance(1000);
+        await _service.SyncBillsAsync();
+        var page13 = _notion.BillPages.Single(p => p.Id == "page-13");
+
+        // Another device deletes Electric; meanwhile someone edits its page in Notion.
+        MergeRemote(SyncEntities.Bill, B13, SyncEntities.DeletedField, SyncValue.True);
+        Assert.DoesNotContain(await _env.Db.GetAllBillsAsync(), b => b.Id == B13);
+        _env.Time.Advance(120_000);
+        _notion.EditInNotion(page13, "Payment", JsonNode.Parse("""{"number":130}""")!);
+        var before = Pending();
+
+        _env.Time.Advance(1000);
+        var result = await _service.SyncBillsAsync();
+
+        Assert.False(result.HasErrors, string.Join("; ", result.Errors));
+        Assert.Equal(1, result.Archived);
+        // (Pages of live bills edited after their push are pulled as echoes, which write nothing.)
+        Assert.True(page13.InTrash);
+        Assert.Equal(SyncValue.True, _env.Value(SyncEntities.Bill, B13, SyncEntities.DeletedField));
+        Assert.DoesNotContain(PendingSince(before), r => r.Id == B13);
+        Assert.DoesNotContain(await _env.Db.GetAllBillsAsync(), b => b.Id == B13);
+
+        // Later syncs neither archive it again nor bring it back.
+        _env.Time.Advance(1000);
+        var again = await _service.SyncBillsAsync();
+        Assert.Equal(0, again.Archived);
+        Assert.DoesNotContain(PendingSince(before), r => r.Id == B13);
+        Assert.Equal(SyncValue.True, _env.Value(SyncEntities.Bill, B13, SyncEntities.DeletedField));
+    }
+
+    [Fact]
+    public async Task APulledPageOfADeletedBill_IsNeverAnUndelete()
+    {
+        await OnWithPagesAsync();
+        MergeRemote(SyncEntities.Bill, B13, SyncEntities.DeletedField, SyncValue.True);
+        var before = Pending();
+
+        var pulled = new Bill { Id = B13, Name = "Electric (from Notion)", Type = "Bills", Payment = 130, Remaining = 10, DueDay = 3, Rate = "Monthly", Active = true };
+        await _env.Routed.SaveBillFromNotionAsync(pulled);
+
+        Assert.Empty(PendingSince(before));
+        Assert.Equal(SyncValue.True, _env.Value(SyncEntities.Bill, B13, SyncEntities.DeletedField));
     }
 }

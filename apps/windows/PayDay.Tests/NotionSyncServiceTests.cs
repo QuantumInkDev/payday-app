@@ -12,6 +12,13 @@ namespace PayDay.Tests;
 
 public class NotionSyncServiceTests
 {
+    /// <summary>
+    /// The database the services and view models under test get. The base class passes the fake
+    /// itself; <see cref="SyncOffRouterTests"/> runs every test again through the app's sync write
+    /// path with sync off, which must behave exactly like the plain database.
+    /// </summary>
+    private protected virtual IDatabaseService Wrap(FakeDatabaseService db) => db;
+
     private const string BillsDsId = "bills-ds-id";
     private const string PaymentsDsId = "payments-ds-id";
 
@@ -26,8 +33,8 @@ public class NotionSyncServiceTests
         return (db, creds);
     }
 
-    private static NotionSyncService Build(FakeDatabaseService db, InMemoryCredentialStore creds, RecordingHttpHandler handler)
-        => new(db, creds, handler);
+    private NotionSyncService Build(FakeDatabaseService db, InMemoryCredentialStore creds, RecordingHttpHandler handler)
+        => new(Wrap(db), creds, handler);
 
     private static string QueryResponse(params string[] pageJsons)
     {

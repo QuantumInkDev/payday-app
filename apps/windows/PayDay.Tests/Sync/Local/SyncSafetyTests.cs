@@ -225,6 +225,51 @@ public sealed class SyncSafetyTests : IDisposable
         Assert.Equal("#445566", TypeColorService.GetHex("Bills"));
     }
 
+    [Fact]
+    public async Task TypeColors_AReadAfterAMerge_DoesNotLetAnOlderMapRevertAnotherDevicesColour()
+    {
+        await _env.InitializeAsync();
+        _env.InsertLegacyData();
+        await _env.TurnOnAsync();
+        await TypeColorService.LoadAsync(_env.Routed); // Cards is #FD79A8 in this device's map
+        var replica = _env.Sync.Replica!;
+
+        // Another device changes Cards; then something reads every setting (the backup on mark-paid does).
+        replica.MergeRecords(new[] { Remote(SyncEntities.Setting, "TypeColor/Cards", SyncEntities.ValueField, SyncValue.String("#112233")) });
+        await _env.Routed.GetAllSettingsAsync();
+        await _env.Routed.GetSettingAsync(TypeColorService.SettingKey);
+        var pendingBefore = replica.Read((_, m) => m.PendingRecords.Count);
+
+        // The user changes another colour from the map loaded before the merge.
+        _env.Time.Advance(120_000);
+        await TypeColorService.SetHexAsync(_env.Routed, "Bills", "#445566");
+
+        var written = replica.Read((_, m) => m.PendingRecords.Skip(pendingBefore).ToList());
+        Assert.Equal("TypeColor/Bills", Assert.Single(written).Id);
+        Assert.Equal(SyncValue.String("#112233"), _env.Value(SyncEntities.Setting, "TypeColor/Cards", SyncEntities.ValueField));
+        Assert.Contains("#112233", await _env.Db.GetSettingAsync(TypeColorService.SettingKey), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TypeColors_WithSyncOff_StillSaveTheWholeMapAsBefore()
+    {
+        await _env.InitializeAsync();
+        _env.InsertLegacyData();
+        await TypeColorService.LoadAsync(_env.Routed);
+
+        await TypeColorService.SetHexAsync(_env.Routed, "Bills", "#445566");
+
+        Assert.False(_env.Sync.IsOn);
+        var expected = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["Cards"] = "#fd79a8",
+            ["Fitness"] = "#00B894",
+            ["Bad"] = "red",
+            ["Bills"] = "#445566",
+        });
+        Assert.Equal(expected, await _env.Db.GetSettingAsync(TypeColorService.SettingKey));
+    }
+
     // ---- A6: one unmark is one action ------------------------------------------------------------------
 
     [Fact]
