@@ -6,7 +6,23 @@
 
 ---
 
+## Session 2026-11-14: multi-platform design and repo restructure
+
+- Multi-platform design approved (`planning/2026-11-14-multiplatform-design.md`); product name locked in as **FutureCheck** (code name PayDay stays in the code).
+- Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` untouched so the installed app keeps its data). New root `README.md`.
+- `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified at `3b08f76`: exit 0 with warnings treated as errors.
+
+**On the rig and the VM daily clone:** run `git pull`, then delete the leftover root `PayDay`, `PayDay.Core` and `PayDay.Tests` folders (only `bin/` and `obj/` remain in them), then build from `apps\windows\`. The installed app keeps its data because the package identity is unchanged.
+
+---
+
 ## 🔴 CONTINUE HERE
+
+**Design section 9 step 3: scope the new features.** (Steps 1 and 2, repo restructure and the FutureCheck name, are done.) The Phase 7 notes below are history.
+
+---
+
+## Previous marker (Phase 7)
 
 **Phase 7 — Polish** is functionally complete and user-smoke-tested. Eleven chunks shipped this session:
 
