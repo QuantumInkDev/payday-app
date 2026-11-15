@@ -139,10 +139,10 @@ public class SyncReplicaTests
     {
         var a = NewDevice(_timeA);
         CreateBill(a, "Woodgrove Rewards", 100);
-        var first = a.SealPending()!;
+        var first = Assert.Single(a.SealPending());
         CreateBill(a, "Contoso Card", 200);
-        var second = a.SealPending()!;
-        Assert.Null(a.SealPending());
+        var second = Assert.Single(a.SealPending());
+        Assert.Empty(a.SealPending());
         Assert.Equal((1, 2), (first.Seq, second.Seq));
         Assert.Equal(first, a.NextBatchToUpload);
         Assert.Throws<InvalidOperationException>(() => a.MarkUploaded(2));
@@ -177,7 +177,7 @@ public class SyncReplicaTests
     }
 
     [Fact]
-    public void Files_AboveAGap_AreMergedWithoutMovingTheCursor()
+    public void Files_AboveAGap_AreRemembered_AndTheCursorPassesThemOnceTheGapIsFilled()
     {
         var a = NewDevice(_timeA);
         var b = NewDevice(_timeB);
@@ -191,7 +191,8 @@ public class SyncReplicaTests
         Assert.Equal(0, b.Cursor(a.DeviceId));
         var first = SyncPaths.ChangeFilePath(a.DeviceId, 1);
         b.MergeFile(_codec.Open(first, _drive[first]));
-        Assert.Equal(1, b.Cursor(a.DeviceId));
+        Assert.Equal(2, b.Cursor(a.DeviceId));
+        Assert.Empty(b.Metadata.MergedAhead(a.DeviceId));
     }
 
     [Fact]

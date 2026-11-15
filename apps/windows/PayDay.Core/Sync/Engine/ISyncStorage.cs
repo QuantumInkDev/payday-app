@@ -9,8 +9,8 @@ public sealed record SealedBatch(long Seq, IReadOnlyList<ChangeRecord> Records, 
 
 /// <summary>
 /// A device's local sync state that is never synced (<c>data-model.md</c> section 6.2): device and
-/// vault identity, the clock state, the outgoing queue, sealed batches, read cursors and snapshot
-/// first-listed times.
+/// vault identity, the clock state, the outgoing queue, sealed batches, read cursors, change files
+/// merged above a gap, and snapshot first-listed times. Not thread-safe; see <see cref="ISyncStorage"/>.
 /// </summary>
 public interface ISyncMetadata
 {
@@ -46,6 +46,14 @@ public interface ISyncMetadata
 
     void SetCursor(string deviceId, long seq);
 
+    /// <summary>
+    /// Change files of <paramref name="deviceId"/> already merged above its cursor (beyond a gap,
+    /// section 10.2 "Order-free"), so the cursor can advance through them once the gap is filled.
+    /// </summary>
+    IReadOnlyCollection<long> MergedAhead(string deviceId);
+
+    void SetMergedAhead(string deviceId, IEnumerable<long> seqs);
+
     /// <summary>When this device first listed a snapshot (local clock, Unix ms), by file name (section 11.1).</summary>
     long? SnapshotFirstListed(string snapshotName);
 
@@ -56,9 +64,17 @@ public interface ISyncMetadata
 }
 
 /// <summary>
-/// Everything a device persists for sync. <see cref="RunInTransaction"/> MUST make the merged
-/// records, the clock state and the outgoing queue change together or not at all (sections 2.3
-/// and 10.1); a SQLite implementation wraps it in one database transaction.
+/// Everything a device persists for sync.
+/// <para>
+/// <b>Threading and transactions.</b> Storage is not thread-safe: <see cref="SyncReplica"/>
+/// serializes every operation behind one lock, and nothing else should touch the storage while a
+/// replica owns it. <see cref="RunInTransaction"/> is synchronous and MUST make the merged records,
+/// the clock state, cursors and the outgoing queue change together or not at all (sections 2.3 and
+/// 10.1): when the action throws, every change it made is rolled back and the exception propagates.
+/// It is not reentrant: calling it from inside a running transaction throws
+/// <see cref="InvalidOperationException"/>. A SQLite implementation uses one dedicated connection for
+/// sync and wraps the action in one <c>BEGIN IMMEDIATE</c> … <c>COMMIT</c>.
+/// </para>
 /// </summary>
 public interface ISyncStorage
 {
@@ -66,5 +82,6 @@ public interface ISyncStorage
 
     ISyncMetadata Metadata { get; }
 
+    /// <summary>Runs <paramref name="action"/> as one atomic transaction (see the type's remarks).</summary>
     void RunInTransaction(Action action);
 }

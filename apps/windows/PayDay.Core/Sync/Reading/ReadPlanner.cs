@@ -9,16 +9,29 @@ public sealed record SnapshotInfo(string Hlc, IReadOnlyDictionary<string, long> 
     public long CoversFor(string deviceId) => Covers.TryGetValue(deviceId, out var v) ? v : 0;
 }
 
+public enum ReadStepKind
+{
+    ChangeFile,
+    Snapshot,
+}
+
+/// <summary>One file to merge: a change file (<see cref="DeviceId"/>, <see cref="Seq"/>) or a snapshot (<see cref="SnapshotHlc"/>).</summary>
+public sealed record ReadStep(ReadStepKind Kind, string? DeviceId = null, long Seq = 0, string? SnapshotHlc = null);
+
 /// <summary>
 /// What one sync reads (section 10.2): the snapshots it must merge, the change files it reads in
 /// order per device, the read cursors afterwards, and for each device whose next file is missing
-/// while a higher one is listed, the first missing sequence number.
+/// while a higher one is listed, the first missing sequence number. <see cref="Steps"/> lists every
+/// file in the order the plan was computed; merging in that order moves the cursors exactly as
+/// the plan says. (<see cref="Engine.SyncReplica.MergeFile"/> also reaches the same cursors in any
+/// other order, because it remembers files merged above a gap.)
 /// </summary>
 public sealed record ReadPlan(
     IReadOnlyList<string> MergeSnapshots,
     IReadOnlyDictionary<string, IReadOnlyList<long>> ReadFiles,
     IReadOnlyDictionary<string, long> CursorsAfter,
-    IReadOnlyDictionary<string, long> Gaps);
+    IReadOnlyDictionary<string, long> Gaps,
+    IReadOnlyList<ReadStep> Steps);
 
 /// <summary>Read planning (<c>spec/sync-protocol.md</c> section 10.2 step 3 and section 11.3).</summary>
 public static class ReadPlanner
@@ -62,6 +75,7 @@ public static class ReadPlanner
         bool Listed(string d, long seq) => present.TryGetValue(d, out var set) && set.Contains(seq);
 
         var merged = new HashSet<string>(StringComparer.Ordinal);
+        var steps = new List<ReadStep>();
         var read = devices.ToDictionary(d => d, _ => new List<long>(), StringComparer.Ordinal);
         while (true)
         {
@@ -71,6 +85,7 @@ public static class ReadPlanner
                 {
                     cur[d]++;
                     read[d].Add(cur[d]);
+                    steps.Add(new ReadStep(ReadStepKind.ChangeFile, DeviceId: d, Seq: cur[d]));
                 }
             }
             var need = snapshots
@@ -78,9 +93,10 @@ public static class ReadPlanner
                     && s.Covers.Any(c => c.Value > cur[c.Key] && !Listed(c.Key, cur[c.Key] + 1)))
                 .ToList();
             if (need.Count == 0) break;
-            foreach (var s in need)
+            foreach (var s in need.OrderBy(n => n.Hlc, StringComparer.Ordinal))
             {
                 merged.Add(s.Hlc);
+                steps.Add(new ReadStep(ReadStepKind.Snapshot, SnapshotHlc: s.Hlc));
                 foreach (var (d, v) in s.Covers) cur[d] = Math.Max(cur[d], v);
             }
         }
@@ -99,6 +115,6 @@ public static class ReadPlanner
         foreach (var d in devices) after[d] = cur[d];
         var mergeList = merged.ToList();
         mergeList.Sort(string.CompareOrdinal);
-        return new ReadPlan(mergeList, readFiles, after, gaps);
+        return new ReadPlan(mergeList, readFiles, after, gaps, steps);
     }
 }

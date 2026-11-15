@@ -7,10 +7,11 @@ namespace PayDay.Sync.Engine;
 /// <summary>An in-memory <see cref="ISyncMetadata"/>.</summary>
 public sealed class InMemorySyncMetadata : ISyncMetadata
 {
-    private readonly List<ChangeRecord> _pending = new();
-    private readonly List<SealedBatch> _batches = new();
-    private readonly Dictionary<string, long> _cursors = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, long> _firstListed = new(StringComparer.Ordinal);
+    private List<ChangeRecord> _pending = new();
+    private List<SealedBatch> _batches = new();
+    private Dictionary<string, long> _cursors = new(StringComparer.Ordinal);
+    private Dictionary<string, SortedSet<long>> _ahead = new(StringComparer.Ordinal);
+    private Dictionary<string, long> _firstListed = new(StringComparer.Ordinal);
 
     public string? DeviceId { get; set; }
 
@@ -47,6 +48,16 @@ public sealed class InMemorySyncMetadata : ISyncMetadata
 
     public void SetCursor(string deviceId, long seq) => _cursors[deviceId] = seq;
 
+    public IReadOnlyCollection<long> MergedAhead(string deviceId)
+        => _ahead.TryGetValue(deviceId, out var set) ? set.ToArray() : Array.Empty<long>();
+
+    public void SetMergedAhead(string deviceId, IEnumerable<long> seqs)
+    {
+        var set = new SortedSet<long>(seqs);
+        if (set.Count == 0) _ahead.Remove(deviceId);
+        else _ahead[deviceId] = set;
+    }
+
     public long? SnapshotFirstListed(string snapshotName) => _firstListed.TryGetValue(snapshotName, out var t) ? t : null;
 
     public void SetSnapshotFirstListed(string snapshotName, long unixMs) => _firstListed[snapshotName] = unixMs;
@@ -60,20 +71,81 @@ public sealed class InMemorySyncMetadata : ISyncMetadata
         _pending.Clear();
         _batches.Clear();
         _cursors.Clear();
+        _ahead.Clear();
         _firstListed.Clear();
     }
+
+    /// <summary>A deep copy of the current state, for rollback.</summary>
+    internal object Capture()
+        => new Saved(DeviceId, VaultId, ClockState, NextSeq, _pending.ToList(), _batches.ToList(),
+            new Dictionary<string, long>(_cursors, StringComparer.Ordinal),
+            _ahead.ToDictionary(a => a.Key, a => new SortedSet<long>(a.Value), StringComparer.Ordinal),
+            new Dictionary<string, long>(_firstListed, StringComparer.Ordinal));
+
+    internal void Restore(object captured)
+    {
+        var s = (Saved)captured;
+        DeviceId = s.DeviceId;
+        VaultId = s.VaultId;
+        ClockState = s.ClockState;
+        NextSeq = s.NextSeq;
+        _pending = s.Pending;
+        _batches = s.Batches;
+        _cursors = s.Cursors;
+        _ahead = s.Ahead;
+        _firstListed = s.FirstListed;
+    }
+
+    private sealed record Saved(
+        string? DeviceId,
+        string? VaultId,
+        Hlc? ClockState,
+        long NextSeq,
+        List<ChangeRecord> Pending,
+        List<SealedBatch> Batches,
+        Dictionary<string, long> Cursors,
+        Dictionary<string, SortedSet<long>> Ahead,
+        Dictionary<string, long> FirstListed);
 }
 
-/// <summary>An in-memory <see cref="ISyncStorage"/>. Its "transaction" just runs the action.</summary>
+/// <summary>
+/// An in-memory <see cref="ISyncStorage"/>. Transactions roll back records and metadata when the
+/// action throws, and nested transactions throw, like the SQLite implementation will.
+/// </summary>
 public sealed class InMemorySyncStorage : ISyncStorage
 {
-    public IRecordStore Records { get; } = new InMemoryRecordStore();
+    private readonly InMemoryRecordStore _records = new();
+    private readonly InMemorySyncMetadata _metadata = new();
+    private bool _inTransaction;
 
-    public ISyncMetadata Metadata { get; } = new InMemorySyncMetadata();
+    public IRecordStore Records => _records;
+
+    public ISyncMetadata Metadata => _metadata;
 
     public void RunInTransaction(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        action();
+        if (_inTransaction)
+        {
+            throw new InvalidOperationException("RunInTransaction is not reentrant: a sync transaction is already running on this storage.");
+        }
+        _inTransaction = true;
+        var saved = _metadata.Capture();
+        _records.BeginJournal();
+        try
+        {
+            action();
+            _records.CommitJournal();
+        }
+        catch
+        {
+            _records.RollbackJournal();
+            _metadata.Restore(saved);
+            throw;
+        }
+        finally
+        {
+            _inTransaction = false;
+        }
     }
 }

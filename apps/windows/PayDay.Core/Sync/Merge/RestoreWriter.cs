@@ -26,6 +26,14 @@ public static class RestoreWriter
     ///     this device has a non-null value for.</item>
     /// </list>
     /// Device rows, unknown entities, unknown setting keys and the Notion connector keys are never written.
+    /// <para>
+    /// Row values are written <b>as given</b>: this method does not round money or check IDs. The
+    /// backup-mapping layer that builds <see cref="RestoreInput"/> MUST already have migrated every ID
+    /// (<see cref="Ids.SyncIds.MigrateBillId"/> and the legacy payment and snapshot IDs, references
+    /// included), rounded every money field with <see cref="SyncMoney.Round2"/>, and mapped each
+    /// bill's Remaining to <c>remainingCheckpoint</c> (<c>data-model.md</c> section 8). Settings are
+    /// mapped here, by <see cref="BackupSettings.MapForRestore"/>.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<ChangeRecord> Restore(SyncState state, RestoreInput backup, Hlc hlc)
     {

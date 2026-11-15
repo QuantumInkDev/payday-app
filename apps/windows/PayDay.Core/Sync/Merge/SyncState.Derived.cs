@@ -39,9 +39,16 @@ public sealed partial class SyncState
         return mark.CompareTo(cp) <= 0;
     }
 
-    /// <summary>The live payments whose <c>billId</c> is <paramref name="billId"/>, sorted by ID.</summary>
+    /// <summary>The live payments whose <c>billId</c> is <paramref name="billId"/>, sorted by ID (uses the store's value index).</summary>
     public IReadOnlyList<string> LivePaymentsFor(string billId)
-        => LiveIds(SyncEntities.Payment).Where(p => PaymentBillId(p) == billId).ToArray();
+    {
+        ArgumentNullException.ThrowIfNull(billId);
+        var ids = Store.IdsWhere(SyncEntities.Payment, BillIdField, SyncValue.String(billId))
+            .Where(p => IsLive(SyncEntities.Payment, p))
+            .ToArray();
+        Array.Sort(ids, Json.Utf8Order.Instance);
+        return ids;
+    }
 
     /// <summary>Remaining before the clamp at zero, in cents: checkpoint minus counted payments after it.</summary>
     public long RemainingUnclampedCents(string billId)
