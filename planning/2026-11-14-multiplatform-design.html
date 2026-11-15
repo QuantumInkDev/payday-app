@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PayDay Multi-Platform Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: pay-stub document — sticky contents rail on the left, one reading column, stub-style header with perforated edge */
+:root {
+  --paper: #f5f7f4;        /* check-paper tint */
+  --sheet: #ffffff;
+  --ink: #17211d;
+  --ink-soft: #4a5a53;
+  --rule: #d5ddd8;
+  --accent: #1d5b74;       /* ledger blue */
+  --accent-soft: #e3eef2;
+  --call: #8a5a12;         /* Claude's call */
+  --call-soft: #f7eedd;
+  --code-bg: #eef2ef;
+  --font-display: "Schibsted Grotesk", "Helvetica Neue", Helvetica, sans-serif;
+  --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.25rem;
+  --step-2: 1.6rem;
+  --step-3: 2.4rem;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1513; --sheet: #151d1a; --ink: #e3ebe7; --ink-soft: #9fb0a8; --rule: #2a3631;
+    --accent: #7cc0d8; --accent-soft: #17303a; --call: #e2b768; --call-soft: #33270f; --code-bg: #1b2521;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1513; --sheet: #151d1a; --ink: #e3ebe7; --ink-soft: #9fb0a8; --rule: #2a3631;
+  --accent: #7cc0d8; --accent-soft: #17303a; --call: #e2b768; --call-soft: #33270f; --code-bg: #1b2521;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 80px;
+}
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+
+/* contents rail */
+nav.toc {
+  position: sticky;
+  top: calc(24px + env(safe-area-inset-top, 0px));
+  font-family: var(--font-display);
+  font-size: var(--step--1);
+}
+nav.toc h2 {
+  font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 12px; font-weight: 700;
+}
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a {
+  display: grid; grid-template-columns: 1.8em 1fr; padding: 5px 8px; border-radius: 6px;
+  color: var(--ink-soft); text-decoration: none; line-height: 1.35;
+}
+nav.toc a::before { content: counter(toc); font-variant-numeric: tabular-nums; color: var(--rule); font-weight: 700; }
+nav.toc a:hover { background: var(--accent-soft); color: var(--ink); }
+@media (max-width: 860px) {
+  nav.toc { position: static; }
+  nav.toc ol { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+
+main { min-width: 0; }
+
+/* stub header */
+header.stub {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 10px 10px 0 0;
+  padding: 28px 28px 24px;
+  position: relative;
+}
+header.stub::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 0;
+  border-bottom: 2px dashed var(--rule);
+}
+.eyebrow {
+  font-family: var(--font-display); font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px;
+}
+h1 {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--step-3);
+  line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 14px; text-wrap: balance;
+}
+.lede { margin: 0; color: var(--ink-soft); max-width: 62ch; }
+.fields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0; margin-top: 22px; border-top: 1px solid var(--rule);
+}
+.fields div { padding: 12px 12px 0 0; }
+.fields dt {
+  font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-soft); font-weight: 700;
+}
+.fields dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: 0.85rem; }
+
+.legend {
+  background: var(--sheet); border: 1px solid var(--rule); border-top: none;
+  border-radius: 0 0 10px 10px; padding: 14px 28px; display: flex; flex-wrap: wrap; gap: 10px 22px;
+  font-family: var(--font-display); font-size: var(--step--1); color: var(--ink-soft); align-items: center;
+}
+
+/* decision chips */
+.chip {
+  display: inline-block; font-family: var(--font-display); font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.04em; padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+  vertical-align: 0.12em; line-height: 1.6;
+}
+.chip.decided { background: var(--accent); color: var(--sheet); }
+.chip.call { background: var(--call-soft); color: var(--call); border: 1px solid var(--call); }
+
+section { margin-top: 56px; scroll-margin-top: 24px; }
+h2 {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--step-2);
+  letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 16px; text-wrap: balance;
+  display: flex; gap: 12px; align-items: baseline;
+}
+h2 .n { font-variant-numeric: tabular-nums; color: var(--accent); font-size: var(--step-1); }
+h3 {
+  font-family: var(--font-display); font-weight: 700; font-size: var(--step-1);
+  margin: 32px 0 10px; text-wrap: balance;
+}
+p, li { max-width: 68ch; }
+p { margin: 0 0 14px; }
+ul, ol { padding-left: 1.3em; margin: 0 0 14px; }
+li { margin-bottom: 6px; }
+li::marker { color: var(--ink-soft); }
+strong { font-weight: 600; }
+code {
+  font-family: var(--font-mono); font-size: 0.84em; background: var(--code-bg);
+  padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere;
+}
+
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.split > div { min-width: 0; }
+.label {
+  font-family: var(--font-display); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px;
+}
+
+/* approach tables */
+.table-scroll { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 0.95rem; }
+th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: none; }
+th {
+  font-family: var(--font-display); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 700; background: var(--code-bg);
+}
+td:first-child { width: 34%; }
+tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+tr.picked td:first-child strong { color: var(--accent); }
+tr.rejected td { color: var(--ink-soft); }
+
+pre {
+  font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.55; background: var(--code-bg);
+  border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin: 0 0 18px; color: var(--ink);
+}
+pre .c { color: var(--ink-soft); }
+
+/* worked example: balance checkpoint */
+.ledger {
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; margin: 6px 0 18px;
+  font-family: var(--font-mono); font-size: 0.86rem; max-width: 520px;
+}
+.ledger .row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 16px; border-bottom: 1px dashed var(--rule); }
+.ledger .row:last-child { border-bottom: none; font-weight: 600; }
+.ledger .amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ledger .neg { color: var(--ink-soft); }
+.ledger .cap {
+  font-family: var(--font-display); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 10px 16px 0; font-weight: 700;
+}
+
+/* sync diagram */
+.diagram { overflow-x: auto; margin: 6px 0 20px; }
+.diagram svg { display: block; min-width: 560px; width: 100%; height: auto; }
+.diagram text { font-family: var(--font-display); }
+
+/* setup flows */
+.flow { list-style: none; padding: 0; counter-reset: step; display: grid; gap: 10px; }
+.flow li {
+  counter-increment: step; display: grid; grid-template-columns: 2em 1fr; gap: 8px; margin: 0;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px;
+}
+.flow li::before {
+  content: counter(step); font-family: var(--font-display); font-weight: 800; color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* build order */
+.order { list-style: none; padding: 0; margin: 0; counter-reset: ord; border-left: 2px solid var(--rule); }
+.order li {
+  counter-increment: ord; position: relative; padding: 0 0 18px 34px; margin: 0; max-width: 72ch;
+}
+.order li::before {
+  content: counter(ord); position: absolute; left: -15px; top: 0; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--accent); color: var(--accent);
+  font-family: var(--font-display); font-weight: 800; font-size: 0.85rem; display: grid; place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.order li strong { font-family: var(--font-display); font-weight: 700; }
+
+.callout {
+  background: var(--accent-soft); border-radius: 8px; padding: 14px 18px; margin: 0 0 18px; max-width: 72ch;
+}
+.callout p:last-child { margin-bottom: 0; }
+
+.features { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; padding: 0; list-style: none; counter-reset: feat; }
+.features li {
+  counter-increment: feat; margin: 0; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 12px 14px; font-size: 0.95rem; display: grid; grid-template-columns: 1.6em 1fr; gap: 6px;
+}
+.features li::before { content: counter(feat); font-family: var(--font-display); font-weight: 800; color: var(--ink-soft); }
+
+footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: var(--step--1); font-family: var(--font-display); }
+
+@media (max-width: 520px) {
+  header.stub, .legend { padding-left: 18px; padding-right: 18px; }
+  h1 { font-size: 2rem; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#intent">Intent</a></li>
+    <li><a href="#goals">Goals and limits</a></li>
+    <li><a href="#constraints">Constraints</a></li>
+    <li><a href="#approaches">Approaches</a></li>
+    <li><a href="#repo">Repository layout</a></li>
+    <li><a href="#sync">Sync design</a></li>
+    <li><a href="#notion">Notion connector</a></li>
+    <li><a href="#conformance">Conformance suite</a></li>
+    <li><a href="#order">Build order</a></li>
+    <li><a href="#builder">Left to the builder</a></li>
+    <li><a href="#seed">Seeding the vault</a></li>
+  </ol>
+</nav>
+
+<main>
+  <header class="stub">
+    <p class="eyebrow">Design · Approved 2026-11-14</p>
+    <h1>PayDay Multi-Platform</h1>
+    <p class="lede">One set of bills and pay periods that follows a person across Windows, macOS, iOS, Android and the web. It is synced through their own cloud drive, encrypted so only their devices can read it, and has a three-click Notion connection for anyone who wants their bills there.</p>
+    <dl class="fields">
+      <div><dt>Date</dt><dd>2026-11-14</dd></div>
+      <div><dt>Repo</dt><dd>QuantumInkDev/payday-app</dd></div>
+      <div><dt>Surfaces</dt><dd>Win · Mac · iOS · Android · Web</dd></div>
+      <div><dt>Running cost</dt><dd>$0.00 / user</dd></div>
+    </dl>
+  </header>
+  <div class="legend">
+    <span><span class="chip decided">Decided</span> chosen by the user in conversation</span>
+    <span><span class="chip call">Claude's call</span> proposed by Claude, open to change</span>
+  </div>
+
+  <section id="intent">
+    <h2><span class="n">1</span>Intent</h2>
+    <p>PayDay works well as a Windows app. The goal is to make it a product that follows a person across every device: Windows (done), macOS, iOS and Android, all showing the same data, with no visible sync step. The end game is the public app stores <span class="chip decided">Decided</span>. Setup has to be short enough that a stranger gets through it, and security has to be good enough to hold their financial data.</p>
+    <p>Notion sync works but takes about ten manual steps: create an integration, copy a token, build three databases, share each one. That is acceptable for the developer and a dealbreaker for everyone else.</p>
+  </section>
+
+  <section id="goals">
+    <h2><span class="n">2</span>Goals and limits</h2>
+    <h3>Goals</h3>
+    <ul>
+      <li>Data entered on any device shows up on the others without the user doing anything.</li>
+      <li>Works fully offline and syncs when the network returns.</li>
+      <li>Costs nothing to run at any number of users, for the user and the developer.</li>
+      <li>The cloud provider never sees readable financial data (end-to-end encryption).</li>
+      <li>A new user is set up in a few taps. Adding a second device takes about a minute.</li>
+      <li>Data stays portable: JSON export and import keep working on every platform.</li>
+      <li>Notion stays available as an optional add-on, with a much simpler connection.</li>
+    </ul>
+    <div class="split">
+      <div>
+        <h3>Non-goals for this design</h3>
+        <ul>
+          <li>Bank linking or transaction import.</li>
+          <li>A web app that keeps data on a server. The web app in §6.7 keeps data in the browser and the user's drive, like every other device.</li>
+          <li>Accounts, sign-up, or a server holding user data.</li>
+          <li>Sharing a plan with a partner. It's a feature candidate (§9) and isn't built here. The sync format doesn't depend on where the vault is stored, so a later shared vault can live in an ordinary shared folder. That keeps partners on different cloud accounts possible.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Anti-goals</h3>
+        <p class="label">Works technically, still fails</p>
+        <ul>
+          <li>Any path where the developer or the cloud provider can read a user's data.</li>
+          <li>A sync that silently drops or reverts an edit.</li>
+          <li>Setup longer than the current Notion flow.</li>
+          <li>The four apps disagreeing about the numbers: which bills fall in which pay period, totals, payoff dates.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="constraints">
+    <h2><span class="n">3</span>Constraints</h2>
+    <ul>
+      <li>The Windows app is WinUI 3 on .NET 9 (<code>net9.0-windows10.0.26100.0</code>), used daily on an arm64 VM. It can only be built on Windows. This Mac has Xcode and Swift but no <code>dotnet</code>.</li>
+      <li><strong>Windows builds run on the VM from the Mac.</strong> The arm64 VM is the Parallels guest "Win 11 Arm Dev" on this Mac, and <code>prlctl exec "Win 11 Arm Dev" …</code> runs commands in it without SSH. That was verified on 2026-11-14 (.NET SDK 9.0.318, clone at <code>C:\Projects\PayDayApp</code>). Those commands run as <code>NT AUTHORITY\SYSTEM</code>, so building and testing work but launching the packaged app doesn't. Launching still needs the interactive session; Parallels' <code>--current-user</code> option is worth trying. The VM clone must be pulled before each remote build.</li>
+      <li>Hosting is on the Quantum Ink team's paid Vercel plan, so commercial use is covered.</li>
+      <li>Browsers can erase a site's stored data. Safari does it after 7 days without a visit unless the site is installed. That's how the original <code>payday.html</code> lost its data, and it shapes the web app (§6.7).</li>
+      <li><code>PayDay.Core</code> and <code>PayDay.Tests</code> are plain <code>net9.0</code>. Their 194 passing tests encode current behaviour: pay periods including the 3 PM early start, payoff math, the backup format and the Notion mapping.</li>
+      <li>Free hosted databases and sync services all pause or delete idle free projects (Supabase, PowerSync, Appwrite, Couchbase). ElectricSQL is winding down and Realm sync is shut down (research, 2026-11-14). That is why this design uses the user's own cloud storage.</li>
+      <li>iCloud Drive has no supported API on Windows or Android.</li>
+      <li>The Notion OAuth token exchange needs a client secret that can't ship inside an app.</li>
+      <li>App-store distribution needs a privacy policy URL, and Notion's public-integration form needs a privacy policy and a terms URL.</li>
+      <li>Existing data must survive. The developer's live Windows database and Notion workspace are the starting point.</li>
+    </ul>
+  </section>
+
+  <section id="approaches">
+    <h2><span class="n">4</span>Approaches</h2>
+
+    <h3>Where synced data lives</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Approach</th><th>Trade-off</th></tr></thead>
+      <tbody>
+        <tr class="picked"><td><strong>User's own cloud drive, encrypted change files</strong> <span class="chip decided">Decided</span></td><td>$0 at any scale, the provider sees only ciphertext, no accounts. We write and test the merge logic ourselves and maintain two or three drive integrations.</td></tr>
+        <tr class="rejected"><td>Small relay service we run, storing only ciphertext</td><td>Simplest onboarding with no drive sign-in, but it's a service to run and pay for, and it needs the same merge logic.</td></tr>
+        <tr class="rejected"><td>PowerSync + Supabase</td><td>The most finished engine, but about $75 a month or self-hosting. Accounts are required, and end-to-end encryption defeats most of what it offers.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Picked because the user is fine with personal cloud sync, it keeps the promise that it's free and nobody can read your data, and the data is small: tens of bills and hundreds of payments a year.</p>
+
+    <h3>Sharing the core logic across four apps</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Approach</th><th>Trade-off</th></tr></thead>
+      <tbody>
+        <tr class="picked"><td><strong>Native code per platform plus a shared conformance suite</strong> <span class="chip decided">Decided</span></td><td>Each app is idiomatic in its own language, and the existing C# core and tests carry over. The logic is written three times (C#, Swift, Kotlin), so the versions can drift. Shared test fixtures that every app must pass catch that.</td></tr>
+        <tr class="rejected"><td>One Rust core with bindings to all four apps</td><td>Logic is written once and can't drift. It costs a new language and harder cross-platform builds and debugging, and the C# core gets rewritten.</td></tr>
+        <tr class="rejected"><td>Kotlin Multiplatform core</td><td>Covers Android, iOS and macOS but not Windows on arm64. Rejected.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Simplifying Notion</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Approach</th><th>Trade-off</th></tr></thead>
+      <tbody>
+        <tr class="picked"><td><strong>Notion public integration with OAuth, where the app creates its own databases</strong> <span class="chip call">Claude's call</span></td><td>Three clicks for the user. Needs a tiny stateless function to hold the client secret.</td></tr>
+        <tr class="rejected"><td>Keep the token-paste flow and add a guided wizard</td><td>No function to host, but still about six steps.</td></tr>
+        <tr class="rejected"><td>OAuth with template duplication</td><td>Works, but Notion now recommends creating content through the API, and a template drifts from the code.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>The web app</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Approach</th><th>Trade-off</th></tr></thead>
+      <tbody>
+        <tr class="picked"><td><strong>Local-first TypeScript web app, served as static files from Vercel</strong> <span class="chip decided">Web app decided</span> <span class="chip call">TypeScript is Claude's call</span></td><td>Matches the Next.js-on-Vercel stack SpellThat already uses, and has the most mature browser tooling: SQLite in WebAssembly, WebCrypto, and drive sign-in without a secret. The cost is a fourth language that has to pass the conformance suite.</td></tr>
+        <tr class="rejected"><td>Blazor WebAssembly reusing <code>PayDay.Core</code></td><td>The C# rules aren't rewritten, but the screens get rebuilt anyway, the first download is several MB, and keeping SQLite in the browser is fiddlier.</td></tr>
+        <tr class="rejected"><td>Server-rendered app with a hosted database</td><td>Breaks the rule that data stays local to the user and that nobody else can read it. Rejected.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="repo">
+    <h2><span class="n">5</span>Repository layout</h2>
+    <p>The repository moved from <code>~/Projects/Windows/PayDayApp</code> to <code>~/Projects/PayDayApp</code> <span class="chip decided">Decided</span>. This was done on 2026-11-14. A symlink stays at the old path so open sessions keep working. The GitHub repo is unchanged.</p>
+    <p class="label">Target layout <span class="chip call">Claude's call</span></p>
+<pre>PayDayApp/
+├── apps/
+│   ├── windows/          <span class="c"># PayDay/, PayDay.Core/, PayDay.Tests/ — moved as-is with git mv</span>
+│   ├── apple/            <span class="c"># one Xcode project: macOS + iOS app targets</span>
+│   │   └── PayDayKit/    <span class="c"># Swift package: models, rules, sync engine, view-models</span>
+│   ├── android/          <span class="c"># Gradle project (later)</span>
+│   └── web/              <span class="c"># TypeScript web app + its Vercel functions (Notion OAuth exchange)</span>
+├── spec/
+│   ├── data-model.md     <span class="c"># canonical entities, fields, units, ID rules</span>
+│   ├── sync-protocol.md  <span class="c"># file layout, encryption, merge rules</span>
+│   └── conformance/      <span class="c"># JSON fixtures every app's tests must pass</span>
+├── design/               <span class="c"># icon sources, palette, type colours, store screenshots</span>
+├── tools/                <span class="c"># existing PowerShell helpers</span>
+├── planning/
+└── CLAUDE.md, SESSION_STATUS.md, README.md</pre>
+    <ul>
+      <li>No Turborepo or Nx, because the apps share no package manager. Each app keeps its native build, and a short <code>README.md</code> lists the build command for each.</li>
+      <li>The move must keep <code>git log --follow</code> history and leave the Windows build at 0 warnings and 0 errors with 194/194 tests passing. That gets verified on the arm64 VM, since this Mac can't build WinUI.</li>
+      <li>The VM and rig clones need a <code>git pull</code>, then a rebuild from <code>apps/windows/</code>.</li>
+    </ul>
+  </section>
+
+  <section id="sync">
+    <h2><span class="n">6</span>Sync design</h2>
+
+    <div class="diagram" role="img" aria-label="Each device writes encrypted change files into its own folder in the user's cloud drive and reads the other devices' folders.">
+      <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+        <rect x="250" y="20" width="260" height="210" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="380" y="46" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)">USER'S CLOUD DRIVE · APP FOLDER</text>
+        <text x="380" y="66" text-anchor="middle" font-size="12" fill="var(--ink-soft)">ciphertext only · OneDrive / Google Drive / Dropbox</text>
+        <rect x="272" y="82" width="216" height="34" rx="6" fill="var(--sheet)" stroke="var(--rule)"/>
+        <text x="380" y="104" text-anchor="middle" font-size="12.5" fill="var(--ink)">devices/windows-vm/ · 000001.chg …</text>
+        <rect x="272" y="124" width="216" height="34" rx="6" fill="var(--sheet)" stroke="var(--rule)"/>
+        <text x="380" y="146" text-anchor="middle" font-size="12.5" fill="var(--ink)">devices/macbook/ · 000001.chg …</text>
+        <rect x="272" y="166" width="216" height="34" rx="6" fill="var(--sheet)" stroke="var(--rule)"/>
+        <text x="380" y="188" text-anchor="middle" font-size="12.5" fill="var(--ink)">snapshots/ · vault.json</text>
+
+        <rect x="20" y="60" width="170" height="64" rx="10" fill="var(--sheet)" stroke="var(--ink-soft)"/>
+        <text x="105" y="88" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">Windows</text>
+        <text x="105" y="108" text-anchor="middle" font-size="12" fill="var(--ink-soft)">local SQLite + key</text>
+        <rect x="20" y="146" width="170" height="64" rx="10" fill="var(--sheet)" stroke="var(--ink-soft)"/>
+        <text x="105" y="174" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">Android</text>
+        <text x="105" y="194" text-anchor="middle" font-size="12" fill="var(--ink-soft)">local SQLite + key</text>
+        <rect x="570" y="60" width="170" height="64" rx="10" fill="var(--sheet)" stroke="var(--ink-soft)"/>
+        <text x="655" y="88" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">macOS</text>
+        <text x="655" y="108" text-anchor="middle" font-size="12" fill="var(--ink-soft)">local SQLite + key</text>
+        <rect x="570" y="146" width="170" height="64" rx="10" fill="var(--sheet)" stroke="var(--ink-soft)"/>
+        <text x="655" y="174" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">iOS</text>
+        <text x="655" y="194" text-anchor="middle" font-size="12" fill="var(--ink-soft)">local SQLite + key</text>
+
+        <line x1="190" y1="92" x2="268" y2="99" stroke="var(--accent)" stroke-width="1.5" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <line x1="190" y1="178" x2="268" y2="160" stroke="var(--accent)" stroke-width="1.5" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <line x1="570" y1="92" x2="492" y2="141" stroke="var(--accent)" stroke-width="1.5" marker-start="url(#arr)" marker-end="url(#arr)"/>
+        <line x1="570" y1="178" x2="492" y2="160" stroke="var(--accent)" stroke-width="1.5" marker-start="url(#arr)" marker-end="url(#arr)"/>
+      </svg>
+    </div>
+    <p>Each device writes only its own folder and reads everyone else's. The vault key never leaves the devices.</p>
+
+    <h3>6.1 Data model changes on all platforms</h3>
+    <ul>
+      <li>Every synced row gets a globally unique ID. Bills added in the app use GUID strings, but the seeded bills use <code>"1"</code>–<code>"27"</code> (<code>PayDay/Services/SeedData.cs</code>). Seed IDs get rewritten to GUIDs, and Payments and Snapshots move from <code>INTEGER AUTOINCREMENT</code> to string IDs (UUIDv7) <span class="chip call">Claude's call</span>. That way rows created on two devices never collide. The migration rewrites references such as <code>Payments.BillId</code> to match.</li>
+      <li>Fresh installs start empty <span class="chip call">Claude's call</span>. <code>SeedData.cs</code> holds the developer's real bills and Notion database IDs, and that must never ship in a store build. Seed data moves to a dev-only import or a demo mode.</li>
+      <li>Every synced row records, per field, when it last changed and which device changed it. Times come from a hybrid logical clock (HLC): wall-clock time plus a counter, so the order survives clock skew between devices.</li>
+      <li>Deletes become tombstones, a "deleted at" marker, instead of removing the row. This also solves the existing carryover where Notion archive-on-delete needed a tombstone table.</li>
+      <li>Settings split into two kinds. Synced settings are the pay anchor date, early start, type colours and custom types. Per-device settings are the theme, window size, Notion token and drive sign-in. The canonical list lives in <code>spec/data-model.md</code>.</li>
+      <li>Money stays a <code>double</code> as it is today, unless the conformance suite shows rounding differences between platforms. If it does, switch to integer cents everywhere. The builder decides, with that test as the trigger.</li>
+    </ul>
+
+    <h3>6.2 Merge rule</h3>
+    <ul>
+      <li><strong>Last write wins per field</strong>, ordered by HLC, with ties broken by device ID. If two devices edit different fields of the same bill, both edits survive. If they edit the same field, the later edit wins.</li>
+      <li><strong>Remaining becomes a balance checkpoint plus payments</strong> <span class="chip call">Claude's call</span>. Today "mark paid" lowers Remaining in place and unmark adds it back. Under last-write-wins that loses decrements. Two offline devices paying the same card for different periods would each write "start minus one payment". A statement figure typed in Notion would wipe out payments made in the app. Instead, each bill stores a checkpoint (an amount and the time it was set), and Remaining is the checkpoint minus the payments recorded after it, clamped at zero. Editing Remaining, in the app or in Notion, sets a new checkpoint. What the user sees doesn't change, and Notion's Remaining column is written as the computed value.</li>
+    </ul>
+    <div class="ledger" aria-label="Worked example of a balance checkpoint">
+      <div class="cap">Example: one card across three devices</div>
+      <div class="row"><span>Checkpoint · typed from statement, Oct 3</span><span class="amt">$1,240.00</span></div>
+      <div class="row"><span>Mark paid · Oct 16 period · Windows</span><span class="amt neg">− $85.00</span></div>
+      <div class="row"><span>Mark paid · Oct 30 period · iPhone, offline</span><span class="amt neg">− $85.00</span></div>
+      <div class="row"><span>Mark paid · Oct 30 period · Mac, same payment</span><span class="amt neg">merged · $0.00</span></div>
+      <div class="row"><span>Remaining on every device</span><span class="amt">$1,070.00</span></div>
+    </div>
+    <ul>
+      <li><strong>Payments merge as a set.</strong> Each payment is its own row, so concurrent payments all survive. The regular "mark paid" payment for a bill in a period gets a deterministic ID derived from the bill ID and period key. If two devices mark the same bill paid in the same period, that produces one payment, not two. Extra or one-time payments, a §9 feature candidate, get random IDs and simply add up. Unmark tombstones the deterministic payment.</li>
+      <li>Other payment fields edited on two devices resolve per field, like bills.</li>
+      <li>The merge must be deterministic. The same set of changes, applied in any order, produces the same database on every platform. This is the core of the conformance suite.</li>
+    </ul>
+
+    <h3>6.3 What goes in the drive</h3>
+<pre>&lt;app folder&gt;/PayDay/
+├── vault.json                <span class="c"># format version, key generations (id + check value), created-at; no secrets</span>
+├── devices/
+│   └── &lt;deviceId&gt;/
+│       ├── 000001.chg        <span class="c"># encrypted batch of changes, append-only</span>
+│       └── 000002.chg
+└── snapshots/
+    └── &lt;hlc&gt;-&lt;deviceId&gt;.snap <span class="c"># encrypted full state, written periodically for fast first sync</span></pre>
+    <ul>
+      <li>Each device writes only its own folder, so two devices never fight over the same file.</li>
+      <li>A device reads everyone else's new files, merges them, and records how far it has read.</li>
+      <li>Compaction: any device may write a snapshot. Files older than the newest snapshot that every known device has read past can be removed. The builder sets the thresholds.</li>
+      <li>Drive locations: the OneDrive app folder (<code>approot</code>), the Google Drive <code>appDataFolder</code>, and the Dropbox App folder. Files count toward the user's own storage, and the data is tiny.</li>
+    </ul>
+
+    <h3>6.4 Encryption and keys</h3>
+    <ul>
+      <li>One random 256-bit <strong>vault key</strong>, created on the first device.</li>
+      <li>Files are encrypted with <strong>AES-256-GCM</strong> with a fresh random nonce per file <span class="chip call">Claude's call</span>. It's built into .NET, CryptoKit and Android's crypto APIs, so no platform needs a third-party crypto library. The exact framing (header, nonce, ciphertext, tag) is fixed in <code>spec/sync-protocol.md</code>, with test vectors in <code>spec/conformance/</code>.</li>
+      <li>The vault key lives in the OS keystore on each device and is never written to the drive. On Windows that's Credential Manager, the same store the Notion token uses today; on Apple it's the Keychain; on Android it's the Android Keystore.</li>
+      <li><strong>Key generations</strong> <span class="chip call">Claude's call</span>. Every file header names the key generation it was encrypted with, and <code>vault.json</code> lists the generations. v1 ships with one generation and no "remove device" screen. The format still allows rotating to a new key later to cut off a lost or stolen device, which also means signing that device out of the drive provider. Rotation issues a new recovery phrase.</li>
+      <li><strong>Recovery phrase</strong> <span class="chip call">Claude's call</span>. The vault key is shown once as a list of words. If someone loses every device and the phrase, nobody can recover the synced data. That's the price of no one else being able to read it. The onboarding screen says so plainly and offers a local JSON export as a second safety net.</li>
+    </ul>
+
+    <h3>6.5 Setup flows</h3>
+    <div class="split">
+      <div>
+        <p class="label">First device</p>
+        <ol class="flow">
+          <li>Turn on sync, pick OneDrive, Google Drive or Dropbox, and sign in on that provider's page.</li>
+          <li>The app creates the vault, uploads the current data and shows the recovery phrase to save.</li>
+        </ol>
+      </div>
+      <div>
+        <p class="label">Next device</p>
+        <ol class="flow">
+          <li>Choose "I already use PayDay" and sign in to the same provider.</li>
+          <li>Unlock by scanning a QR code shown on an existing device, or by typing the recovery phrase on a PC without a camera.</li>
+          <li>The data appears.</li>
+        </ol>
+      </div>
+    </div>
+    <p><strong>A device that already has its own data</strong> and joins an existing vault <span class="chip call">Claude's call</span>: v1 doesn't merge two independent databases. The app saves the device's current data as a JSON backup file, then replaces it with the vault's data, and says so before it does. Merging two histories that were never synced would mean matching bills by name and guessing at payments, which isn't worth the risk of silent errors.</p>
+    <p><strong>Restoring a JSON backup with sync on</strong> <span class="chip call">Claude's call</span> means "make every device look like this backup." The restore is written as new edits: every restored field gets a fresh HLC stamp, and every row missing from the backup gets a tombstone. That way it reaches every device and the next sync doesn't undo it. The app asks for confirmation first and saves the current state as a backup. Per-device settings in the backup apply only to the device doing the restore.</p>
+
+    <h3>6.6 Provider order</h3>
+    <p><strong>OneDrive first</strong> <span class="chip call">Claude's call</span>. It works on Windows, Mac, iOS and Android, and the existing user is on Windows. Google Drive comes second, since it's common for Android users, and Dropbox third. iCloud (CloudKit) comes only later, as a convenience for Apple-only users, because it can't reach Windows or Android.</p>
+
+    <h3>6.7 The web app as a device</h3>
+    <ul>
+      <li>The browser is one more device. It has its own local database and its own folder in the vault, and it follows the same merge and encryption rules. Vercel serves only the app's files and never sees any data.</li>
+      <li>The local database is SQLite compiled to WebAssembly, kept in the browser's private file storage (OPFS). Encryption uses WebCrypto AES-256-GCM, with the same file framing as the other apps byte for byte.</li>
+      <li>Browsers have no OS keystore, so the vault key is kept as a non-extractable WebCrypto key in IndexedDB.</li>
+      <li>Drive sign-in happens in the browser with PKCE, which needs no secret. Microsoft, Google and Dropbox all support it for browser apps.</li>
+      <li><strong>Real use on the web requires sync</strong> <span class="chip call">Claude's call</span>. The browser can erase its storage, so the drive holds the real copy and the browser holds a working copy. If the browser is wiped, the user signs in, unlocks again with the QR code or recovery phrase, and the data comes back. The app also asks the browser for persistent storage and suggests installing it as an app.</li>
+      <li><strong>Try-it mode:</strong> without signing in, the web app opens with clearly labelled sample data. Someone can see what it does before installing anything or connecting a drive.</li>
+      <li>The same site hosts the product's landing page, privacy policy and terms, which the app stores and the Notion integration require.</li>
+    </ul>
+  </section>
+
+  <section id="notion">
+    <h2><span class="n">7</span>Notion connector</h2>
+    <ul>
+      <li>Notion stops being how devices sync and becomes an optional connector. PayDay's data flows out to Notion, and Notion edits to bills flow back in as ordinary changes.</li>
+    </ul>
+    <ol class="flow">
+      <li>Click Connect Notion.</li>
+      <li>Notion's consent page opens, and the user picks a page.</li>
+      <li>PayDay creates the Bills, Payments and Snapshots databases under that page with the right columns. There's no token to paste and no columns to rename.</li>
+    </ol>
+    <ul>
+      <li><strong>Notion sign-in exchange:</strong> a Vercel Function in the web app's project (<code>apps/web</code>) holds the client secret <span class="chip call">Claude's call</span>. Vercel is already paid for and hosts the web app, so this keeps everything with one vendor instead of adding Cloudflare. The function exchanges the authorization code for tokens, refreshes them, and stores nothing. Native apps receive the result through a custom URL scheme: protocol activation on Windows, a URL scheme on Apple, an intent filter on Android. The scheme's name will follow the product name. The web app receives the result on a normal redirect page.</li>
+      <li>Notion page IDs are stored in the synced data, so any device can run the connector without creating duplicates. The Notion token itself stays per device. The builder decides which device runs the connector and how two connected devices avoid pushing twice. The simplest acceptable answer: the device that connected Notion owns the connector, and the others show "Notion: connected on &lt;device&gt;".</li>
+      <li>The developer's current three databases get adopted rather than recreated, since the connector can be pointed at existing databases.</li>
+      <li>A Notion public integration needs a privacy policy and a terms page. The app stores need those anyway.</li>
+    </ul>
+  </section>
+
+  <section id="conformance">
+    <h2><span class="n">8</span>Shared conformance suite</h2>
+    <p><code>spec/conformance/</code> holds JSON fixtures, each an input and its expected output. Every app's test project loads the same files. The first fixtures are generated from the current C# behaviour, which is the reference implementation:</p>
+    <ul>
+      <li>Pay periods: the anchor date, the 14-day walk, This, Next and Following, and the 3 PM early start.</li>
+      <li>Bill-to-period assignment, totals, and subtotals that exclude inactive bills.</li>
+      <li>Payoff ordering (time-to-payoff, snowball, avalanche) and payoff dates.</li>
+      <li>Merge scenarios: concurrent field edits, delete against edit, duplicate mark-paid, out-of-order delivery.</li>
+      <li>Encryption test vectors and file framing.</li>
+      <li>Backup JSON round-trip, including the legacy <code>cost</code> and <code>owed</code> keys.</li>
+    </ul>
+    <div class="callout"><p>Any change to a rule or format lands in <code>spec/</code> and its fixtures first, then in each app.</p></div>
+  </section>
+
+  <section id="order">
+    <h2><span class="n">9</span>Build order</h2>
+    <ol class="order">
+      <li><strong>Restructure the repo</strong> to the §5 layout with no behaviour change. First merge <code>wip/backup-2026-09-09</code> into <code>main</code> (it's one commit ahead and holds only Serena and tooling files), then work on a <code>feature/</code> branch.</li>
+      <li><strong>Lock in the product name: FutureCheck</strong> <span class="chip decided">Decided</span>. "PayDay" was crowded in the stores, suggested payday loans, and is a video-game franchise. "Check" means both the paycheck and the checkmark on a paid bill, and "Future" points at the forecast. A web search on 2026-11-14 found no app named FutureCheck on the App Store, Google Play or Microsoft Store. Still to do:
+        <ul>
+          <li>US trademark: the user searched USPTO tmsearch on 2026-11-14. "FutureCheck" returned no results. "Future Check" returned only marks containing one of the two words, and none for the phrase. That's a clean first pass, not a legal clearance, so a trademark attorney's knockout search is worth doing before spending on marketing.</li>
+          <li>The user registers <code>futurecheck.app</code>, which was available on 2026-11-14, through their existing registrar, Squarespace. Optionally they also register <code>futurecheck.money</code> to protect the name. <code>futurecheck.com</code> is taken. DNS then points the domain at the web app's Vercel project.</li>
+          <li>Use the name everywhere it's needed: the Notion public integration, the custom URL scheme (<code>futurecheck://</code>), the bundle and package IDs (<code>dev.quantumink.futurecheck</code>) <span class="chip call">Claude's call</span>, and the store listings. Until the domain is live, <code>payday.quantumink.dev</code> serves for testing. The code keeps the PayDay name internally until a rename pass, which the builder schedules.</li>
+        </ul>
+      </li>
+      <li><strong>Scope new features</strong> in their own short design (shortlist below) <span class="chip call">Claude's call</span>. This happens before the sync format is frozen, because features like extra payments, income tracking and set-asides add synced data. Deciding them first avoids migrating a live format across devices.</li>
+      <li><strong>Write <code>spec/</code> and the first conformance fixtures</strong> from the C# core plus the chosen features' data, and wire them into <code>PayDay.Tests</code>.</li>
+      <li><strong>Sync in the Windows app</strong>: ID migration, balance checkpoints, HLC and tombstones, change files, encryption, OneDrive, and the setup and pairing screens. The exit test is two Windows installs, the VM and the rig, syncing with each other.</li>
+      <li><strong>Notion connector rework</strong>: the sign-in function on Vercel, auto-created databases, and adopting existing ones.</li>
+      <li><strong>macOS app</strong> in SwiftUI with <code>PayDayKit</code>, at feature parity with Windows, passing the conformance suite and syncing with Windows.</li>
+      <li><strong>Web app</strong> in TypeScript, served as static files from Vercel, passing the conformance suite. It includes try-it mode and the landing, privacy and terms pages <span class="chip call">Claude's call to place it after the Mac app</span>.</li>
+      <li><strong>iOS app</strong> from the same <code>PayDayKit</code>.</li>
+      <li><strong>Android app</strong> in Kotlin with Jetpack Compose and SQLite, passing the conformance suite.</li>
+      <li><strong>Google Drive, then Dropbox</strong> providers.</li>
+      <li><strong>Phase 8, ship</strong>: store listings, signing, and the MSIX, App Store and Play builds.</li>
+    </ol>
+    <h3>Feature shortlist</h3>
+    <p>From research done on 2026-11-14, strongest first. The chosen features are built on Windows during or after step 5 and are part of the parity target for the Mac and web apps.</p>
+    <ol class="features">
+      <li>Due-date reminders, with mark paid from the notification or a widget</li>
+      <li>A forecast of what's left across upcoming paychecks, plus a safe-to-spend number</li>
+      <li>Set-asides for yearly or irregular bills</li>
+      <li>Income tracking, including irregular pay and two incomes</li>
+      <li>Extra or one-time debt payments, and target-date payoff</li>
+      <li>Payment confirmation numbers, plus CSV and PDF export</li>
+      <li>Sharing a plan with a partner</li>
+    </ol>
+  </section>
+
+  <section id="builder">
+    <h2><span class="n">10</span>Left to the builder</h2>
+    <ul>
+      <li>The web framework (Vite or a Next.js static export) and which SQLite-in-browser library to use.</li>
+      <li>Platform minimums (macOS, iOS and Android versions) and the Swift persistence library: GRDB or raw SQLite, not SwiftData, so the schema stays identical to Windows. Android persistence: Room or SQLDelight.</li>
+      <li>The exact HLC encoding, file framing, compaction thresholds and sync triggers (on launch, on change with a debounce, periodically while open).</li>
+      <li>The recovery-phrase word list and length.</li>
+      <li>How each app shows sync status and errors.</li>
+      <li>Whether the Windows Notion code is refactored into the new connector or rewritten.</li>
+    </ul>
+  </section>
+
+  <section id="seed">
+    <h2><span class="n">11</span>Seeding the vault from the developer's installs</h2>
+    <p>The code is built on the rig and ported from there. The arm64 VM is where the app is tested and used, and it probably has the most recent data. That comes from the user on 2026-11-14 and isn't certain.</p>
+    <ol class="flow">
+      <li>Before sync is turned on in step 5, export a JSON backup from both the VM and the rig.</li>
+      <li>A small comparison script reports the newest <code>UpdatedAt</code> per bill, payment counts with the latest <code>PaidAt</code>, and the latest snapshot. The user picks the starting device from that report.</li>
+      <li>The expected result is that the VM seeds the vault. The rig then joins as the second device, with its data saved to a backup file first (§6.5).</li>
+      <li>If both sides have edits that matter, they get combined by hand into the seed device's data before sync starts. v1 has no automatic merge of independent histories.</li>
+    </ol>
+    <p>Both backups are kept outside the repo, because they contain real financial data. No open questions remain.</p>
+  </section>
+
+  <footer>PayDay · planning/2026-11-14-multiplatform-design · approved 2026-11-14</footer>
+</main>
+</div>
+</body>
+</html>
