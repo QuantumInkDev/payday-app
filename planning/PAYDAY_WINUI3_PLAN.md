@@ -343,7 +343,7 @@ No ship until the rough edges are gone. Scope covers three buckets — known-iss
 ### 7.1 Known-issue carryovers
 - **Sortable columns on All Bills** — retrofit the Dashboard's sortable-column pattern (same-column click flips asc↔desc, switching columns resets to ascending, ▲/▼ indicator).
 - **Bill editor tweaks** — specifics deferred from chunk 3b smoke test. Capture when raised.
-- **Real app icon** — replace the temporary Segoe Fluent glyph (commit `425be56`, `e825`) with a proper asset set across all required sizes.
+- **Real app icon** — replace the temporary Segoe Fluent glyph (commit `8f40102`, `e825`) with a proper asset set across all required sizes.
 - **Notion archive-on-delete** — needs a tombstone table to distinguish "never existed locally" from "deleted locally last session". TODO sits in `SyncBillsAsync`.
 - **NotionPageId write-back on Payments/Snapshots** — store page IDs at push time so a future push-resume-after-failure flow can pick up where it left off. Add an `is_synced` column.
 

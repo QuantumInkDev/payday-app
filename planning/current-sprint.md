@@ -9,17 +9,17 @@
 
 | Chunk | Commit | Description |
 |---|---|---|
-| 7a | `61ebb96` | Sortable All Bills columns |
-| 7b | `3c19932` | Bill auto-sync on edit |
-| 7c | `b067460` | Full rename Cost→Payment, Owed→Remaining |
-| 7d | `971e1b9` | Sync Now at top of nav + Pay decrements Remaining |
-| 7e | `2ce6916` | Dashboard polish |
-| 7f | `180b8f4` | All Bills overhaul |
-| 7g | `38d08a9` | Type tag color customization |
-| 7h | `fd5bcf1` | Installments type |
-| 7i | `9fa95ec` | Insights snapshot management + Payoff strategies |
-| 7j | `87e2f87` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
-| 7k | `38e9e6e` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
+| 7a | `653312e` | Sortable All Bills columns |
+| 7b | `242b713` | Bill auto-sync on edit |
+| 7c | `d5a4ef6` | Full rename Cost→Payment, Owed→Remaining |
+| 7d | `3b1f78b` | Sync Now at top of nav + Pay decrements Remaining |
+| 7e | `94b76e6` | Dashboard polish |
+| 7f | `9d09129` | All Bills overhaul |
+| 7g | `669de55` | Type tag color customization |
+| 7h | `a83ae28` | Installments type |
+| 7i | `45023bf` | Insights snapshot management + Payoff strategies |
+| 7j | `48e191a` | Exclude inactive bills from BillGroup subtotals (live-refresh on toggle) |
+| 7k | `c470138` | PayDay sortable column toolbar + 3 PM early-start pay-period shift |
 
 **Entering tests/build:** 150/150 green, 0 warn / 0 err.
 **Exiting tests/build:** 194/194 green, 0 warn / 0 err.

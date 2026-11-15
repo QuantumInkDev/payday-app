@@ -18,7 +18,7 @@
 
 ## Documentation
 
-- `///` XML doc comments on public methods in `PayDay.Core/Services/*` — especially for ports of the JS prototype, where the doc cites the JS function it mirrors. Example: `// Mirrors the JS getPayPeriods() in payday.html.`
+- `///` XML doc comments on public methods in `apps/windows/PayDay.Core/Services/*` — especially for ports of the JS prototype, where the doc cites the JS function it mirrors. Example: `// Mirrors the JS getPayPeriods() in payday.html.`
 - Section dividers in long services use `// ----` comment bars (see `PayPeriodService.cs`).
 - Don't comment WHAT the code does; do comment WHY a non-obvious port detail exists. Example worth keeping: `// JS: new Date(year, month, day) overflows; mirror with .AddDays(day - 1).`
 

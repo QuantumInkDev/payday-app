@@ -4,7 +4,7 @@
 **Closed:** 2026-05-15
 **Scope:** Add NuGet dependencies, define the schema in `Services/DatabaseService.cs`, seed the 27 bills from the original HTML app on first launch.
 **Plan reference:** `PAYDAY_WINUI3_PLAN.md` §1.3, §2.1, §2.2, §2.3.
-**Prior sprint:** `sprint-01-bootstrap.md` (closed 2026-05-15, commit `6dce721`).
+**Prior sprint:** `sprint-01-bootstrap.md` (closed 2026-05-15, commit `cbb1460`).
 
 ## Tasks
 

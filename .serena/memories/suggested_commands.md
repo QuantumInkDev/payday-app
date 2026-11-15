@@ -11,10 +11,10 @@ $env:PATH = "C:\Program Files\dotnet;$env:PATH"
 
 ```powershell
 # WinUI app (the launchable one)
-dotnet build P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj --nologo
+dotnet build P:\Projects-Not-On-Cloud\PayDayApp\apps\windows\PayDay\PayDay.csproj --nologo
 
 # Class library only (faster — no WinUI build hooks)
-dotnet build P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Core\PayDay.Core.csproj --nologo
+dotnet build P:\Projects-Not-On-Cloud\PayDayApp\apps\windows\PayDay.Core\PayDay.Core.csproj --nologo
 ```
 
 **Note:** XAML compiler diagnostics are sometimes empty under `dotnet build` (known WinUI 3 toolchain issue). For clearer errors use the `winui-dev-workflow` skill's `BuildAndRun.ps1` (prefers MSBuild when present) or install Visual Studio with the Universal workload.
@@ -22,7 +22,7 @@ dotnet build P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Core\PayDay.Core.csproj -
 ## Test
 
 ```powershell
-dotnet test P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Tests\PayDay.Tests.csproj --nologo
+dotnet test P:\Projects-Not-On-Cloud\PayDayApp\apps\windows\PayDay.Tests\PayDay.Tests.csproj --nologo
 ```
 **As of 2026-05-15:** 21 tests pass (13 PayPeriod + 8 PayoffCalculator). Tests MUST NOT reference `PayDay.csproj` — the WinAppSDK auto-initializer throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process without package identity. See [[payday_core_split]].
 
@@ -30,7 +30,7 @@ dotnet test P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Tests\PayDay.Tests.csproj 
 
 ```powershell
 # Standard — uses Microsoft.Windows.SDK.BuildTools.WinApp build hook
-dotnet run --project P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj --launch-profile PayDay
+dotnet run --project P:\Projects-Not-On-Cloud\PayDayApp\apps\windows\PayDay\PayDay.csproj --launch-profile PayDay
 ```
 The "launch profile doesn't exist" warning is cosmetic; the app still launches with package identity.
 

@@ -20,4 +20,4 @@
 
 **Platforms:** `x86;x64;ARM64`. Output type `WinExe`. Packaged via single-project MSIX (`Package.appxmanifest`).
 
-**Architectural seam:** `PayDay.Core/Services/IDatabaseService.cs` is the interface. `PayDay/Services/DatabaseService.cs` (the only WinUI-side service) implements it so Core services can be unit-tested without the WinAppSDK runtime.
+**Architectural seam:** `apps/windows/PayDay.Core/Services/IDatabaseService.cs` is the interface. `apps/windows/PayDay/Services/DatabaseService.cs` (the only WinUI-side service) implements it so Core services can be unit-tested without the WinAppSDK runtime.
