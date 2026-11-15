@@ -12,7 +12,7 @@
 - Repo restructured: `PayDay/`, `PayDay.Core/`, `PayDay.Tests/` moved with `git mv` into `apps/windows/` (all pure renames, history preserved, `Package.appxmanifest` unchanged). New root `README.md`.
 - `tools/vm-build.sh [git-ref]` builds and tests a pushed commit on the arm64 VM from the Mac. Verified on 2026-11-14 at the head of PR #1 (after all scrub passes, on a freshly re-cloned VM checkout): 0 warnings, 0 errors, 194/194 tests passed. The earlier "OK" at `cfd55c6` was a silent no-op caused by a `vm-build.sh` bug that `ee9d898` fixed.
 
-- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes, the bill-editor placeholder text and several test fixtures held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` (five passes: the second and third caught card figures and two utility-bill amounts in test fixtures, the fourth fixed a derived test total, and the fifth replaced the sample-data due days, swapped brand names in test fixtures for made-up ones, and changed the pay anchor and the dates in the C# code and tests, so the real pay cadence can't be read off them) to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind; test fixtures use generic names such as Electric, Phone, Amber and Sparrow, and every amount is fictional) and placeholder Notion IDs (`00000000-…`). Installed apps keep their saved pay anchor; only a brand-new install starts from the new default. All branches on GitHub were force-pushed. **Every commit ID from before this changed**, and the IDs quoted in these notes were updated to the rewritten history. The old commits can stay reachable on GitHub by their old IDs until GitHub purges them, so a GitHub Support sensitive-data removal request is needed (owner action). The old-to-new maps and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
+- **Git history rewritten to remove personal data (2026-11-14).** The repo is public, and `SeedData.cs`, `planning/PAYDAY_WINUI3_PLAN.md`, `planning/payday.html`, a few planning notes, the bill-editor placeholder text and several test fixtures held real bill names, balances, credit limits and Notion IDs. Every commit was rewritten with `git filter-repo` (five passes: the second and third caught card figures and two utility-bill amounts in test fixtures, the fourth fixed a derived test total, and the fifth replaced the sample-data due days, swapped brand names in test fixtures for made-up ones, and changed the pay anchor and the dates in the C# code and tests, so the real pay cadence can't be read off them) to use fictional sample data (Microsoft-style names such as Woodgrove, Contoso, Northwind; test fixtures use generic names such as Electric, Phone, Amber and Sparrow, and every amount is fictional) and placeholder Notion IDs (`00000000-…`). Installed apps keep their saved pay anchor; only a brand-new install starts from the new default. All branches on GitHub were force-pushed. **Every commit ID from before this changed**, and the IDs quoted in these notes were updated to the rewritten history. The old commits can stay reachable on GitHub by their old IDs until GitHub purges them, so a GitHub Support sensitive-data removal request was filed on 2026-11-15 (confirmation goes to the account email). The old-to-new maps and a full pre-scrub backup are kept off-repo in `~/Projects/archive/` on the Mac.
 - `tools/notion-diagnose.ps1` now compares against placeholder IDs; pass your real data-source IDs if you use it. Installed apps keep their own Notion settings in their local database, so live sync is unaffected.
 
 **Old clones must not push.** The rig (`P:\Projects-Not-On-Cloud\PayDayApp`), the VM daily clone (`C:\Projects\PayDayApp`) and any other copy still hold the old history with the real data. Pushing any branch from them would put it back on GitHub. (The VM's build checkout `C:\Builds\payday-app` was deleted on 2026-11-14; `tools/vm-build.sh` re-clones it.) Before doing anything else in an old clone, run `git fetch --prune origin`, then for each local branch `git switch <branch> && git reset --hard origin/<branch>` or simply re-clone. If an old clone has uncommitted edits you want to keep, copy those files out by hand first, because the reset discards them.
@@ -30,22 +30,29 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 ---
 
+## Session 2026-11-15: Windows sync (design step 5), PayDayKit
+
+- PR #2: v1 feature scope, `spec/` (data model, sync protocol) and the conformance suite. Two agent reviews fixed a checkpoint double-subtract, same-day irregular paychecks, number-typing disagreements, compaction data loss, and restore handling of Notion keys and legacy colours.
+- PR #4: spec edge cases found by the implementations (whole-string ASCII matching, pairing text folding, strict JSON incl. lone surrogates, vaultId, envelope check order). 423 sync cases.
+- PR #3: C# sync engine library in `apps/windows/PayDay.Core/Sync/` passing every sync case.
+- PR #5: SQLite storage for sync inside `payday.db` (new tables only, created when sync is turned on), `SyncRoutingDatabaseService` in front of every write (pass-through when sync is off), one-time migration that runs only on "turn on sync" and writes a never-rotated `presync` backup first.
+- PR #6: sync loop against a drive interface (`SyncCoordinator`, `SyncScheduler`, in-memory drive with fault injection, multi-device end-to-end tests) plus turn-on safety fixes (Notion page matching after the ID migration, write gate, changed-fields-only saves).
+- This branch: OneDrive provider (Microsoft Graph app folder, MSAL public client, no client ID committed), the Sync page, and the PR #6 review fixes (Notion owner push-first flag, no auto-claim, archive-on-delete, single-colour writes, persisted 24-hour timers).
+- `apps/apple/PayDayKit` (branch `feature/apple-app`): Swift package with the core rules and the sync library, created and tested with the Xcode MCP; 599 tests incl. every core and sync case.
+- The GitHub Support purge request was filed on 2026-11-15.
+
+---
+
 ## 🔴 CONTINUE HERE
 
-**Design section 9 step 5: sync in the Windows app**, with the Mac app's `PayDayKit` able to start in parallel now that `spec/` exists. Steps 1–4 are done:
+**Waiting on the developer, then design step 5's exit test:**
 
-- Step 3: v1 features decided in `planning/2026-11-14-feature-scope.md`.
-- Step 4: `spec/data-model.md`, `spec/sync-protocol.md`, `spec/conformance/core/` (157 cases generated from the C# code and run by `PayDay.Tests`, 353 tests in all) and `spec/conformance/sync/` (237 cases, checked by the Python reference in `tools/spec/check_fixtures.py`; the C# sync engine will run them in step 5).
-- The C# core and tests now build on the Mac too: .NET 9 SDK in `~/.dotnet` (`export PATH=~/.dotnet:$PATH`). The VM stays the gate for the WinUI app.
+1. **OneDrive app ID.** Register a free app at entra.microsoft.com (App registrations → New registration; personal Microsoft accounts; redirect "Public client/native" `http://localhost`; delegated `Files.ReadWrite.AppFolder` + `offline_access`). Supply it with `setx FUTURECHECK_ONEDRIVE_CLIENT_ID <id>` on each PC. Then run the manual test in the PR for the OneDrive provider (sign in, create vault, phrase, add a device, join from the second PC, lock/unlock, Notion owner, offline, turn off). Exit test: the VM and the rig syncing.
+2. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
 
-**Decide before freezing the rules** (C# quirks the core fixtures currently record as-is; see `spec/conformance/core/README.md`):
-1. Restoring an old backup zeroes snapshot totals (`totalOwed` isn't migrated). Real data-loss bug: fix.
-2. `EarlyStart` is saved but never read; the 3 PM shift always applies.
-3. Due days past a month's end overflow into the next month (31st in April → May 1) instead of clamping.
-4. Rate and type matching is case-sensitive.
-5. Any payment, even 0, marks a bill paid on the PayDay page.
+**Before seeding the vault** (design §11): export JSON backups from both the VM and the rig and decide which holds the real data.
 
-The Phase 7 notes below are history.
+**Still open from the core fixtures** (C# quirks recorded as-is; see `spec/conformance/core/README.md`): old backups lose snapshot totals on restore (data-loss bug, fix), `EarlyStart` is never read, due days overflow into the next month, rate/type matching is case-sensitive, any payment marks a bill paid.
 
 ---
 
