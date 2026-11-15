@@ -14,7 +14,9 @@ namespace PayDay.Pages;
 /// <summary>
 /// The Sync page. Everything it decides lives in <see cref="SyncPageViewModel"/> (PayDay.Core, unit
 /// tested); this code-behind only shows dialogs, saves the recovery phrase file, draws the QR image
-/// and runs the one-second pairing timer. Leaving the page closes an open pairing code.
+/// and runs the one-second pairing timer. The view model lives for the whole run
+/// (<see cref="App.SyncPageModel"/>), so leaving the page never loses a recovery phrase on screen or
+/// an operation still running; leaving the page closes an open pairing code.
 /// </summary>
 public sealed partial class SyncPage : Page, ISyncReloadable
 {
@@ -26,7 +28,7 @@ public sealed partial class SyncPage : Page, ISyncReloadable
     public SyncPage()
     {
         var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        ViewModel = new SyncPageViewModel(App.SyncCoordinator, App.DriveAccount, App.Notion, dispatch: a => queue.TryEnqueue(() => a()));
+        ViewModel = App.SyncPageModel ?? new SyncPageViewModel(App.SyncCoordinator, App.DriveAccount, App.Notion, dispatch: a => queue.TryEnqueue(() => a()));
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.PropertyChanged += OnViewModelChanged;
@@ -35,14 +37,19 @@ public sealed partial class SyncPage : Page, ISyncReloadable
         Unloaded += OnPageUnloaded;
     }
 
-    private async void OnPageLoaded(object sender, RoutedEventArgs e) => await ViewModel.LoadAsync();
+    private async void OnPageLoaded(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.LoadAsync();
+        if (ViewModel.IsPairing) _pairingTimer.Start();
+        await ShowQrAsync(ViewModel.PairingQrPng);
+    }
 
     private async void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
         _pairingTimer.Stop();
-        await ViewModel.ClosePairingAsync();
         ViewModel.PropertyChanged -= OnViewModelChanged;
-        ViewModel.Dispose();
+        // The view model stays (App.SyncPageModel); only an open pairing code is closed.
+        await ViewModel.ClosePairingAsync();
     }
 
     public Task ReloadAfterSyncAsync(bool settingsChanged)
@@ -97,7 +104,7 @@ public sealed partial class SyncPage : Page, ISyncReloadable
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
             };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.ConfirmReplaceAsync();
+            if (await App.ShowDialogAsync(dialog) == ContentDialogResult.Primary) await ViewModel.ConfirmReplaceAsync();
             else ViewModel.CancelReplace();
         }
         finally
@@ -136,14 +143,28 @@ public sealed partial class SyncPage : Page, ISyncReloadable
 
     private void OnPhraseSavedClick(object sender, RoutedEventArgs e) => ViewModel.PhraseSaved = PhraseSavedBox.IsChecked == true;
 
-    private void OnFinishPhraseClick(object sender, RoutedEventArgs e) => ViewModel.FinishRecoveryPhrase();
+    private async void OnFinishPhraseClick(object sender, RoutedEventArgs e) => await ViewModel.FinishRecoveryPhraseAsync();
+
+    private void OnShowPhraseAgainClick(object sender, RoutedEventArgs e) => ViewModel.ShowRecoveryPhraseAgain();
 
     private async void OnSavePhraseClick(object sender, RoutedEventArgs e)
     {
         if (ViewModel.RecoveryPhraseFileText is not { } text) return;
+        var advice = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Where to keep the phrase",
+            Content = new TextBlock { Text = SyncPageViewModel.PhraseFileAdvice, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = "Choose a place…",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await App.ShowDialogAsync(advice) != ContentDialogResult.Primary) return;
+
+        // Not Documents or Desktop: OneDrive usually backs those up, next to the vault.
         var picker = new FileSavePicker
         {
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedStartLocation = PickerLocationId.ComputerFolder,
             SuggestedFileName = "FutureCheck recovery phrase",
         };
         picker.FileTypeChoices.Add("Text file", new[] { ".txt" });
@@ -153,6 +174,27 @@ public sealed partial class SyncPage : Page, ISyncReloadable
         }
         var file = await picker.PickSaveFileAsync();
         if (file is null) return;
+        if (SyncPageViewModel.IsInFolder(file.Path, SyncPageViewModel.OneDriveFolders(Environment.GetEnvironmentVariable)))
+        {
+            var confirm = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "That folder is in OneDrive",
+                Content = new TextBlock
+                {
+                    TextWrapping = TextWrapping.Wrap,
+                    Text = "OneDrive backs this folder up to the same account as your vault, so anyone who gets into that account would have both your data and its key. Choose a USB drive or another folder instead.",
+                },
+                PrimaryButtonText = "Save here anyway",
+                CloseButtonText = "Choose another place",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await App.ShowDialogAsync(confirm) != ContentDialogResult.Primary)
+            {
+                await DeleteIfEmptyAsync(file);
+                return;
+            }
+        }
         try
         {
             await FileIO.WriteTextAsync(file, text);
@@ -161,6 +203,19 @@ public sealed partial class SyncPage : Page, ISyncReloadable
         catch (Exception ex)
         {
             ViewModel.ErrorMessage = $"The file could not be saved: {ex.Message}";
+        }
+    }
+
+    /// <summary>The picker may have created an empty file; never delete one that has content.</summary>
+    private static async Task DeleteIfEmptyAsync(StorageFile file)
+    {
+        try
+        {
+            var props = await file.GetBasicPropertiesAsync();
+            if (props.Size == 0) await file.DeleteAsync();
+        }
+        catch (Exception)
+        {
         }
     }
 
@@ -181,6 +236,6 @@ public sealed partial class SyncPage : Page, ISyncReloadable
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary) await ViewModel.TurnOffAsync();
+        if (await App.ShowDialogAsync(dialog) == ContentDialogResult.Primary) await ViewModel.TurnOffAsync();
     }
 }

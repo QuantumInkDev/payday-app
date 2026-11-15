@@ -258,6 +258,15 @@
                         </ItemsControl>
                     </StackPanel>
 
+                    <!-- A recovery phrase this PC created and the user has not confirmed saving -->
+                    <Button
+                        AutomationProperties.Name="Show my recovery phrase"
+                        Click="OnShowPhraseAgainClick"
+                        Content="Show my recovery phrase"
+                        Style="{ThemeResource AccentButtonStyle}"
+                        ToolTipService.ToolTip="You haven't confirmed that you saved your recovery phrase yet."
+                        Visibility="{x:Bind ViewModel.HasUnconfirmedPhrase, Mode=OneWay, Converter={StaticResource Visible}}" />
+
                     <!-- Notion connector owner -->
                     <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind ViewModel.NotionLine, Mode=OneWay}" TextWrapping="Wrap" />

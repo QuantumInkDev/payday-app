@@ -10,6 +10,7 @@ using PayDay.Sync.Drive;
 using PayDay.Sync.Drive.OneDrive;
 using PayDay.Sync.Keys;
 using PayDay.Sync.Local;
+using PayDay.ViewModels;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -56,7 +57,14 @@ public partial class App : Application
     /// <summary>When to sync (launch, foreground, 5 s after an edit, every 5 minutes, "Sync now").</summary>
     public static SyncScheduler? SyncScheduler { get; private set; }
 
+    /// <summary>
+    /// The Sync page's state, kept for the whole run so leaving the page (or a vault creation still
+    /// running) never loses the recovery phrase on screen. Null until launch finished.
+    /// </summary>
+    public static SyncPageViewModel? SyncPageModel { get; private set; }
+
     private static OneDriveDriveProvider? _drive;
+    private static bool _dialogOpen;
 
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
@@ -65,6 +73,63 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Log("Unobserved task exception", e.Exception);
+            e.SetObserved();
+        };
+    }
+
+    /// <summary>
+    /// Logs anything that escaped a handler and keeps the app running when that is safe: every
+    /// write the app makes is transactional, so a failed handler leaves no half-written data. Only
+    /// failures that mean the process itself is broken are let through.
+    /// </summary>
+    private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        Log("Unhandled exception", e.Exception);
+        e.Handled = e.Exception is not (OutOfMemoryException or AccessViolationException or System.Runtime.InteropServices.SEHException);
+    }
+
+    private static void Log(string what, Exception? ex)
+    {
+        try
+        {
+            var folder = Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "logs");
+            Directory.CreateDirectory(folder);
+            File.AppendAllText(
+                Path.Combine(folder, "unhandled.log"),
+                $"{DateTimeOffset.Now:O} {what}: {ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch (Exception)
+        {
+            // Logging must never make things worse.
+        }
+        System.Diagnostics.Debug.WriteLine($"{what}: {ex}");
+    }
+
+    /// <summary>
+    /// Shows a dialog unless one is already open (WinUI allows only one at a time and throws on a
+    /// second). Never throws: a dialog that cannot be shown counts as dismissed.
+    /// </summary>
+    public static async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
+    {
+        if (_dialogOpen) return ContentDialogResult.None;
+        _dialogOpen = true;
+        try
+        {
+            return await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log("Dialog failed", ex);
+            return ContentDialogResult.None;
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
     }
 
     /// <summary>
@@ -79,6 +144,8 @@ public partial class App : Application
         // Merged changes from another device (raised after each merge committed, off the UI thread).
         Sync.DataChanged += OnSyncDataChanged;
         await StartSyncLoopAsync();
+        var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        SyncPageModel = new SyncPageViewModel(SyncCoordinator, DriveAccount, Notion, dispatch: a => queue.TryEnqueue(() => a()));
 
         MainWindow = new MainWindow();
         MainWindow.Activate();

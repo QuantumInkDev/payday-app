@@ -27,6 +27,7 @@ public sealed partial class MainWindow : Window
         _ = RefreshLastSyncedLabelAsync();
         Activated += MainWindow_Activated;
         Closed += (_, _) => App.StopSyncLoop();
+        AppWindow.Closing += OnAppWindowClosing;
 
         _syncReloadTimer = DispatcherQueue.CreateTimer();
         _syncReloadTimer.Interval = System.TimeSpan.FromMilliseconds(400);
@@ -36,6 +37,29 @@ public sealed partial class MainWindow : Window
 
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _syncReloadTimer;
     private bool _syncReloadSettings;
+    private bool _closeConfirmed;
+
+    /// <summary>
+    /// Closing while a sync operation runs, or while the recovery phrase of a new vault is not
+    /// confirmed as saved, asks first.
+    /// </summary>
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_closeConfirmed || App.SyncPageModel?.CloseWarning() is not { } warning) return;
+        args.Cancel = true;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = RootGrid.XamlRoot,
+            Title = "Close FutureCheck?",
+            Content = new TextBlock { Text = warning, TextWrapping = TextWrapping.Wrap },
+            PrimaryButtonText = "Close anyway",
+            CloseButtonText = "Keep open",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        if (await App.ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
+        _closeConfirmed = true;
+        Close();
+    }
 
     /// <summary>
     /// Another device's changes were merged (called on the UI thread for every merge): reload the
@@ -115,7 +139,7 @@ public sealed partial class MainWindow : Window
             Content = message,
             CloseButtonText = "OK",
         };
-        await dialog.ShowAsync();
+        await App.ShowDialogAsync(dialog);
     }
 
     private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
@@ -142,7 +166,7 @@ public sealed partial class MainWindow : Window
             DefaultButton = ContentDialogButton.Primary,
         };
 
-        var result = await dialog.ShowAsync();
+        var result = await App.ShowDialogAsync(dialog);
         if (result != ContentDialogResult.Primary) return;
 
         try
@@ -158,7 +182,7 @@ public sealed partial class MainWindow : Window
                 Content = ex.Message,
                 CloseButtonText = "OK",
             };
-            await err.ShowAsync();
+            await App.ShowDialogAsync(err);
             return;
         }
 
