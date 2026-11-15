@@ -140,12 +140,19 @@ public sealed class JsonData
         }
     }
 
+    /// <summary>Compact JSON text, for diagnostics. A value holding a non-finite number shows its kind instead.</summary>
     public override string ToString()
-        => Kind switch
+    {
+        if (Kind == JsonDataKind.Number && !double.IsFinite(_number)) return _number.ToString(CultureInfo.InvariantCulture);
+        try
         {
-            JsonDataKind.Number when !double.IsFinite(_number) => _number.ToString(CultureInfo.InvariantCulture),
-            _ => System.Text.Encoding.UTF8.GetString(StrictJson.Serialize(this)),
-        };
+            return System.Text.Encoding.UTF8.GetString(StrictJson.Serialize(this));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return $"<{Kind} with a non-finite number>";
+        }
+    }
 
     private InvalidOperationException WrongKind(JsonDataKind wanted)
         => new($"JSON value is {Kind}, not {wanted}.");
