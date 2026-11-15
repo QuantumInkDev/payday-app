@@ -277,15 +277,12 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     {
         if (row is null || CurrentPeriodKey is null) return;
         var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Payment;
-        var id = await _paymentService.MarkPaidAsync(CurrentPeriodKey, row.Bill.Id, amount).ConfigureAwait(true);
+        // Records the payment and decrements the bill's Remaining by the submitted amount (clamped
+        // to 0). The user manages APR/interest manually — we only subtract what they paid.
+        var id = await _db.MarkBillPaidAsync(CurrentPeriodKey, row.Bill, amount).ConfigureAwait(true);
         row.PaymentId = id;
         row.AmountPaid = amount;
         row.IsPaid = true;
-
-        // Decrement the bill's Remaining by the submitted amount (clamped to 0).
-        // The user manages APR/interest manually — we only subtract what they paid.
-        row.Bill.Remaining = Math.Max(0, row.Bill.Remaining - amount);
-        await _db.UpsertBillAsync(row.Bill).ConfigureAwait(true);
 
         UnpaidBills.Remove(row);
         PaidBills.Add(row);
@@ -309,15 +306,13 @@ public sealed partial class PayDayPageViewModel : ObservableObject
         if (row is null || CurrentPeriodKey is null) return;
         // Capture how much was paid before the row is reset, so we can restore Remaining.
         var refunded = row.AmountPaid;
-        await _paymentService.UnmarkPaidAsync(CurrentPeriodKey, row.Bill.Id).ConfigureAwait(true);
+        await _db.UnmarkBillPaidAsync(CurrentPeriodKey, row.Bill, refunded).ConfigureAwait(true);
         row.PaymentId = null;
         row.IsPaid = false;
         row.AmountPaid = row.Bill.Payment;
 
         if (refunded > 0)
         {
-            row.Bill.Remaining += refunded;
-            await _db.UpsertBillAsync(row.Bill).ConfigureAwait(true);
             PendingNotionPush = PushBillSafeAsync(row.Bill);
         }
 
@@ -331,17 +326,13 @@ public sealed partial class PayDayPageViewModel : ObservableObject
     {
         if (CurrentPeriodKey is null) return;
         var pushes = new List<Task>();
-        var updatedBills = new List<Bill>();
         foreach (var row in UnpaidBills.ToList())
         {
             var amount = row.AmountPaid > 0 ? row.AmountPaid : row.Bill.Payment;
-            var id = await _paymentService.MarkPaidAsync(CurrentPeriodKey, row.Bill.Id, amount).ConfigureAwait(true);
+            var id = await _db.MarkBillPaidAsync(CurrentPeriodKey, row.Bill, amount).ConfigureAwait(true);
             row.PaymentId = id;
             row.AmountPaid = amount;
             row.IsPaid = true;
-
-            row.Bill.Remaining = Math.Max(0, row.Bill.Remaining - amount);
-            updatedBills.Add(row.Bill);
 
             UnpaidBills.Remove(row);
             PaidBills.Add(row);
@@ -354,10 +345,6 @@ public sealed partial class PayDayPageViewModel : ObservableObject
                 PaidAt = DateTime.UtcNow.ToString("O"),
             }, row.Bill.Name));
             pushes.Add(PushBillSafeAsync(row.Bill));
-        }
-        foreach (var bill in updatedBills)
-        {
-            await _db.UpsertBillAsync(bill).ConfigureAwait(true);
         }
         RecalculateTotals();
         PendingNotionPush = Task.WhenAll(pushes);

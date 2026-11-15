@@ -1,0 +1,600 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using PayDay.Models;
+using PayDay.Sync.Storage;
+
+namespace PayDay.Services;
+
+/// <summary>
+/// Today's persistence: the <c>Bills</c>, <c>Payments</c>, <c>Snapshots</c> and <c>Settings</c>
+/// tables of <c>payday.db</c> (schema version 2). Moved here from the app project unchanged so the
+/// sync layer's tests run against the same SQL the app uses; the app's <c>DatabaseService</c> only
+/// supplies the file path and the seed data.
+/// </summary>
+public class SqliteDatabaseService : IDatabaseService
+{
+    private const int CurrentSchemaVersion = 2;
+    private const string SchemaVersionKey = "SchemaVersion";
+
+    private readonly IReadOnlyList<Bill> _seedBills;
+    private readonly IReadOnlyList<(string Key, string? Value)> _seedSettings;
+
+    public string DbPath { get; }
+    public string ConnectionString { get; }
+
+    public SqliteDatabaseService(
+        string dbPath,
+        IReadOnlyList<Bill>? seedBills = null,
+        IReadOnlyList<(string Key, string? Value)>? seedSettings = null)
+    {
+        DbPath = dbPath;
+        _seedBills = seedBills ?? Array.Empty<Bill>();
+        _seedSettings = seedSettings ?? Array.Empty<(string, string?)>();
+        ConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = DbPath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+    }
+
+    public async Task<SqliteConnection> OpenConnectionAsync()
+    {
+        var conn = new SqliteConnection(ConnectionString);
+        await conn.OpenAsync().ConfigureAwait(false);
+        using (var pragma = conn.CreateCommand())
+        {
+            pragma.CommandText = "PRAGMA foreign_keys = ON;";
+            await pragma.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        return conn;
+    }
+
+    public async Task InitializeAsync()
+    {
+        await using (var conn = await OpenConnectionAsync().ConfigureAwait(false))
+        await using (var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false))
+        {
+            await ExecuteAsync(conn, tx, SchemaBills).ConfigureAwait(false);
+            await ExecuteAsync(conn, tx, SchemaPayments).ConfigureAwait(false);
+            await ExecuteAsync(conn, tx, SchemaSnapshots).ConfigureAwait(false);
+            await ExecuteAsync(conn, tx, SchemaSettings).ConfigureAwait(false);
+            await tx.CommitAsync().ConfigureAwait(false);
+        }
+
+        await RunMigrationsAsync().ConfigureAwait(false);
+
+        // With sync on, the tables are a materialized view of the synced records: seeding them
+        // directly would add bills that exist nowhere else, so an empty table stays empty.
+        if (await CountBillsAsync().ConfigureAwait(false) == 0 && !await IsSyncEnabledAsync().ConfigureAwait(false))
+        {
+            await SeedAsync().ConfigureAwait(false);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Migrations
+    // ------------------------------------------------------------------
+
+    private async Task RunMigrationsAsync()
+    {
+        var existing = await GetSettingAsync(SchemaVersionKey).ConfigureAwait(false);
+        var version = int.TryParse(existing, out var v) ? v : 0;
+
+        // Schema v1 → v2: rename Bills.Cost → Payment, Bills.Owed → Remaining,
+        // Snapshots.TotalOwed → TotalRemaining. ALTER TABLE RENAME COLUMN is
+        // safe and lossless on SQLite 3.25+. The Bills renames sit in one
+        // transaction; the Snapshots rename is separate so each is conditional
+        // on the column actually existing (lets the migration re-run safely).
+        if (version < 2)
+        {
+            if (await ColumnExistsAsync("Bills", "Cost").ConfigureAwait(false))
+            {
+                await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+                await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+                await ExecuteAsync(conn, tx, "ALTER TABLE Bills RENAME COLUMN Cost TO Payment;").ConfigureAwait(false);
+                await ExecuteAsync(conn, tx, "ALTER TABLE Bills RENAME COLUMN Owed TO Remaining;").ConfigureAwait(false);
+                await tx.CommitAsync().ConfigureAwait(false);
+            }
+            if (await ColumnExistsAsync("Snapshots", "TotalOwed").ConfigureAwait(false))
+            {
+                await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+                await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+                await ExecuteAsync(conn, tx, "ALTER TABLE Snapshots RENAME COLUMN TotalOwed TO TotalRemaining;").ConfigureAwait(false);
+                await tx.CommitAsync().ConfigureAwait(false);
+            }
+        }
+
+        if (version == CurrentSchemaVersion) return;
+
+        await SetSettingAsync(SchemaVersionKey, CurrentSchemaVersion.ToString()).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ColumnExistsAsync(string table, string column)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table});";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var nameOrdinal = reader.GetOrdinal("name");
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            if (string.Equals(reader.GetString(nameOrdinal), column, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Settings
+    // ------------------------------------------------------------------
+
+    public async Task<string?> GetSettingAsync(string key)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Value FROM Settings WHERE Key = $k LIMIT 1;";
+        cmd.Parameters.AddWithValue("$k", key);
+        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        return result == null || result is DBNull ? null : (string)result;
+    }
+
+    public async Task SetSettingAsync(string key, string? value)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO Settings(Key, Value) VALUES($k, $v)
+            ON CONFLICT(Key) DO UPDATE SET Value = excluded.Value;
+            """;
+        cmd.Parameters.AddWithValue("$k", key);
+        cmd.Parameters.AddWithValue("$v", (object?)value ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------------
+    // Bills CRUD
+    // ------------------------------------------------------------------
+
+    public async Task<int> CountBillsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM Bills;";
+        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt32(result);
+    }
+
+    public async Task<Bill?> GetBillAsync(string id)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Bills WHERE Id = $id LIMIT 1;";
+        cmd.Parameters.AddWithValue("$id", id);
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        return await reader.ReadAsync().ConfigureAwait(false) ? MapBill(reader) : null;
+    }
+
+    public async Task<IReadOnlyList<Bill>> GetAllBillsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Bills ORDER BY Type, Name;";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var list = new List<Bill>();
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            list.Add(MapBill(reader));
+        }
+        return list;
+    }
+
+    public async Task UpsertBillAsync(Bill bill)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+        await UpsertBillInternalAsync(conn, tx, bill).ConfigureAwait(false);
+        await tx.CommitAsync().ConfigureAwait(false);
+    }
+
+    public async Task UpsertBillsAsync(IEnumerable<Bill> bills)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+        foreach (var bill in bills)
+        {
+            await UpsertBillInternalAsync(conn, tx, bill).ConfigureAwait(false);
+        }
+        await tx.CommitAsync().ConfigureAwait(false);
+    }
+
+    public async Task DeleteBillAsync(string id)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Bills WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task UpsertBillInternalAsync(SqliteConnection conn, SqliteTransaction tx, Bill bill)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            INSERT INTO Bills(Id, Name, Type, Payment, Remaining, Available, CreditLimit, DueDay, Rate, APR,
+                              AutoPay, Active, YearlyDate, Notes, NotionPageId)
+            VALUES($Id, $Name, $Type, $Payment, $Remaining, $Available, $CreditLimit, $DueDay, $Rate, $APR,
+                   $AutoPay, $Active, $YearlyDate, $Notes, $NotionPageId)
+            ON CONFLICT(Id) DO UPDATE SET
+                Name = excluded.Name,
+                Type = excluded.Type,
+                Payment = excluded.Payment,
+                Remaining = excluded.Remaining,
+                Available = excluded.Available,
+                CreditLimit = excluded.CreditLimit,
+                DueDay = excluded.DueDay,
+                Rate = excluded.Rate,
+                APR = excluded.APR,
+                AutoPay = excluded.AutoPay,
+                Active = excluded.Active,
+                YearlyDate = excluded.YearlyDate,
+                Notes = excluded.Notes,
+                NotionPageId = excluded.NotionPageId,
+                UpdatedAt = datetime('now');
+            """;
+        cmd.Parameters.AddWithValue("$Id", bill.Id);
+        cmd.Parameters.AddWithValue("$Name", bill.Name);
+        cmd.Parameters.AddWithValue("$Type", bill.Type);
+        cmd.Parameters.AddWithValue("$Payment", bill.Payment);
+        cmd.Parameters.AddWithValue("$Remaining", bill.Remaining);
+        cmd.Parameters.AddWithValue("$Available", bill.Available);
+        cmd.Parameters.AddWithValue("$CreditLimit", bill.CreditLimit);
+        cmd.Parameters.AddWithValue("$DueDay", bill.DueDay);
+        cmd.Parameters.AddWithValue("$Rate", bill.Rate);
+        cmd.Parameters.AddWithValue("$APR", bill.APR);
+        cmd.Parameters.AddWithValue("$AutoPay", bill.AutoPay ? 1 : 0);
+        cmd.Parameters.AddWithValue("$Active", bill.Active ? 1 : 0);
+        cmd.Parameters.AddWithValue("$YearlyDate", (object?)bill.YearlyDate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$Notes", (object?)bill.Notes ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$NotionPageId", (object?)bill.NotionPageId ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    internal static Bill MapBill(SqliteDataReader r) => new()
+    {
+        Id           = r.GetString(r.GetOrdinal("Id")),
+        Name         = r.GetString(r.GetOrdinal("Name")),
+        Type         = r.GetString(r.GetOrdinal("Type")),
+        Payment      = r.GetDouble(r.GetOrdinal("Payment")),
+        Remaining    = r.GetDouble(r.GetOrdinal("Remaining")),
+        Available    = r.GetDouble(r.GetOrdinal("Available")),
+        CreditLimit  = r.GetDouble(r.GetOrdinal("CreditLimit")),
+        DueDay       = r.GetInt32(r.GetOrdinal("DueDay")),
+        Rate         = r.GetString(r.GetOrdinal("Rate")),
+        APR          = r.GetDouble(r.GetOrdinal("APR")),
+        AutoPay      = r.GetInt32(r.GetOrdinal("AutoPay")) != 0,
+        Active       = r.GetInt32(r.GetOrdinal("Active")) != 0,
+        YearlyDate   = r.IsDBNull(r.GetOrdinal("YearlyDate"))   ? null : r.GetString(r.GetOrdinal("YearlyDate")),
+        Notes        = r.IsDBNull(r.GetOrdinal("Notes"))        ? null : r.GetString(r.GetOrdinal("Notes")),
+        CreatedAt    = r.IsDBNull(r.GetOrdinal("CreatedAt"))    ? null : r.GetString(r.GetOrdinal("CreatedAt")),
+        UpdatedAt    = r.IsDBNull(r.GetOrdinal("UpdatedAt"))    ? null : r.GetString(r.GetOrdinal("UpdatedAt")),
+        NotionPageId = r.IsDBNull(r.GetOrdinal("NotionPageId")) ? null : r.GetString(r.GetOrdinal("NotionPageId")),
+    };
+
+    // ------------------------------------------------------------------
+    // Payments CRUD
+    // ------------------------------------------------------------------
+
+    public async Task<long> InsertPaymentAsync(Payment payment)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO Payments(BillId, PeriodKey, AmountPaid, NotionPageId)
+            VALUES($BillId, $PeriodKey, $AmountPaid, $NotionPageId);
+            SELECT last_insert_rowid();
+            """;
+        cmd.Parameters.AddWithValue("$BillId", payment.BillId);
+        cmd.Parameters.AddWithValue("$PeriodKey", payment.PeriodKey);
+        cmd.Parameters.AddWithValue("$AmountPaid", payment.AmountPaid);
+        cmd.Parameters.AddWithValue("$NotionPageId", (object?)payment.NotionPageId ?? DBNull.Value);
+        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt64(result);
+    }
+
+    public async Task DeletePaymentAsync(long id)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Payments WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    public async Task<int> DeletePaymentsForBillInPeriodAsync(string periodKey, string billId)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Payments WHERE PeriodKey = $k AND BillId = $b;";
+        cmd.Parameters.AddWithValue("$k", periodKey);
+        cmd.Parameters.AddWithValue("$b", billId);
+        return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<Payment>> GetPaymentsByPeriodAsync(string periodKey)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Payments WHERE PeriodKey = $k ORDER BY PaidAt;";
+        cmd.Parameters.AddWithValue("$k", periodKey);
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var list = new List<Payment>();
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            list.Add(MapPayment(reader));
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<Payment>> GetAllPaymentsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Payments ORDER BY PeriodKey, PaidAt;";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var list = new List<Payment>();
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            list.Add(MapPayment(reader));
+        }
+        return list;
+    }
+
+    internal static Payment MapPayment(SqliteDataReader r) => new()
+    {
+        Id           = r.GetInt64(r.GetOrdinal("Id")),
+        BillId       = r.GetString(r.GetOrdinal("BillId")),
+        PeriodKey    = r.GetString(r.GetOrdinal("PeriodKey")),
+        AmountPaid   = r.GetDouble(r.GetOrdinal("AmountPaid")),
+        PaidAt       = r.IsDBNull(r.GetOrdinal("PaidAt"))       ? null : r.GetString(r.GetOrdinal("PaidAt")),
+        NotionPageId = r.IsDBNull(r.GetOrdinal("NotionPageId")) ? null : r.GetString(r.GetOrdinal("NotionPageId")),
+    };
+
+    // ------------------------------------------------------------------
+    // Snapshots CRUD
+    // ------------------------------------------------------------------
+
+    public async Task<long> InsertSnapshotAsync(Snapshot snapshot)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO Snapshots(SnapshotDate, TotalRemaining, Details, NotionPageId)
+            VALUES($Date, $Total, $Details, $NotionPageId);
+            SELECT last_insert_rowid();
+            """;
+        cmd.Parameters.AddWithValue("$Date", snapshot.SnapshotDate);
+        cmd.Parameters.AddWithValue("$Total", snapshot.TotalRemaining);
+        cmd.Parameters.AddWithValue("$Details", (object?)snapshot.Details ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$NotionPageId", (object?)snapshot.NotionPageId ?? DBNull.Value);
+        var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt64(result);
+    }
+
+    public async Task<int> DeleteSnapshotAsync(long id)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Snapshots WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    public async Task<int> DeleteAllSnapshotsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM Snapshots;";
+        return await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM Snapshots ORDER BY SnapshotDate;";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var list = new List<Snapshot>();
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            list.Add(MapSnapshot(reader));
+        }
+        return list;
+    }
+
+    internal static Snapshot MapSnapshot(SqliteDataReader r) => new()
+    {
+        Id           = r.GetInt64(r.GetOrdinal("Id")),
+        SnapshotDate = r.GetString(r.GetOrdinal("SnapshotDate")),
+        TotalRemaining = r.GetDouble(r.GetOrdinal("TotalRemaining")),
+        Details      = r.IsDBNull(r.GetOrdinal("Details"))      ? null : r.GetString(r.GetOrdinal("Details")),
+        NotionPageId = r.IsDBNull(r.GetOrdinal("NotionPageId")) ? null : r.GetString(r.GetOrdinal("NotionPageId")),
+    };
+
+    // ------------------------------------------------------------------
+    // Bulk read / replace (for JSON export + import)
+    // ------------------------------------------------------------------
+
+    public async Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Key, Value FROM Settings;";
+        await using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        var dict = new Dictionary<string, string?>(StringComparer.Ordinal);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            var key = reader.GetString(0);
+            var value = reader.IsDBNull(1) ? null : reader.GetString(1);
+            dict[key] = value;
+        }
+        return dict;
+    }
+
+    public async Task ReplaceAllDataAsync(
+        IReadOnlyList<Bill> bills,
+        IReadOnlyList<Payment> payments,
+        IReadOnlyList<Snapshot> snapshots,
+        IReadOnlyDictionary<string, string?> settings)
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync().ConfigureAwait(false);
+
+        await ExecuteAsync(conn, tx, "DELETE FROM Payments;").ConfigureAwait(false);
+        await ExecuteAsync(conn, tx, "DELETE FROM Snapshots;").ConfigureAwait(false);
+        await ExecuteAsync(conn, tx, "DELETE FROM Bills;").ConfigureAwait(false);
+        await ExecuteAsync(conn, tx, "DELETE FROM Settings;").ConfigureAwait(false);
+
+        foreach (var bill in bills)
+        {
+            await UpsertBillInternalAsync(conn, tx, bill).ConfigureAwait(false);
+        }
+        foreach (var payment in payments)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO Payments(BillId, PeriodKey, AmountPaid, PaidAt, NotionPageId)
+                VALUES($BillId, $PeriodKey, $AmountPaid, COALESCE($PaidAt, datetime('now')), $NotionPageId);
+                """;
+            cmd.Parameters.AddWithValue("$BillId", payment.BillId);
+            cmd.Parameters.AddWithValue("$PeriodKey", payment.PeriodKey);
+            cmd.Parameters.AddWithValue("$AmountPaid", payment.AmountPaid);
+            cmd.Parameters.AddWithValue("$PaidAt", (object?)payment.PaidAt ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$NotionPageId", (object?)payment.NotionPageId ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        foreach (var snapshot in snapshots)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO Snapshots(SnapshotDate, TotalRemaining, Details, NotionPageId)
+                VALUES($Date, $Total, $Details, $NotionPageId);
+                """;
+            cmd.Parameters.AddWithValue("$Date", snapshot.SnapshotDate);
+            cmd.Parameters.AddWithValue("$Total", snapshot.TotalRemaining);
+            cmd.Parameters.AddWithValue("$Details", (object?)snapshot.Details ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$NotionPageId", (object?)snapshot.NotionPageId ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+        foreach (var (key, value) in settings)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO Settings(Key, Value) VALUES($k, $v);";
+            cmd.Parameters.AddWithValue("$k", key);
+            cmd.Parameters.AddWithValue("$v", (object?)value ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
+
+        await tx.CommitAsync().ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------------
+    // Seed (called from InitializeAsync when Bills table is empty)
+    // ------------------------------------------------------------------
+
+    private async Task SeedAsync()
+    {
+        if (_seedBills.Count > 0)
+        {
+            await UpsertBillsAsync(_seedBills).ConfigureAwait(false);
+        }
+        foreach (var (key, value) in _seedSettings)
+        {
+            await SetSettingAsync(key, value).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Read-only: whether local sync has been turned on in this database (creates nothing).</summary>
+    private async Task<bool> IsSyncEnabledAsync()
+    {
+        await using var conn = await OpenConnectionAsync().ConfigureAwait(false);
+        return SqliteSyncSchema.IsSyncEnabled(conn);
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers / schema constants
+    // ------------------------------------------------------------------
+
+    private static async Task ExecuteAsync(
+        SqliteConnection conn,
+        SqliteTransaction tx,
+        string sql,
+        params (string Name, object Value)[] parameters)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        foreach (var (name, value) in parameters)
+        {
+            cmd.Parameters.AddWithValue(name, value);
+        }
+        await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    internal const string SchemaBills = """
+        CREATE TABLE IF NOT EXISTS Bills (
+            Id           TEXT PRIMARY KEY,
+            Name         TEXT NOT NULL,
+            Type         TEXT NOT NULL,
+            Payment      REAL NOT NULL DEFAULT 0,
+            Remaining    REAL DEFAULT 0,
+            Available    REAL DEFAULT 0,
+            CreditLimit  REAL DEFAULT 0,
+            DueDay       INTEGER DEFAULT 1,
+            Rate         TEXT DEFAULT 'Monthly',
+            APR          REAL DEFAULT 0,
+            AutoPay      INTEGER DEFAULT 0,
+            Active       INTEGER DEFAULT 1,
+            YearlyDate   TEXT,
+            Notes        TEXT,
+            CreatedAt    TEXT DEFAULT (datetime('now')),
+            UpdatedAt    TEXT DEFAULT (datetime('now')),
+            NotionPageId TEXT
+        );
+        """;
+
+    internal const string SchemaPayments = """
+        CREATE TABLE IF NOT EXISTS Payments (
+            Id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            BillId       TEXT NOT NULL REFERENCES Bills(Id),
+            PeriodKey    TEXT NOT NULL,
+            AmountPaid   REAL NOT NULL,
+            PaidAt       TEXT DEFAULT (datetime('now')),
+            NotionPageId TEXT
+        );
+        """;
+
+    internal const string SchemaSnapshots = """
+        CREATE TABLE IF NOT EXISTS Snapshots (
+            Id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            SnapshotDate   TEXT NOT NULL,
+            TotalRemaining REAL NOT NULL,
+            Details        TEXT,
+            NotionPageId   TEXT
+        );
+        """;
+
+    internal const string SchemaSettings = """
+        CREATE TABLE IF NOT EXISTS Settings (
+            Key   TEXT PRIMARY KEY,
+            Value TEXT
+        );
+        """;
+}
