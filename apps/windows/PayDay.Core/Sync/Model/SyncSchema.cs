@@ -87,7 +87,8 @@ public sealed record SyncFieldSpec(string Name, SyncFieldType Type, SyncValue De
             SyncFieldType.Bool => value.IsBool,
             SyncFieldType.Int => IsInteger(value),
             SyncFieldType.NullableInt => value.IsNull || IsInteger(value),
-            SyncFieldType.Number or SyncFieldType.Money => value.IsNumber,
+            SyncFieldType.Number => value.IsNumber,
+            SyncFieldType.Money => value.IsNumber && SyncMoney.TryCents(value.NumberValue, out _),
             _ => false,
         };
 

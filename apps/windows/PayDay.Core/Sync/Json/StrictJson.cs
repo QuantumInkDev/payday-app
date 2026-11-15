@@ -34,8 +34,10 @@ public static class StrictJson
     /// Parses exactly one JSON value from UTF-8 bytes, or throws <see cref="SyncException"/> with
     /// code <c>malformed</c> if the bytes start with a byte-order mark, are not valid UTF-8, hold
     /// anything but one JSON value (whitespace around it is fine), repeat a key in any object,
-    /// contain a string escape that leaves an unpaired UTF-16 surrogate, or use a non-JSON token
-    /// such as <c>NaN</c>.
+    /// contain a string escape that leaves an unpaired UTF-16 surrogate, use a non-JSON token
+    /// such as <c>NaN</c>, or hold a number that overflows binary64 (<c>1e400</c>, or an integer
+    /// with hundreds of digits). Any JSON value is accepted as the root; payload and vault.json
+    /// readers then require an object.
     /// </summary>
     public static JsonData Parse(ReadOnlySpan<byte> utf8)
     {
@@ -198,9 +200,15 @@ public static class StrictJson
                 return JsonData.String(CheckedString(ref reader));
             case JsonTokenType.Number:
             {
-                // double.Parse rounds to nearest like JSON.parse and gives an infinity on overflow.
+                // double.Parse rounds to nearest like JSON.parse and gives an infinity on overflow,
+                // which cannot be merged the same way everywhere (section 6.3): malformed.
                 var text = Encoding.ASCII.GetString(reader.ValueSpan);
-                return JsonData.Number(double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture));
+                var number = double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
+                if (!double.IsFinite(number))
+                {
+                    throw new SyncException(SyncErrorCodes.Malformed, "number overflows binary64");
+                }
+                return JsonData.Number(number);
             }
             case JsonTokenType.True:
                 return JsonData.True;

@@ -100,6 +100,9 @@ public class SyncFilesTests
         Assert.Equal(SyncErrorCodes.BadQr, Code(() => PairingQr.Parse(qr + "0")));
         Assert.Equal(SyncErrorCodes.BadQr, Code(() => PairingQr.Parse(qr.Replace(':', ';'))));
         Assert.Equal(SyncErrorCodes.BadQr, Code(() => PairingQr.Parse(qr[..^1] + "G")));
+        Assert.Equal(SyncErrorCodes.BadQr, Code(() => PairingQr.Parse("\u2003" + qr)));
+        Assert.Equal(SyncErrorCodes.BadQr, Code(() => PairingQr.Parse(qr.Replace("FCPAIR", "FCPA\u0131R", StringComparison.Ordinal))));
+        Assert.Equal(code.PairingSecret, PairingQr.Parse("\u00a0 " + qr + "\u00a0").PairingSecret);
         Assert.Throws<ArgumentException>(() => PairingQr.Format(new byte[15], new byte[32]));
     }
 
@@ -168,6 +171,10 @@ public class SyncFilesTests
         var tie = info with { VaultId = "019a0000-0000-7000-8000-00000000fa00" };
         Assert.Same(info, VaultFile.ChooseAmongDuplicates(new[] { later, info }));
         Assert.Same(tie, VaultFile.ChooseAmongDuplicates(new[] { info, tie }));
+        var undated = info with { CreatedAt = "yesterday", VaultId = "019a0000-0000-7000-8000-000000000000" };
+        var missing = info with { CreatedAt = null, VaultId = "019a0000-0000-7000-8000-000000000001" };
+        Assert.Same(later, VaultFile.ChooseAmongDuplicates(new[] { undated, missing, later }));
+        Assert.Same(undated, VaultFile.ChooseAmongDuplicates(new[] { missing, undated }));
         Assert.Equal(SyncErrorCodes.Malformed, Code(() => VaultFile.CheckBytes(Encoding.UTF8.GetBytes("[]"))));
     }
 

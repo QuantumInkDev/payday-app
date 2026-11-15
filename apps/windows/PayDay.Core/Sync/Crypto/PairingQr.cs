@@ -17,6 +17,8 @@ public static class PairingQr
     public const int PairingIdLength = 16;
     public const int SecretLength = 32;
 
+    private static readonly char[] TrimCharacters = { ' ', '\t', '\r', '\n', '\u00a0' };
+
     /// <summary>A new random pairing ID and secret.</summary>
     public static PairingCode NewCode()
         => new(System.Security.Cryptography.RandomNumberGenerator.GetBytes(PairingIdLength), SyncKeys.NewKey());
@@ -35,13 +37,15 @@ public static class PairingQr
     }
 
     /// <summary>
-    /// Parses scanned text: case-insensitive (ASCII letters), surrounding whitespace ignored,
-    /// anything else fails with <c>badQr</c>.
+    /// Parses scanned text exactly as section 9.1 says: trim leading and trailing characters of the
+    /// recovery phrase's separator set (space, tab, CR, LF, U+00A0) and nothing else, change ASCII
+    /// <c>a</c>–<c>z</c> to upper case and no other character, then match the whole string.
+    /// Anything else fails with <c>badQr</c>.
     /// </summary>
     public static PairingCode Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var t = text.Trim();
+        var t = text.Trim(TrimCharacters);
         var upper = new char[t.Length];
         for (var i = 0; i < t.Length; i++)
         {

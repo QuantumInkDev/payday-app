@@ -42,12 +42,25 @@ public class SyncPrimitivesTests
         => Assert.Equal(SyncErrorCodes.Malformed, Code(() => StrictJson.Parse("{\"a\":1,\"\\u0061\":2}")));
 
     [Fact]
-    public void StrictJson_KeepsOverflowingNumbersAsInfinity_ForTheReadingRuleToReject()
+    public void StrictJson_RejectsNumbersThatOverflowBinary64()
     {
-        var v = StrictJson.Parse("{\"x\":1e400,\"y\":-1e400}");
-        Assert.True(double.IsPositiveInfinity(v["x"]!.NumberValue));
-        Assert.True(double.IsNegativeInfinity(v["y"]!.NumberValue));
-        Assert.False(StrictJson.TryGetInteger(v["x"], out _));
+        Assert.Equal(SyncErrorCodes.Malformed, Code(() => StrictJson.Parse("{\"x\":1e400}")));
+        Assert.Equal(SyncErrorCodes.Malformed, Code(() => StrictJson.Parse("[-1e400]")));
+        Assert.Equal(SyncErrorCodes.Malformed, Code(() => StrictJson.Parse("{\"x\":" + new string('9', 400) + "}")));
+        Assert.Equal(1e308, StrictJson.Parse("1e308").NumberValue);
+        Assert.Equal(0, StrictJson.Parse("1e-400").NumberValue);
+    }
+
+    [Fact]
+    public void ChangeRecord_BuiltInCodeWithANonFiniteValueIsInvalid()
+    {
+        var json = JsonData.Object(
+            ("entity", JsonData.String("bill")),
+            ("id", JsonData.String("b")),
+            ("field", JsonData.String("name")),
+            ("value", JsonData.Number(double.PositiveInfinity)),
+            ("hlc", JsonData.String("01a1d9edc200-0000-0a0a0a0a0a0a0a0a")));
+        Assert.False(ChangeRecord.TryFromJson(json, out _));
     }
 
     [Fact]
@@ -133,7 +146,7 @@ public class SyncPrimitivesTests
     }
 
     [Theory]
-    [InlineData("{\"entity\":\"bill\",\"id\":\"b\",\"field\":\"name\",\"value\":1e400,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}")]
+    [InlineData("{\"entity\":\"bill\",\"id\":\"b\",\"field\":\"name\",\"value\":{\"x\":1},\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}")]
     [InlineData("{\"entity\":\"bill\",\"id\":\"b\",\"field\":\"\",\"value\":1,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}")]
     [InlineData("{\"entity\":\"bill\",\"id\":\"b\",\"field\":\"name\",\"value\":1,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\\n\"}")]
     [InlineData("{\"entity\":\"bill\",\"id\":\"b\",\"field\":\"name\",\"value\":1,\"hlc\":5}")]

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using PayDay.Sync.Json;
 using PayDay.Sync.Model;
 
@@ -75,7 +74,7 @@ public static class BackupSettings
                 return SyncDates.IsDate(raw.AsString()) ? SyncValue.String(raw.StringValue) : null;
             case SyncSettingKeys.EarlyStart:
                 if (raw.Kind == JsonDataKind.Bool) return SyncValue.Bool(raw.BoolValue);
-                return raw.AsString() is { } text ? SyncValue.Bool(string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)) : null;
+                return raw.AsString() is { } text ? SyncValue.Bool(IsAsciiTrue(text)) : null;
             case SyncSettingKeys.SafeToSpendBuffer:
             {
                 double number;
@@ -98,8 +97,10 @@ public static class BackupSettings
             {
                 if (raw.AsString() is { } t)
                 {
-                    return t.Length > 0 && t.All(c => c is >= '0' and <= '9')
-                        ? SyncValue.Number(double.Parse(t, NumberStyles.None, CultureInfo.InvariantCulture))
+                    // Digit text whose value is at most 2^53 - 1 (leading zeros allowed).
+                    if (t.Length == 0 || !t.All(c => c is >= '0' and <= '9')) return null;
+                    return ulong.TryParse(t, NumberStyles.None, CultureInfo.InvariantCulture, out var days) && days <= StrictJson.MaxSafeInteger
+                        ? SyncValue.Number(days)
                         : null;
                 }
                 return StrictJson.TryGetInteger(raw, out var n) && n >= 0 ? SyncValue.Number(n) : null;
@@ -114,32 +115,28 @@ public static class BackupSettings
     }
 
     /// <summary>
-    /// Reads the legacy <c>TypeColors</c> JSON object text. Text that is not a JSON object gives no
-    /// colours; for a key that repeats, the last value wins, as a dictionary deserializer reads it.
+    /// Reads the legacy <c>TypeColors</c> JSON object text with the strict rules of
+    /// <c>sync-protocol.md</c> 6.3 (no NaN, duplicate keys, lone surrogates or trailing text). Text
+    /// that is invalid, or valid JSON that is not an object, gives no colours.
     /// </summary>
-    private static List<(string Type, JsonData Value)> ParseLegacyTypeColors(string text)
+    private static IReadOnlyList<KeyValuePair<string, JsonData>> ParseLegacyTypeColors(string text)
     {
-        var entries = new List<(string, JsonData)>();
+        // A lone surrogate cannot be encoded as UTF-8; Encoding.UTF8 would silently replace it.
+        if (StrictJson.HasLoneSurrogate(text)) return Array.Empty<KeyValuePair<string, JsonData>>();
         try
         {
-            using var doc = JsonDocument.Parse(text);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return entries;
-            var byKey = new Dictionary<string, JsonData>(StringComparer.Ordinal);
-            var order = new List<string>();
-            foreach (var p in doc.RootElement.EnumerateObject())
-            {
-                var value = p.Value.ValueKind == JsonValueKind.String ? JsonData.String(p.Value.GetString()!) : JsonData.Null;
-                if (!byKey.ContainsKey(p.Name)) order.Add(p.Name);
-                byKey[p.Name] = value;
-            }
-            entries.AddRange(order.Select(k => (k, byKey[k])));
+            var parsed = StrictJson.Parse(text);
+            return parsed.Kind == JsonDataKind.Object ? parsed.Members : Array.Empty<KeyValuePair<string, JsonData>>();
         }
-        catch (JsonException)
+        catch (SyncException)
         {
-            // Not JSON: no colours.
+            return Array.Empty<KeyValuePair<string, JsonData>>();
         }
-        return entries;
     }
+
+    /// <summary>The whole text is <c>true</c> in any mix of ASCII upper and lower case.</summary>
+    private static bool IsAsciiTrue(string s)
+        => s.Length == 4 && (s[0] | 0x20) == 't' && (s[1] | 0x20) == 'r' && (s[2] | 0x20) == 'u' && (s[3] | 0x20) == 'e';
 
     private static bool IsHexColor(string? s)
         => s is { Length: 7 } && s[0] == '#' && s.Skip(1).All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F');

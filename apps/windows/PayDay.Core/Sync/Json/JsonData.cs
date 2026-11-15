@@ -15,8 +15,8 @@ public enum JsonDataKind
 /// <summary>
 /// An immutable parsed JSON value, as produced by <see cref="StrictJson.Parse(ReadOnlySpan{byte})"/>.
 /// Numbers are IEEE-754 binary64 values exactly as a JSON parser rounds them
-/// (<c>spec/sync-protocol.md</c> section 6.3), so a number that overflows (<c>1e400</c>) is kept as
-/// an infinity and rejected later by whichever rule reads it. Object members keep their order and
+/// (<c>spec/sync-protocol.md</c> section 6.3); the strict parser rejects a number that overflows
+/// binary64, though a value built in code may still hold one. Object members keep their order and
 /// never repeat a key.
 /// </summary>
 public sealed class JsonData

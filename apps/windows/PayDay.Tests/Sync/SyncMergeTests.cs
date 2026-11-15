@@ -167,6 +167,13 @@ public class SyncMergeTests
     [InlineData("EarlyStart", "\" true\"", "false")]
     [InlineData("EarlyStart", "true", "true")]
     [InlineData("EarlyStart", "1", null)]
+    [InlineData("EarlyStart", "\"tRuE\"", "true")]
+    [InlineData("EarlyStart", "\"true\\n\"", "false")]
+    [InlineData("ReminderDaysBefore", "\"0009007199254740991\"", "9007199254740991")]
+    [InlineData("ReminderDaysBefore", "\"9007199254740992\"", null)]
+    [InlineData("ReminderDaysBefore", "\"3\\n\"", null)]
+    [InlineData("SafeToSpendBuffer", "\"12\\n\"", null)]
+    [InlineData("SafeToSpendBuffer", "\"\u0661\u0662\"", null)]
     [InlineData("SafeToSpendBuffer", "\"-12.345\"", "-12.35")]
     [InlineData("SafeToSpendBuffer", "\"12.\"", null)]
     [InlineData("SafeToSpendBuffer", "\"1e3\"", null)]
@@ -214,6 +221,8 @@ public class SyncMergeTests
         Assert.False(migration.ContainsKey(SyncSettingKeys.NotionOwnerDeviceId));
 
         Assert.Empty(BackupSettings.MapForRestore(StrictJson.Parse("{\"TypeColors\":\"not json\"}")));
+        Assert.Empty(BackupSettings.MapForRestore(StrictJson.Parse("{\"TypeColors\":\"{\\\"Cards\\\":\\\"#123456\\\",\\\"Gym\\\":NaN}\"}")));
+        Assert.Empty(BackupSettings.MapForRestore(JsonData.Object(("TypeColors", JsonData.String("{\"Cards\":\"#123456\",\"\ud800\":\"#654321\"}")))));
         Assert.Empty(BackupSettings.MapForRestore(StrictJson.Parse("{\"TypeColors\":\"[\\\"#123456\\\"]\"}")));
     }
 

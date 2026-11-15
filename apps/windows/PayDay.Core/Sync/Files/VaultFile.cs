@@ -9,7 +9,7 @@ public sealed record VaultGeneration(long Id, string KeyCheck, string? CreatedAt
 
 /// <summary>A vault.json that passed <see cref="VaultFile.Check"/>.</summary>
 public sealed record VaultInfo(
-    string? VaultId,
+    string VaultId,
     string? CreatedAt,
     string? CreatedBy,
     long CurrentGeneration,
@@ -41,6 +41,11 @@ public static class VaultFile
             throw new SyncException(SyncErrorCodes.Malformed, "not a vault.json");
         }
         Envelope.CheckFormatVersionOf(vault);
+        var vaultId = vault["vaultId"]?.AsString();
+        if (!Uuid.IsCanonical(vaultId))
+        {
+            throw new SyncException(SyncErrorCodes.Malformed, "vaultId must be a canonical lowercase UUID");
+        }
         var gens = vault["generations"];
         if (gens is null || gens.Kind != JsonDataKind.Array || gens.Items.Count == 0)
         {
@@ -65,7 +70,7 @@ public static class VaultFile
         {
             throw new SyncException(SyncErrorCodes.Malformed, "generation IDs must be unique and include currentGeneration");
         }
-        return new VaultInfo(vault["vaultId"]?.AsString(), vault["createdAt"]?.AsString(), vault["createdBy"]?.AsString(), current, list);
+        return new VaultInfo(vaultId!, vault["createdAt"]?.AsString(), vault["createdBy"]?.AsString(), current, list);
     }
 
     /// <summary>The generation whose key check matches <paramref name="vaultKey"/>, or null (section 7.2).</summary>
@@ -101,14 +106,16 @@ public static class VaultFile
 
     /// <summary>
     /// Picks the vault every device uses when two vault.json files exist (section 12.1): the
-    /// earliest <c>createdAt</c>, ties broken by the smaller <c>vaultId</c>.
+    /// earliest <c>createdAt</c>, ties broken by the smaller <c>vaultId</c>. A <c>createdAt</c> that is
+    /// not a valid timestamp sorts after every valid one.
     /// </summary>
     public static VaultInfo ChooseAmongDuplicates(IEnumerable<VaultInfo> candidates)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         return candidates
-            .OrderBy(v => v.CreatedAt ?? string.Empty, StringComparer.Ordinal)
-            .ThenBy(v => v.VaultId ?? string.Empty, StringComparer.Ordinal)
+            .OrderBy(v => Model.SyncDates.IsTimestamp(v.CreatedAt) ? 0 : 1)
+            .ThenBy(v => Model.SyncDates.IsTimestamp(v.CreatedAt) ? v.CreatedAt : string.Empty, StringComparer.Ordinal)
+            .ThenBy(v => v.VaultId, StringComparer.Ordinal)
             .First();
     }
 }
