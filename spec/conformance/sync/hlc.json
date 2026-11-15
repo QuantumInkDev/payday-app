@@ -261,6 +261,46 @@
       }
     },
     {
+      "name": "decode rejects a trailing newline",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a\n"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects a trailing CR LF",
+      "input": {
+        "fn": "decode",
+        "hlc": "01a1d9edc200-0000-0a0a0a0a0a0a0a0a\r\n"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects a leading newline",
+      "input": {
+        "fn": "decode",
+        "hlc": "\n01a1d9edc200-0000-0a0a0a0a0a0a0a0a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "decode rejects non-ASCII digits",
+      "input": {
+        "fn": "decode",
+        "hlc": "٠١a١d٩edc٢٠٠-٠٠٠٠-٠a٠a٠a٠a٠a٠a٠a٠a"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
       "name": "compare: smaller wall is earlier",
       "input": {
         "fn": "compare",

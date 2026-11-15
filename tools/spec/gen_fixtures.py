@@ -44,6 +44,14 @@ EXTRA_1 = "019a0000-0000-7000-8000-0000000000e1"
 EXTRA_2 = "019a0000-0000-7000-8000-0000000000e2"
 VAULT_ID = "019a0000-0000-7000-8000-00000000fa01"
 
+NONASCII_DIGITS = {str(i): ch for i, ch in enumerate("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669")}
+
+
+def non_ascii_digits(text):
+    """Replace ASCII digits with Arabic-Indic digits (which \\d and int() accept in some languages)."""
+    return "".join(NONASCII_DIGITS.get(c, c) for c in text)
+
+
 P1, P2, P3 = "2026-10-29", "2026-11-12", "2026-11-26"  # pay-period keys from anchor 2025-03-20
 
 
@@ -192,6 +200,10 @@ def gen_hlc():
         ("decode rejects non-hex device", h(0)[:-1] + "g"),
         ("decode rejects empty string", ""),
         ("decode rejects 13-digit wall", "0" + h(0)),
+        ("decode rejects a trailing newline", h(0) + "\n"),
+        ("decode rejects a trailing CR LF", h(0) + "\r\n"),
+        ("decode rejects a leading newline", "\n" + h(0)),
+        ("decode rejects non-ASCII digits", non_ascii_digits(h(0))),
     ]
     for name, s in bad:
         add(name, {"fn": "decode", "hlc": s}, expect_error(H.decode, s))
@@ -363,6 +375,38 @@ def gen_ids():
                   ("0a0a0a0a0a0a0a0", False), ("0a0a0a0a0a0a0a0a0", False), ("0a0a0a0a-0a0a0a0a", False)]:
         add(f"device ID {s!r}", {"fn": "isDeviceId", "id": s}, {"valid": ok})
 
+    # Whole-string, ASCII-only matching (sync-protocol.md 1).
+    for name, fn, args in [
+        ("regular payment ID rejects a period key with a trailing newline", "regularPaymentId",
+         {"billId": BILL_1, "periodKey": P2 + "\n"}),
+        ("regular payment ID rejects a period key in non-ASCII digits", "regularPaymentId",
+         {"billId": BILL_1, "periodKey": non_ascii_digits(P2)}),
+        ("regular payment ID rejects a bill ID with a trailing newline", "regularPaymentId",
+         {"billId": BILL_1 + "\n", "periodKey": P2}),
+        ("paycheck ID rejects a pay date in full-width digits", "paycheckId",
+         {"incomeSourceId": INCOME_1, "payDate": "".join(chr(0xFF10 + int(c)) if c.isdigit() else c
+                                                          for c in "2026-11-20")}),
+    ]:
+        f = {"regularPaymentId": I.regular_payment_id, "paycheckId": I.paycheck_id}[fn]
+        add(name, dict({"fn": fn}, **args), expect_error(f, *args.values()))
+    for name, paid in [("legacy payment ID rejects a paidAt with a trailing newline", "2026-10-30T15:04:05.000Z\n"),
+                       ("legacy payment ID rejects a paidAt in non-ASCII digits",
+                        non_ascii_digits("2026-10-30T15:04:05.000Z"))]:
+        args = (BILL_1, P1, 5500, paid, 1)
+        add(name, {"fn": "legacyPaymentId", "billId": BILL_1, "periodKey": P1, "amountCents": 5500,
+                   "paidAt": paid, "occurrence": 1}, expect_error(I.legacy_payment_id, *args))
+    add("legacy balance snapshot ID rejects a date with a trailing newline",
+        {"fn": "legacySnapshotId", "snapshotDate": "2026-10-29\n", "totalCents": 1, "occurrence": 1},
+        expect_error(I.legacy_snapshot_id, "2026-10-29\n", 1, 1))
+    for old in [BILL_1 + "\n", "13\n", " 13"]:
+        add(f"migrate bill ID {old!r} (not a UUID, so a legacy ID kept exactly)", {"fn": "migrateBillId", "id": old},
+            {"name": I.name_legacy_bill(old), "id": I.migrate_bill_id(old)},
+            note="Whole-string matching: a UUID with a trailing newline is not UUID-shaped; the legacy name keeps "
+                 "every character, so this differs from the ID without it")
+    add("inspect a UUID with a trailing newline", {"fn": "inspectUuid", "id": BILL_1 + "\n"}, I.inspect_uuid(BILL_1 + "\n"))
+    for d in [DEV_A + "\n", non_ascii_digits(DEV_A)]:
+        add(f"device ID {d!r}", {"fn": "isDeviceId", "id": d}, {"valid": H.is_device_id(d)})
+
     write("ids.json", "Deterministic IDs (UUIDv5), UUIDv7 layout, legacy ID migration, device IDs "
           "(sync-protocol.md section 3; data-model.md section 8).", cases)
 
@@ -509,12 +553,22 @@ def gen_crypto():
         {"qr": FL.pairing_qr(PAIR_ID, PAIR_SECRET), "path": pair_path})
     qr = FL.pairing_qr(PAIR_ID, PAIR_SECRET)
     for name, text in [("parse pairing QR", qr), ("parse pairing QR typed in lowercase", qr.lower()),
-                       ("parse pairing QR with surrounding whitespace", "  " + qr + "\n")]:
+                       ("parse pairing QR with surrounding whitespace", "  " + qr + "\n"),
+                       ("parse pairing QR with surrounding tabs, CR LF and no-break spaces",
+                        "\t\u00a0" + qr + "\r\n\u00a0")]:
         pid, sec = FL.parse_pairing_qr(text)
         add(name, {"fn": "parsePairingQr", "qr": text}, {"pairingIdHex": pid.hex(), "pairingSecretHex": sec.hex()})
     for name, text in [("pairing QR with unknown version is rejected", qr.replace("FCPAIR:1:", "FCPAIR:2:")),
                        ("pairing QR with a short secret is rejected", qr[:-2]),
-                       ("pairing QR with a different prefix is rejected", qr.replace("FCPAIR", "FCPAIRING"))]:
+                       ("pairing QR with a different prefix is rejected", qr.replace("FCPAIR", "FCPAIRING")),
+                       ("pairing QR with dotless i (U+0131) is rejected: case folding is ASCII only",
+                        qr.replace("FCPAIR", "FCPA\u0131R")),
+                       ("pairing QR with an em space (U+2003) around it is rejected",
+                        "\u2003" + qr),
+                       ("pairing QR with an ideographic space (U+3000) around it is rejected", qr + "\u3000"),
+                       ("pairing QR with a space inside is rejected", qr.replace(":", ": ", 1)),
+                       ("pairing QR in full-width characters is rejected",
+                        "".join(chr(ord(c) + 0xFEE0) if "!" <= c <= "~" else c for c in qr))]:
         add(name, {"fn": "parsePairingQr", "qr": text}, expect_error(FL.parse_pairing_qr, text))
 
     write("crypto.json", "Key derivation, AES-256-GCM file framing, key check values and the pairing QR "
@@ -604,6 +658,9 @@ def gen_files():
         f"devices/{DEV_A}/000001.CHG", f"devices/{DEV_A}/000001.chg.tmp", f"devices/{DEV_A.upper()}/000001.chg",
         f"/devices/{DEV_A}/000001.chg", f"devices/{DEV_A}/sub/000001.chg", f"snapshots/{snap_hlc.upper()}.snap",
         "snapshots/latest.snap", "pairing/" + "AB" * 16 + ".pair", "vault.json",
+        f"devices/{DEV_A}/000001.chg\n", f"snapshots/{snap_hlc}.snap\n", "pairing/" + "ab" * 16 + ".pair\n",
+        f"devices/{DEV_A}/" + non_ascii_digits("000001") + ".chg", f"devices/{DEV_A}\n/000001.chg",
+        f"snapshots/{snap_hlc}\n.snap",
     ]
     for p in paths:
         try:
@@ -688,6 +745,16 @@ def gen_files():
     raw_env("an integer above 2^53 - 1 is malformed", chg_text("9007199254740993"), chg_path)
     raw_env("2^53 - 1 is a valid integer (here it is just the wrong seq)", chg_text("9007199254740991"), chg_path)
     raw_env("1e400 overflows binary64 and is malformed", chg_text("1e400"), chg_path)
+    raw_env("a payload that is a JSON array is malformed", b"[]", chg_path,
+            note="The root must be an object; this branch was reached by no fixture before")
+    raw_env("a payload that is a JSON string is malformed", b'"changes"', chg_path)
+    rec_text = ('{"entity":"bill","id":"%s","field":"payment","value":%%s,"hlc":"%s"}' % (BILL_1, h(0))).encode()
+    raw_env("a record value that overflows binary64 makes the payload malformed",
+            chg_text("3").replace(b'"records":[]', b'"records":[' + (rec_text % b"1e400") + b']'), chg_path,
+            note="Every JSON number is the binary64 value it parses to; one that overflows cannot be merged the same "
+                 "way everywhere, so the whole payload is rejected")
+    raw_env("a 400-digit integer record value makes the payload malformed",
+            chg_text("3").replace(b'"records":[]', b'"records":[' + (rec_text % (b"9" * 400)) + b']'), chg_path)
     raw_env("trailing text after the object is malformed", chg_text("3") + b" x", chg_path)
     raw_env("whitespace around the object is fine", b" \n" + chg_text("3") + b"\n", chg_path)
 
@@ -699,6 +766,11 @@ def gen_files():
     env("pairing generation true is malformed", dict(good_pair, generation=True), pair_path)
     env("pairing vault key must be 64 lowercase hex digits", dict(good_pair, vaultKey=K1.hex().upper()), pair_path)
     env("pairing expiresAt must be a timestamp", dict(good_pair, expiresAt="in ten minutes"), pair_path)
+    env("pairing expiresAt with a trailing newline is malformed", dict(good_pair, expiresAt=iso(600) + "\n"), pair_path)
+    env("pairing expiresAt in non-ASCII digits is malformed",
+        dict(good_pair, expiresAt=non_ascii_digits(iso(600))), pair_path)
+    env("pairing vault key with a trailing newline is malformed", dict(good_pair, vaultKey=K1.hex() + "\n"), pair_path)
+    env("pairing device ID with a trailing newline is malformed", dict(good_pair, deviceId=DEV_A + "\n"), pair_path)
 
     vault = {
         "type": "futurecheck-vault", "formatVersion": 1, "vaultId": VAULT_ID, "createdAt": iso(0),
@@ -727,6 +799,16 @@ def gen_files():
     vlt("vault.json currentGeneration true is malformed", dict(vault, currentGeneration=True))
     vlt("vault.json generation id true is malformed", dict(vault, generations=[dict(gen1, id=True)]))
     vlt("vault.json generation id 1.0 is accepted", dict(vault, generations=[dict(gen1, id=1.0)]))
+    vlt("vault.json type must be exactly futurecheck-vault", dict(vault, type="futurecheck-vault2"))
+    vlt_text("vault.json that is not an object is malformed", "[]")
+    vlt("vault.json vaultId is required", {k: v for k, v in vault.items() if k != "vaultId"})
+    vlt("vault.json vaultId must be lowercase", dict(vault, vaultId=VAULT_ID.upper()))
+    vlt("vault.json vaultId must be a string", dict(vault, vaultId=12345))
+    vlt("vault.json vaultId must be a UUID", dict(vault, vaultId="my-vault"))
+    vlt("vault.json vaultId with a trailing newline is malformed", dict(vault, vaultId=VAULT_ID + "\n"))
+    vlt("vault.json vaultId may be any canonical UUID version", dict(vault, vaultId="9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b"))
+    vlt("vault.json keyCheck with a trailing newline is malformed",
+        dict(vault, generations=[dict(gen1, keyCheck=gen1["keyCheck"] + "\n")]))
     vlt_text("vault.json with a duplicate key is malformed",
              json.dumps(vault, separators=(",", ":"))[:-1] + ',"currentGeneration":1}')
 
@@ -1224,6 +1306,86 @@ def gen_merge():
                                   "TypeColors": '{"Cards":"#fd79a8","Gym":"#00B894","Bad":"red"}',
                                   "SafeToSpendBuffer": "75.5", "ReminderDaysBefore": "3",
                                   "SchemaVersion": "2", "Theme": "Light"}}}))
+
+    full_settings = W1 + [
+        r("setting", "PayAnchor", "value", "2025-03-27", h(5)),
+        r("setting", "EarlyStart", "value", True, h(5)),
+        r("setting", "SafeToSpendBuffer", "value", 100.0, h(5)),
+        r("setting", "ReminderDaysBefore", "value", 5, h(5)),
+        r("setting", "TypeColor/Cards", "value", "#123456", h(5)),
+        r("setting", "TypeColor/Loans", "value", "#6C5CE7", h(5)),
+    ]
+
+    def restore_settings_case(name, settings, expect_fields, note):
+        C.append(merge_case(
+            name, full_settings, {"fields": {("setting", k): {"value": v} for k, v in expect_fields.items()}}, note,
+            edit={"seen": list(range(len(full_settings))),
+                  "op": {"op": "restore", "hlc": h(1000), "rows": plan_rows, "settings": settings}}))
+
+    restore_settings_case(
+        "restore ignores out-of-range money in a backup setting",
+        {"SafeToSpendBuffer": "10000000000000", "PayAnchor": "2025-03-20"},
+        {"SafeToSpendBuffer": None, "PayAnchor": "2025-03-20"},
+        "1e13 is outside the money range (data-model.md 3), so the value is not used: the setting is treated as "
+        "missing from the backup and reset to its default. It must not crash or be written.")
+    restore_settings_case(
+        "restore ignores out-of-range money given as a JSON number",
+        {"SafeToSpendBuffer": -1e13}, {"SafeToSpendBuffer": None}, "Same rule for a numeric value.")
+    restore_settings_case(
+        "restore setting text must match the whole value, in ASCII",
+        {"PayAnchor": "2025-03-20\n", "SafeToSpendBuffer": "75.5\n", "ReminderDaysBefore": non_ascii_digits("3"),
+         "TypeColor/Cards": "#FD79A8\n", "EarlyStart": "true\n"},
+        {"PayAnchor": None, "SafeToSpendBuffer": None, "ReminderDaysBefore": None, "TypeColor/Cards": None,
+         "EarlyStart": False, "TypeColor/Loans": None},
+        "A trailing newline or non-ASCII digits make the text unusable (not used, so reset). EarlyStart is "
+        "'true' only for exactly t-r-u-e in any ASCII case; anything else is false.")
+    restore_settings_case(
+        "restore accepts typed setting values and ASCII case-insensitive true",
+        {"EarlyStart": "TRUE", "ReminderDaysBefore": 4.0, "SafeToSpendBuffer": 12.345, "PayAnchor": "2025-03-20"},
+        {"EarlyStart": True, "ReminderDaysBefore": 4, "SafeToSpendBuffer": 12.35, "PayAnchor": "2025-03-20"},
+        "An integral JSON number is an int; a JSON number is money (rounded to cents).")
+    restore_settings_case(
+        "restore accepts a JSON boolean EarlyStart",
+        {"EarlyStart": False}, {"EarlyStart": False}, "A backup written by a later version may hold typed values.")
+    restore_settings_case(
+        "restore drops a negative or too-large reminder setting",
+        {"ReminderDaysBefore": "9" * 20}, {"ReminderDaysBefore": None},
+        "Digit text above 2^53 - 1 is not used, like an integer field (sync-protocol.md 6.3).")
+    restore_settings_case(
+        "legacy TypeColors: only invalid entries are dropped",
+        {"TypeColors": '{"Cards":"#fd79a8","Loans":5,"Bills":"#B2945B\\n","":"#000000","Gym":null}'},
+        {"TypeColor/Cards": "#FD79A8", "TypeColor/Loans": None},
+        "A number, a value with a trailing newline, an empty type name and null are each dropped; the valid Cards "
+        "entry is kept. (Today's C# would discard the whole map when one value is not a string; the spec keeps "
+        "the valid entries.)")
+    for label, text in [("NaN", '{"Cards":"#FD79A8","Loans":NaN}'), ("Infinity", '{"Cards":"#FD79A8","x":Infinity}'),
+                        ("a duplicate key", '{"Cards":"#FD79A8","Cards":"#000000"}'),
+                        ("trailing text", '{"Cards":"#FD79A8"} x'), ("not an object", '["#FD79A8"]')]:
+        restore_settings_case(
+            f"legacy TypeColors with {label} gives no colours", {"TypeColors": text},
+            {"TypeColor/Cards": None, "TypeColor/Loans": None},
+            "TypeColors is parsed with the strict JSON rules (sync-protocol.md 6.3). Invalid JSON, or JSON that is "
+            "not an object, gives no colours, so every colour resets.")
+
+    C.append(merge_case(
+        "records that are not objects are ignored", W1 + ["bill", 5, None, [r("bill", BILL_1, "name", "x", h(9))]],
+        {"fields": {("bill", BILL_1): {"name": "Woodgrove Rewards"}}, "live": {"bill": [BILL_1]}},
+        "Each element of records must be an object; anything else is an invalid record and is skipped."))
+
+    C.append(merge_case(
+        "money fields of the wrong type or out of range read as 0", [
+            r("bill", BILL_1, "deleted", False, h(0)),
+            r("bill", BILL_1, "remainingCheckpoint", 1000.0, h(0)),
+            r("bill", BILL_2, "deleted", False, h(0)),
+            r("bill", BILL_2, "remainingCheckpoint", "900", h(0)),
+            r("payment", EXTRA_1, "amountPaid", "100", h(10)), r("payment", EXTRA_1, "billId", BILL_1, h(10)),
+            r("payment", EXTRA_1, "deleted", False, h(10)), r("payment", EXTRA_1, "kind", "Extra", h(10)),
+            r("payment", EXTRA_2, "amountPaid", 1e13, h(11)), r("payment", EXTRA_2, "billId", BILL_1, h(11)),
+            r("payment", EXTRA_2, "deleted", False, h(11)), r("payment", EXTRA_2, "kind", "Extra", h(11)),
+        ],
+        {"remaining": {BILL_1: 1000.0, BILL_2: 0.0}},
+        "A string amount and an amount at or above 1e13 read as the default 0 (data-model.md 1.2 and 3); a "
+        "string checkpoint reads as 0."))
 
     a_other = base1000 + play(base1000, [op_mark(BILL_1, P2, 100.0, h(100)), op_remaining(BILL_1, 880.0, h(200))])
     b_other = play(base1000 + mark(BILL_1, P2, 100.0, h(100)), [op_mark(BILL_1, P3, 50.0, h(250, 0, DEV_B))])
