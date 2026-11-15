@@ -9,6 +9,8 @@ public enum JSONParseError: Error, Sendable, Equatable {
     case duplicateKey(String)
     case loneSurrogate
     case tooDeep
+    /// A number that overflows binary64 (`1e400`, a 400-digit integer); rejected in strict mode.
+    case numberOverflow(offset: Int)
 }
 
 /// An RFC 8259 JSON parser over UTF-8 bytes.
@@ -19,25 +21,34 @@ public enum JSONParseError: Error, Sendable, Equatable {
 /// characters in strings. Duplicate object keys are rejected unless `allowDuplicateKeys` is set
 /// (the backup reader needs them, because today's C# reader keeps the last one).
 ///
-/// Numbers parse to the nearest binary64 value; a literal too large for binary64 (`1e400`) parses
-/// to an infinity so the caller decides (an integer field rejects it, a record value is invalid).
+/// Numbers parse to the nearest binary64 value. In strict mode a number that overflows binary64
+/// (`1e400`) is an error (spec/sync-protocol.md section 6.3); in lenient mode it parses to an
+/// infinity and the caller decides.
 public struct JSONParser {
     public var allowDuplicateKeys: Bool
+    public var rejectNumberOverflow: Bool
     public var maxDepth: Int
 
-    public init(allowDuplicateKeys: Bool = false, maxDepth: Int = 512) {
+    public init(allowDuplicateKeys: Bool = false, rejectNumberOverflow: Bool = true, maxDepth: Int = 512) {
         self.allowDuplicateKeys = allowDuplicateKeys
+        self.rejectNumberOverflow = rejectNumberOverflow
         self.maxDepth = maxDepth
     }
 
-    /// Strict parse, duplicates rejected: the sync protocol's payload and vault.json rules.
+    /// Strict parse: duplicates and binary64 overflow rejected. The sync protocol's payload,
+    /// vault.json and legacy `TypeColors` rules.
     public static func parseStrict(_ bytes: some Collection<UInt8>) throws(JSONParseError) -> JSONValue {
         try JSONParser().parse(bytes)
     }
 
-    /// Parse that keeps duplicate keys (lookups see the last one).
+    public static func parseStrict(_ text: String) throws(JSONParseError) -> JSONValue {
+        try parseStrict(Array(text.utf8))
+    }
+
+    /// Parse that keeps duplicate keys (lookups see the last one) and lets numbers overflow to
+    /// infinity.
     public static func parseLenient(_ bytes: some Collection<UInt8>) throws(JSONParseError) -> JSONValue {
-        try JSONParser(allowDuplicateKeys: true).parse(bytes)
+        try JSONParser(allowDuplicateKeys: true, rejectNumberOverflow: false).parse(bytes)
     }
 
     public static func parseLenient(_ text: String) throws(JSONParseError) -> JSONValue {
@@ -50,7 +61,8 @@ public struct JSONParser {
             throw .byteOrderMark
         }
         guard String(validating: bytes, as: UTF8.self) != nil else { throw .invalidUTF8 }
-        var cursor = Cursor(bytes: bytes, allowDuplicateKeys: allowDuplicateKeys, maxDepth: maxDepth)
+        var cursor = Cursor(bytes: bytes, allowDuplicateKeys: allowDuplicateKeys,
+                            rejectNumberOverflow: rejectNumberOverflow, maxDepth: maxDepth)
         cursor.skipWhitespace()
         let value = try cursor.parseValue(depth: 0)
         cursor.skipWhitespace()
@@ -62,12 +74,14 @@ public struct JSONParser {
 private struct Cursor {
     let bytes: [UInt8]
     let allowDuplicateKeys: Bool
+    let rejectNumberOverflow: Bool
     let maxDepth: Int
     var index = 0
 
-    init(bytes: [UInt8], allowDuplicateKeys: Bool, maxDepth: Int) {
+    init(bytes: [UInt8], allowDuplicateKeys: Bool, rejectNumberOverflow: Bool, maxDepth: Int) {
         self.bytes = bytes
         self.allowDuplicateKeys = allowDuplicateKeys
+        self.rejectNumberOverflow = rejectNumberOverflow
         self.maxDepth = maxDepth
     }
 
@@ -254,6 +268,7 @@ private struct Cursor {
         let literal = String(decoding: bytes[start..<index], as: UTF8.self)
         // Swift's Double(String) is correctly rounded and gives ±infinity on overflow.
         guard let value = Double(literal) else { throw .unexpectedByte(offset: start) }
+        if rejectNumberOverflow && !value.isFinite { throw .numberOverflow(offset: start) }
         return JSONNumber(value: value, literal: literal)
     }
 

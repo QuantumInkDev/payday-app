@@ -142,7 +142,8 @@ public enum SyncFiles {
 
     /// A checked vault.json (section 7).
     public struct Vault: Sendable, Hashable {
-        public let vaultId: String?
+        /// A canonical lowercase UUID.
+        public let vaultId: String
         public let currentGeneration: Int64
         /// Generation IDs, sorted.
         public let generations: [Int64]
@@ -153,6 +154,7 @@ public enum SyncFiles {
     public static func checkVault(_ vault: JSONValue) throws(SyncError) -> Vault {
         guard case .object(let obj) = vault, obj["type"]?.stringValue == "futurecheck-vault" else { throw .malformed }
         try checkFormatVersion(obj)
+        guard let vaultId = obj["vaultId"]?.stringValue, SyncIDs.isCanonicalUUID(vaultId) else { throw .malformed }
         guard case .array(let gens)? = obj["generations"], !gens.isEmpty else { throw .malformed }
         var ids: [Int64] = []
         var checks: [Int64: String] = [:]
@@ -165,7 +167,7 @@ public enum SyncFiles {
         guard Set(ids).count == ids.count, let current = asInt(obj["currentGeneration"]), ids.contains(current) else {
             throw .malformed
         }
-        return Vault(vaultId: obj["vaultId"]?.stringValue, currentGeneration: current, generations: ids.sorted(), keyChecks: checks)
+        return Vault(vaultId: vaultId, currentGeneration: current, generations: ids.sorted(), keyChecks: checks)
     }
 
     /// Parses and checks vault.json text strictly.
@@ -238,9 +240,16 @@ public enum SyncFiles {
         "FCPAIR:1:" + Hex.encode(pairingId, uppercase: true) + ":" + Hex.encode(secret, uppercase: true)
     }
 
-    /// Parses a scanned code: case-insensitive, surrounding white space ignored; else `badQr`.
+    /// Parses a scanned code (section 9.1): trims leading and trailing characters of the recovery
+    /// phrase's separator set only, folds ASCII `a`-`z` to upper case only, then the whole string
+    /// must be `FCPAIR:1:<32 hex>:<64 hex>`; else `badQr`.
     public static func parsePairingQr(_ text: String) throws(SyncError) -> (pairingId: [UInt8], secret: [UInt8]) {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        var scalars = Array(text.unicodeScalars)
+        while let f = scalars.first, RecoveryPhrase.separators.contains(f) { scalars.removeFirst() }
+        while let l = scalars.last, RecoveryPhrase.separators.contains(l) { scalars.removeLast() }
+        var folded = String.UnicodeScalarView()
+        for s in scalars { folded.append(s.value >= 0x61 && s.value <= 0x7A ? Unicode.Scalar(s.value - 0x20)! : s) }
+        let t = String(folded)
         let parts = t.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 4, parts[0] == "FCPAIR", parts[1] == "1",
               isUpperHex(parts[2], count: 32), isUpperHex(parts[3], count: 64),

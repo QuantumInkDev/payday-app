@@ -34,6 +34,24 @@ struct PackageChecks {
         #expect(try Money.round2(x) == Double(cents) / 100)
     }
 
+    /// Lone-surrogate shapes the fixtures do not reach: a lead surrogate followed by an escape
+    /// that is not a trail surrogate, and a trail surrogate on its own. All are `malformed`.
+    @Test(arguments: [#""\ud800A""#, #""\ud800\ud800""#, #""\udc00""#, #""x\udfffy""#])
+    func loneSurrogateEscapesAreMalformed(_ json: String) {
+        let payload = #"{"type":"changes","formatVersion":1,"vaultId":"019a0000-0000-7000-8000-00000000fa01","deviceId":"0a0a0a0a0a0a0a0a","seq":3,"records":[],"note":"# + json + "}"
+        #expect(throws: SyncError.malformed) { try SyncFiles.parsePayload(Array(payload.utf8)) }
+        #expect(throws: JSONParseError.loneSurrogate) { try JSONParser.parseLenient(json) }
+    }
+
+    /// A backup whose bills, payments or snapshots list holds a `null` entry is rejected (today's
+    /// C# reader would crash on it later instead).
+    @Test(arguments: ["bills", "payments", "snapshots"])
+    func backupWithNullEntryIsRejected(_ key: String) {
+        #expect(throws: BackupError.wrongType("\(key)[0]")) {
+            try BackupFormat.parse(text: #"{"formatVersion":1,"exportedAt":"","# + "\"\(key)\":[null]}")
+        }
+    }
+
     @Test func moneyRangeIsEnforced() {
         #expect(throws: MoneyError.outOfRange) { try Money.cents(1e13) }
         #expect(throws: MoneyError.outOfRange) { try Money.cents(.nan) }

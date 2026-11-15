@@ -159,7 +159,7 @@ public enum BackupSettingsMapping {
     public static func map(_ raw: JSONObject) -> [String: RecordValue] {
         var out: [String: RecordValue] = [:]
         if case .string(let text)? = raw["TypeColors"],
-           case .object(let colors)? = try? JSONParser.parseLenient(text) {
+           case .object(let colors)? = try? JSONParser.parseStrict(text) {
             for m in colors where !m.key.isEmpty {
                 let key = SettingKey.typeColor(m.key)
                 if let v = mapOne(key, m.value) { out[key] = v }
@@ -183,7 +183,7 @@ public enum BackupSettingsMapping {
         case SettingKey.earlyStart:
             if let b = raw.boolValue { return .bool(b) }
             guard let s = raw.stringValue else { return nil }
-            return .bool(s.lowercased() == "true")
+            return .bool(SyncIDs.asciiLowercased(s) == "true")
         case SettingKey.safeToSpendBuffer:
             var d: Double?
             if let s = raw.stringValue, isDecimalText(s) { d = Double(s) }
@@ -192,7 +192,8 @@ public enum BackupSettingsMapping {
             return .number(r)
         case SettingKey.reminderDaysBefore:
             if let s = raw.stringValue, !s.isEmpty, s.utf8.allSatisfy({ $0 >= 0x30 && $0 <= 0x39 }) {
-                return Double(s).map(RecordValue.number)
+                guard let v = Int64(s), v <= SyncFiles.maxSafeInteger else { return nil }
+                return .number(Double(v))
             }
             guard let i = SyncFiles.asInt(raw), i >= 0 else { return nil }
             return .number(Double(i))
