@@ -50,7 +50,7 @@ public sealed class SyncSafetyTests : IDisposable
     {
         await _env.InitializeAsync();
         _env.InsertLegacyData();
-        SqliteConnection.ClearAllPools();
+        SqliteTestFiles.ClearPoolsFor(_env.Path);
         var before = File.ReadAllBytes(_env.Path);
 
         // Exactly what App.OnLaunched does, then every page's load through the routing write path.
@@ -74,7 +74,7 @@ public sealed class SyncSafetyTests : IDisposable
         }
         await _env.Db.InitializeAsync();
 
-        SqliteConnection.ClearAllPools();
+        SqliteTestFiles.ClearPoolsFor(_env.Path);
         Assert.Equal(before, File.ReadAllBytes(_env.Path));
         Assert.False(File.Exists(_env.Path + "-journal"));
         Assert.False(File.Exists(_env.Path + "-wal"));

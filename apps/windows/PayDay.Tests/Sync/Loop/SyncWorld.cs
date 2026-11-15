@@ -49,7 +49,7 @@ internal sealed class SyncWorld : IDisposable
     /// <summary>Copies a device's database file, as a cloned disk or restored app data would.</summary>
     public string CloneDatabase(SyncDevice device)
     {
-        SqliteConnection.ClearAllPools();
+        SqliteTestFiles.ClearPoolsFor(device.Env.Path);
         var copy = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"payday-test-clone-{Guid.NewGuid():N}.db");
         File.Copy(device.Env.Path, copy);
         _extraFiles.Add(copy);
@@ -66,9 +66,9 @@ internal sealed class SyncWorld : IDisposable
     public void Dispose()
     {
         foreach (var d in _devices) d.Dispose();
-        SqliteConnection.ClearAllPools();
         foreach (var f in _extraFiles)
         {
+            SqliteTestFiles.ClearPoolsFor(f);
             try
             {
                 if (File.Exists(f)) File.Delete(f);
