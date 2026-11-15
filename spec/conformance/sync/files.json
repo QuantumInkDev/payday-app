@@ -232,6 +232,66 @@
       }
     },
     {
+      "name": "parse path 'devices/0a0a0a0a0a0a0a0a/000001.chg\\n'",
+      "input": {
+        "fn": "parsePath",
+        "path": "devices/0a0a0a0a0a0a0a0a/000001.chg\n"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap\\n'",
+      "input": {
+        "fn": "parsePath",
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a.snap\n"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'pairing/abababababababababababababababab.pair\\n'",
+      "input": {
+        "fn": "parsePath",
+        "path": "pairing/abababababababababababababababab.pair\n"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'devices/0a0a0a0a0a0a0a0a/٠٠٠٠٠١.chg'",
+      "input": {
+        "fn": "parsePath",
+        "path": "devices/0a0a0a0a0a0a0a0a/٠٠٠٠٠١.chg"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'devices/0a0a0a0a0a0a0a0a\\n/000001.chg'",
+      "input": {
+        "fn": "parsePath",
+        "path": "devices/0a0a0a0a0a0a0a0a\n/000001.chg"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
+      "name": "parse path 'snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a\\n.snap'",
+      "input": {
+        "fn": "parsePath",
+        "path": "snapshots/01a1d9f6e9c0-0000-0a0a0a0a0a0a0a0a\n.snap"
+      },
+      "expected": {
+        "error": "badPath"
+      }
+    },
+    {
       "name": "valid change file envelope",
       "input": {
         "fn": "checkEnvelope",
@@ -1624,6 +1684,56 @@
       }
     },
     {
+      "name": "a payload that is a JSON array is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "[]"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "The root must be an object; this branch was reached by no fixture before"
+    },
+    {
+      "name": "a payload that is a JSON string is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "\"changes\""
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "a record value that overflows binary64 makes the payload malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[{\"entity\":\"bill\",\"id\":\"019a0000-0000-7000-8000-0000000000b1\",\"field\":\"payment\",\"value\":1e400,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}]}"
+      },
+      "expected": {
+        "error": "malformed"
+      },
+      "note": "Every JSON number is the binary64 value it parses to; one that overflows cannot be merged the same way everywhere, so the whole payload is rejected"
+    },
+    {
+      "name": "a 400-digit integer record value makes the payload malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "path": "devices/0a0a0a0a0a0a0a0a/000003.chg",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+        "payloadText": "{\"type\":\"changes\",\"formatVersion\":1,\"vaultId\":\"019a0000-0000-7000-8000-00000000fa01\",\"deviceId\":\"0a0a0a0a0a0a0a0a\",\"seq\":3,\"records\":[{\"entity\":\"bill\",\"id\":\"019a0000-0000-7000-8000-0000000000b1\",\"field\":\"payment\",\"value\":9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,\"hlc\":\"01a1d9edc200-0000-0a0a0a0a0a0a0a0a\"}]}"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
       "name": "trailing text after the object is malformed",
       "input": {
         "fn": "checkEnvelope",
@@ -1739,6 +1849,86 @@
           "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
           "deviceId": "0a0a0a0a0a0a0a0a",
           "expiresAt": "in ten minutes"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing expiresAt with a trailing newline is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "expiresAt": "2026-11-14T12:10:00.000Z\n"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing expiresAt in non-ASCII digits is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "expiresAt": "٢٠٢٦-١١-١٤T١٢:١٠:٠٠.٠٠٠Z"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing vault key with a trailing newline is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5\n",
+          "deviceId": "0a0a0a0a0a0a0a0a",
+          "expiresAt": "2026-11-14T12:10:00.000Z"
+        },
+        "path": "pairing/abababababababababababababababab.pair",
+        "vaultId": "019a0000-0000-7000-8000-00000000fa01"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "pairing device ID with a trailing newline is malformed",
+      "input": {
+        "fn": "checkEnvelope",
+        "payload": {
+          "type": "pairing",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "generation": 1,
+          "vaultKey": "f37bab15f8502440f593435afe8aefac43ad24eb5f5a77c903c93c2e8ab8cdc5",
+          "deviceId": "0a0a0a0a0a0a0a0a\n",
+          "expiresAt": "2026-11-14T12:10:00.000Z"
         },
         "path": "pairing/abababababababababababababababab.pair",
         "vaultId": "019a0000-0000-7000-8000-00000000fa01"
@@ -1898,6 +2088,210 @@
         "generations": [
           1
         ]
+      }
+    },
+    {
+      "name": "vault.json type must be exactly futurecheck-vault",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault2",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json that is not an object is malformed",
+      "input": {
+        "fn": "checkVault",
+        "vaultText": "[]"
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId is required",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId must be lowercase",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "019A0000-0000-7000-8000-00000000FA01",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId must be a string",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": 12345,
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId must be a UUID",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "my-vault",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId with a trailing newline is malformed",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01\n",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
+      }
+    },
+    {
+      "name": "vault.json vaultId may be any canonical UUID version",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "9f6c1e2a-3b4d-4e5f-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "currentGeneration": 1,
+        "generations": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "vault.json keyCheck with a trailing newline is malformed",
+      "input": {
+        "fn": "checkVault",
+        "vault": {
+          "type": "futurecheck-vault",
+          "formatVersion": 1,
+          "vaultId": "019a0000-0000-7000-8000-00000000fa01",
+          "createdAt": "2026-11-14T12:00:00.000Z",
+          "createdBy": "0a0a0a0a0a0a0a0a",
+          "currentGeneration": 1,
+          "generations": [
+            {
+              "id": 1,
+              "createdAt": "2026-11-14T12:00:00.000Z",
+              "keyCheck": "54c8c2aa80ce76b080b28501f7d8a1b9\n"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "error": "malformed"
       }
     },
     {
