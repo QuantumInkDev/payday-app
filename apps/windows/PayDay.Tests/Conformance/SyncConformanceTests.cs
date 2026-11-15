@@ -88,9 +88,13 @@ public class SyncConformanceTests
     [Fact]
     public void Bip39Wordlist_IsEmbeddedUnchanged_AndMatchesItsPinnedHash()
     {
+        // A Windows checkout that converts line endings may hold the file with CRLF (the repository's
+        // .gitattributes now prevents that for new checkouts); the library undoes only that conversion.
         var embedded = PayDay.Sync.Crypto.RecoveryPhrase.WordlistBytes();
         var onDisk = File.ReadAllBytes(Path.Combine(ConformanceFixtures.SpecDirectory, "bip39-english.txt"));
-        Assert.Equal(onDisk, embedded);
+        Assert.Equal(PayDay.Sync.Crypto.RecoveryPhrase.UndoCrlf(onDisk), embedded);
+        Assert.Equal(2048, embedded.Count(b => b == (byte)'\n'));
+        Assert.DoesNotContain((byte)'\r', embedded);
         Assert.Equal(PayDay.Sync.Crypto.RecoveryPhrase.WordlistSha256, Convert.ToHexStringLower(SHA256.HashData(embedded)));
         Assert.Equal("2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda", PayDay.Sync.Crypto.RecoveryPhrase.WordlistSha256);
         Assert.Equal(2048, PayDay.Sync.Crypto.RecoveryPhrase.Words.Count);

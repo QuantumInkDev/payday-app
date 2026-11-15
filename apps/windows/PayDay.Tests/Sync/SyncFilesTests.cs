@@ -77,6 +77,17 @@ public class SyncFilesTests
     }
 
     [Fact]
+    public void RecoveryPhrase_UndoCrlf_RestoresTheExactPublishedWordlist()
+    {
+        var lf = RecoveryPhrase.WordlistBytes();
+        var crlf = Encoding.ASCII.GetBytes(Encoding.ASCII.GetString(lf).Replace("\n", "\r\n", StringComparison.Ordinal));
+        Assert.NotEqual(lf, crlf);
+        Assert.Equal(lf, RecoveryPhrase.UndoCrlf(crlf));
+        Assert.Equal(RecoveryPhrase.WordlistSha256, Convert.ToHexStringLower(SHA256.HashData(RecoveryPhrase.UndoCrlf(crlf))));
+        Assert.Equal(new byte[] { (byte)'a', (byte)'\r', (byte)'b', (byte)'\n' }, RecoveryPhrase.UndoCrlf(new byte[] { (byte)'a', (byte)'\r', (byte)'b', (byte)'\r', (byte)'\n' }));
+    }
+
+    [Fact]
     public void PairingQr_RoundTripsANewCode()
     {
         var code = PairingQr.NewCode();

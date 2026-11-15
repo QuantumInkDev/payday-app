@@ -22,8 +22,26 @@ public static class RecoveryPhrase
     /// <summary>The 2048 BIP39 English words in list order.</summary>
     public static IReadOnlyList<string> Words => List.Value.Words;
 
-    /// <summary>The embedded wordlist file's exact bytes (for the hash test).</summary>
-    public static byte[] WordlistBytes() => ReadResource();
+    /// <summary>
+    /// The embedded wordlist with LF line endings: the file exactly as published. A Windows checkout
+    /// with <c>core.autocrlf</c> may have turned its LFs into CRLFs before the build embedded it;
+    /// that one conversion is undone here, and the result must still match <see cref="WordlistSha256"/>.
+    /// </summary>
+    public static byte[] WordlistBytes() => UndoCrlf(ReadResource());
+
+    /// <summary>Replaces every CR LF pair with LF; other bytes are left alone.</summary>
+    internal static byte[] UndoCrlf(byte[] raw)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        if (Array.IndexOf(raw, (byte)'\r') < 0) return raw;
+        var output = new List<byte>(raw.Length);
+        for (var i = 0; i < raw.Length; i++)
+        {
+            if (raw[i] == '\r' && i + 1 < raw.Length && raw[i + 1] == '\n') continue;
+            output.Add(raw[i]);
+        }
+        return output.ToArray();
+    }
 
     /// <summary>The 24 words for a 32-byte key. Fails with <c>badKeyLength</c> for any other length.</summary>
     public static IReadOnlyList<string> Encode(ReadOnlySpan<byte> key)
@@ -126,7 +144,7 @@ public static class RecoveryPhrase
 
     private static Wordlist LoadWordlist()
     {
-        var raw = ReadResource();
+        var raw = WordlistBytes();
         var hash = Convert.ToHexStringLower(SHA256.HashData(raw));
         if (hash != WordlistSha256)
         {
