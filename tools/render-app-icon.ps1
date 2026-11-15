@@ -12,7 +12,7 @@ param(
     [string]$Glyph = "F156",
     [string]$BackgroundHex = "#6C5CE7",
     [string]$ForegroundHex = "#FFFFFF",
-    [string]$AssetsDir = (Join-Path $PSScriptRoot "..\PayDay\Assets"),
+    [string]$AssetsDir = (Join-Path $PSScriptRoot "..\apps\windows\PayDay\Assets"),
     [string]$FontFamily = "Segoe Fluent Icons",
     [double]$GlyphFillRatio = 0.62
 )

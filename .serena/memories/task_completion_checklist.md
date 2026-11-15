@@ -6,8 +6,8 @@ Per `CLAUDE.md` § "After Completing Work" — this is **mandatory** at the end 
 
 ```powershell
 $env:PATH = "C:\Program Files\dotnet;$env:PATH"
-dotnet build P:\Projects-Not-On-Cloud\PayDayApp\PayDay\PayDay.csproj --nologo
-dotnet test  P:\Projects-Not-On-Cloud\PayDayApp\PayDay.Tests\PayDay.Tests.csproj --nologo
+dotnet build P:\Projects-Not-On-Cloud\PayDayApp\apps\windows\PayDay\PayDay.csproj --nologo
+dotnet test  P:\Projects-Not-On-Cloud\PayDayApp\apps\windows\PayDay.Tests\PayDay.Tests.csproj --nologo
 ```
 - App build: 0 warn / 0 err in our code.
 - Tests: all passing (21 as of 2026-05-15 — should grow as Phase 4 adds tests).

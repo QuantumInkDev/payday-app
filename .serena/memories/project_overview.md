@@ -9,6 +9,6 @@
 **Plan of record:** `planning/PAYDAY_WINUI3_PLAN.md` (§3 = done, §4 = current).
 
 **Three projects, no .sln:**
-- `PayDay/` — WinUI 3 app (`net9.0-windows10.0.26100.0`). Pages, ViewModels, XAML, `DatabaseService` implementation.
-- `PayDay.Core/` — plain `net9.0` class library. Holds Models + pure business logic. **Must not reference WinUI** — see [[payday_core_split]].
-- `PayDay.Tests/` — xunit tests on `net9.0`. References `PayDay.Core` only.
+- `apps/windows/PayDay/` — WinUI 3 app (`net9.0-windows10.0.26100.0`). Pages, ViewModels, XAML, `DatabaseService` implementation.
+- `apps/windows/PayDay.Core/` — plain `net9.0` class library. Holds Models + pure business logic. **Must not reference WinUI** — see [[payday_core_split]].
+- `apps/windows/PayDay.Tests/` — xunit tests on `net9.0`. References `PayDay.Core` only.

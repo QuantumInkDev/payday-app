@@ -1,7 +1,7 @@
-# PayDay App
+# PayDay App (product name: FutureCheck)
 
-**Last Updated**: September 10, 2026
-**Project Phase**: Phase 7 (Polish) closed — Phase 8 (Ship) not started
+**Last Updated**: November 14, 2026
+**Project Phase**: Multi-platform step 1 (repo restructure) done — next: feature scoping
 **Current Version**: unknown — no version string is set in any `.csproj`, and `SESSION_STATUS.md` does not record one
 
 ## 🚀 What This App Does
@@ -20,9 +20,9 @@ Taken from the `.csproj` files:
 
 | Project | TargetFramework | Notes |
 |---|---|---|
-| `PayDay/PayDay.csproj` | `net9.0-windows10.0.26100.0` | **Windows-only TFM.** `OutputType=WinExe`, `UseWinUI=true`, `EnableMsixTooling=true`, `TargetPlatformMinVersion=10.0.17763.0`, `Platforms=x86;x64;ARM64`. RuntimeIdentifier defaults to `win-<host arch>`. |
-| `PayDay.Core/PayDay.Core.csproj` | `net9.0` | Plain, cross-platform TFM. Compiles and unit-tests anywhere .NET 9 runs. |
-| `PayDay.Tests/PayDay.Tests.csproj` | `net9.0` | Plain, cross-platform TFM. `IsPackable=false`. |
+| `apps/windows/PayDay/PayDay.csproj` | `net9.0-windows10.0.26100.0` | **Windows-only TFM.** `OutputType=WinExe`, `UseWinUI=true`, `EnableMsixTooling=true`, `TargetPlatformMinVersion=10.0.17763.0`, `Platforms=x86;x64;ARM64`. RuntimeIdentifier defaults to `win-<host arch>`. |
+| `apps/windows/PayDay.Core/PayDay.Core.csproj` | `net9.0` | Plain, cross-platform TFM. Compiles and unit-tests anywhere .NET 9 runs. |
+| `apps/windows/PayDay.Tests/PayDay.Tests.csproj` | `net9.0` | Plain, cross-platform TFM. `IsPackable=false`. |
 
 The app project's TFM is Windows-only — it can only be **built and run on Windows**. `PayDay.Core`
 and `PayDay.Tests` are not, which is deliberate (see project layout below).
@@ -40,17 +40,18 @@ Key packages:
 
 ## 📁 Project Layout
 
-- **`PayDay/`** — the WinUI 3 desktop app. XAML pages/views, code-behind, `App.xaml`,
+- **`apps/windows/PayDay/`** — the WinUI 3 desktop app. XAML pages/views, code-behind, `App.xaml`,
   `app.manifest`, MSIX packaging assets (`Assets/`), and the packaged app identity. This is the only
   Windows-only project. Navigation is a `NavigationView` with pages: PayDay (home), Dashboard, All
   Bills, Payoff Tracker, Insights, Settings.
-- **`PayDay.Core/`** — all logic that must be unit-testable: models, services
+- **`apps/windows/PayDay.Core/`** — all logic that must be unit-testable: models, services
   (`DatabaseService`, `PayPeriodService`, `NotionSyncService`, `TypeColorService`,
   `BackupSerializer`, …) and every view-model. **Tests cannot reference `PayDay.csproj`** — the
   WindowsAppSDK auto-initializer throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process
   without package identity. That constraint is why the VMs live here, not in the app project.
   `InternalsVisibleTo("PayDay.Tests")` keeps helpers internal but test-visible.
-- **`PayDay.Tests/`** — xUnit suite over `PayDay.Core`. 194 tests as of the last verified run.
+- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`. 194 tests as of the last verified run.
+- **`tools/vm-build.sh`** — builds and tests a pushed commit on the arm64 Windows VM from the Mac.
 - **`planning/`** — the build plan and sprint tracking. `PAYDAY_WINUI3_PLAN.md` is the master plan
   (Phases 1–8, DB schema, seed data, Notion DB IDs, design system). `current-sprint.md` tracks the
   active sprint's chunks, exit criteria, and outstanding items.
@@ -65,27 +66,29 @@ sprint's own exit criteria use.
 
 ## 🔨 Build, Test, Run
 
-Run from the repository root, on Windows.
+Run from the repository root, on Windows. The Windows projects live under `apps/windows/`; the repo is becoming multi-platform (product name FutureCheck, code name PayDay).
 
 ```powershell
 # dotnet is NOT on PATH in this shell — do this first, every session:
 $env:PATH = "C:\Program Files\dotnet;$env:PATH"
 
 # Build the app (Windows only)
-dotnet build PayDay/PayDay.csproj
+dotnet build apps/windows/PayDay/PayDay.csproj
 
 # Build just the testable core (works on any .NET 9 host)
-dotnet build PayDay.Core/PayDay.Core.csproj
+dotnet build apps/windows/PayDay.Core/PayDay.Core.csproj
 
 # Run the tests
-dotnet test PayDay.Tests
+dotnet test apps/windows/PayDay.Tests
 
 # Run the app — needs an interactive Windows desktop session (see below)
-dotnet run --project PayDay/PayDay.csproj
+dotnet run --project apps/windows/PayDay/PayDay.csproj
 winapp run                       # equivalent dev-mode launch
 ```
 
 Standing expectation: **0 warnings / 0 errors** on both projects, and `dotnet test` exits 0.
+
+**Build from the Mac:** run `tools/vm-build.sh` (push first; it builds `HEAD` on the VM). Launching the app still needs the interactive Windows session.
 
 Phase 8 packaging commands (not yet exercised):
 
@@ -130,8 +133,8 @@ Tests went 150 → **194** across Phase 7. Phase 5 (Notion sync) and Phase 6 (ba
 auto-backup) are closed.
 
 **In flight:** nothing is mid-implementation. The working tree is clean on branch
-`wip/backup-2026-09-09`, whose tip is `a35fbbc "wip: backup of uncommitted work as of 2026-09-09"`,
-sitting on top of `f800119` (the 2026-05-17 end-of-night status commit that closed Phase 7). The next
+`feature/multiplatform` (repo restructure done: Windows projects moved to `apps/windows/`), branched from the
+`wip/backup-2026-09-09` line, which sits on top of `f800119` (the 2026-05-17 end-of-night status commit that closed Phase 7). The next
 phase is **Phase 8 — Ship** (MSIX packaging + sideload/Store distribution, `PAYDAY_WINUI3_PLAN.md` §8).
 The Phase 7 leftovers below can be picked up alongside Phase 8 or as a Phase 7.5 mini-sprint; none
 are blockers.
@@ -202,7 +205,7 @@ validation error** until the rename happens. Whether the user has done this yet 
 
 ### After Completing Work
 
-1. Ensure `dotnet test PayDay.Tests` exits 0 and `dotnet build PayDay/PayDay.csproj` is 0 warn / 0 err.
+1. Ensure `dotnet test apps/windows/PayDay.Tests` exits 0 and `dotnet build apps/windows/PayDay/PayDay.csproj` is 0 warn / 0 err.
 2. Update `SESSION_STATUS.md` with progress and next steps.
 3. Move the 🔴 **CONTINUE HERE** marker to the stopping point.
 4. Update `planning/current-sprint.md` with task status.
@@ -214,7 +217,7 @@ validation error** until the rename happens. Whether the user has done this yet 
 ## 🔄 Git Workflow
 
 **Repo:** [QuantumInkDev/payday-app](https://github.com/QuantumInkDev/payday-app)
-**Main branch:** `main`. Current branch: `wip/backup-2026-09-09`.
+**Main branch:** `main`. Current branch: `feature/multiplatform`.
 
 ### Branch Strategy
 
@@ -242,8 +245,8 @@ Ship one commit per chunk so each is independently revertable — that is how Ph
 
 ### Pre-Commit Checklist
 
-- [ ] `dotnet build PayDay/PayDay.csproj` — 0 warnings, 0 errors
-- [ ] `dotnet test PayDay.Tests` — exits 0
+- [ ] `dotnet build apps/windows/PayDay/PayDay.csproj` — 0 warnings, 0 errors
+- [ ] `dotnet test apps/windows/PayDay.Tests` — exits 0
 - [ ] Documentation updated
 - [ ] `SESSION_STATUS.md` updated
 
