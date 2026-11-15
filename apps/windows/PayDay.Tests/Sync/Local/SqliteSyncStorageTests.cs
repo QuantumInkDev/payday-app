@@ -19,8 +19,8 @@ namespace PayDay.Tests.Sync.Local;
 /// </summary>
 public sealed class SqliteSyncStorageTests : IDisposable
 {
-    private static readonly Hlc H1 = Hlc.Parse("01a1d9edc200-0000-0a0a0a0a0a0a0a0a");
-    private static readonly Hlc H2 = Hlc.Parse("01a1d9edc200-0001-0a0a0a0a0a0a0a0a");
+    private static readonly Hlc H1 = Hlc.Parse("0196f7dd5600-0000-0a0a0a0a0a0a0a0a");
+    private static readonly Hlc H2 = Hlc.Parse("0196f7dd5600-0001-0a0a0a0a0a0a0a0a");
 
     private readonly SqliteTestFiles _files = new();
 
@@ -204,7 +204,7 @@ public sealed class SqliteSyncStorageTests : IDisposable
             m.SetCursor("0b0b0b0b0b0b0b0b", 4);
             m.SetCursor("0b0b0b0b0b0b0b0b", 5);
             m.SetMergedAhead("0b0b0b0b0b0b0b0b", new long[] { 9, 7, 7 });
-            m.SetSnapshotFirstListed("snapshots/x.snap", 1794657600000);
+            m.SetSnapshotFirstListed("snapshots/x.snap", 1747915200000);
         });
 
         Assert.Equal("0a0a0a0a0a0a0a0a", m.DeviceId);
@@ -217,7 +217,7 @@ public sealed class SqliteSyncStorageTests : IDisposable
         Assert.Equal(5, m.Cursors["0b0b0b0b0b0b0b0b"]);
         Assert.Equal(new long[] { 7, 9 }, m.MergedAhead("0b0b0b0b0b0b0b0b"));
         Assert.Empty(m.MergedAhead("0c0c0c0c0c0c0c0c"));
-        Assert.Equal(1794657600000, m.SnapshotFirstListed("snapshots/x.snap"));
+        Assert.Equal(1747915200000, m.SnapshotFirstListed("snapshots/x.snap"));
         Assert.Null(m.SnapshotFirstListed("snapshots/y.snap"));
         Assert.Throws<InvalidOperationException>(() => storage.RunInTransaction(() => m.MarkBatchUploaded(99)));
         Assert.Throws<SqliteException>(() => storage.RunInTransaction(() => m.AddSealedBatch(new SealedBatch(2, new[] { r1 }))));
@@ -244,7 +244,7 @@ public sealed class SqliteSyncStorageTests : IDisposable
     {
         var path = _files.NewPath();
         var cs = SqliteTestFiles.ConnectionString(path);
-        var time = new ManualTimeProvider(1794657600000);
+        var time = new ManualTimeProvider(1747915200000);
         string deviceId;
         string bill;
         using (var storage = new SqliteSyncStorage(cs))
@@ -255,7 +255,7 @@ public sealed class SqliteSyncStorageTests : IDisposable
             bill = replica.NewRowId();
             replica.CreateRow(SyncEntities.Bill, bill, new Dictionary<string, SyncValue> { ["name"] = SyncValue.String("Woodgrove Rewards"), ["remainingCheckpoint"] = SyncValue.Number(1200) });
             time.Advance(1000);
-            replica.MarkPaid(PaymentKinds.Regular, bill, "2026-11-12", 55, null);
+            replica.MarkPaid(PaymentKinds.Regular, bill, "2025-05-15", 55, null);
             replica.SealPending();
         }
 

@@ -64,6 +64,43 @@ public sealed class NotionSyncService : IDisposable
     public void SaveToken(string token) => _credentials.Set(TokenKey, token);
     public void DeleteToken() => _credentials.Delete(TokenKey);
 
+    /// <summary>
+    /// Saves the token and, with sync on, makes this device the connector's owner
+    /// (<c>sync-protocol.md</c> 12.5: connecting Notion on a device sets <c>NotionOwnerDeviceId</c>
+    /// to it; the previous owner stops). With sync off this is <see cref="SaveToken"/>.
+    /// </summary>
+    public async Task ConnectAsync(string token)
+    {
+        SaveToken(token);
+        if (Host is { } host) await host.ClaimNotionAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>The connector's role on this device (<see cref="NotionRole.SyncOff"/> unless the database is the sync write path).</summary>
+    public NotionConnectorState GetConnectorState() => Host?.GetNotionState() ?? NotionConnectorState.SyncOff;
+
+    private INotionSyncHost? Host => _db as INotionSyncHost;
+
+    /// <summary>
+    /// The role this device runs the connector in. A synced vault whose connector has no owner yet is
+    /// claimed by the first device that uses Notion with a token.
+    /// </summary>
+    private async Task<NotionConnectorState> PrepareConnectorAsync()
+    {
+        if (Host is not { } host) return NotionConnectorState.SyncOff;
+        var state = host.GetNotionState();
+        if (state.Role == NotionRole.NoOwner)
+        {
+            await host.ClaimNotionAsync().ConfigureAwait(false);
+            state = host.GetNotionState();
+        }
+        return state;
+    }
+
+    private static string ConnectedElsewhere(NotionConnectorState state)
+        => $"Notion: connected on {state.OwnerDeviceName ?? "another device"}. This device does not push to or pull from Notion.";
+
+    private void RecordPush(Bill bill) => Host?.RecordNotionPush(bill.Id, bill.Remaining);
+
     public async Task<DateTimeOffset?> GetLastSyncedAsync()
     {
         var raw = await _db.GetSettingAsync(LastSyncedSetting).ConfigureAwait(false);
@@ -112,37 +149,58 @@ public sealed class NotionSyncService : IDisposable
         if (string.IsNullOrWhiteSpace(dataSourceId))
             throw new InvalidOperationException($"Setting '{BillsDataSourceSetting}' is empty.");
 
+        var connector = await PrepareConnectorAsync().ConfigureAwait(false);
+        if (!connector.MayRun)
+        {
+            return new NotionSyncResult(0, 0, 0, 0, new[] { ConnectedElsewhere(connector) });
+        }
+        // A device that just became the owner pushes every bill before its first pull (12.5).
+        var pushFirst = connector.Role == NotionRole.OwnerMustPushFirst;
+        var host = Host;
+
         var errors = new List<string>();
         int created = 0, updated = 0, pulled = 0, archived = 0;
 
         var remotePages = await QueryAllPagesAsync(dataSourceId!, token, ct).ConfigureAwait(false);
+        // A local bill finds its page by the page ID it stored, then by the page's "Bill ID" text, then
+        // by that text mapped the way turning sync on maps legacy bill IDs ("13" → its UUIDv5), so a
+        // migrated bill still finds the page that holds its old ID instead of creating a duplicate.
+        var remoteByPageId = new Dictionary<string, NotionPage>(StringComparer.Ordinal);
         var remoteByBillId = new Dictionary<string, NotionPage>(StringComparer.Ordinal);
+        var remoteByMappedId = new Dictionary<string, NotionPage>(StringComparer.Ordinal);
         foreach (var page in remotePages)
         {
+            if (!string.IsNullOrEmpty(page.Id)) remoteByPageId.TryAdd(page.Id, page);
             var billId = page.BillId;
-            if (!string.IsNullOrWhiteSpace(billId) && !remoteByBillId.ContainsKey(billId!))
-                remoteByBillId[billId!] = page;
+            if (string.IsNullOrWhiteSpace(billId)) continue;
+            remoteByBillId.TryAdd(billId!, page);
+            if (host is not null) remoteByMappedId.TryAdd(host.MapNotionBillId(billId!), page);
         }
 
         var localBills = await _db.GetAllBillsAsync().ConfigureAwait(false);
         var localByBillId = new Dictionary<string, Bill>(StringComparer.Ordinal);
         foreach (var b in localBills)
             localByBillId[b.Id] = b;
+        var matchedPages = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var local in localBills)
         {
             try
             {
-                if (remoteByBillId.TryGetValue(local.Id, out var remote))
+                var remote = FindPage(local, remoteByPageId, remoteByBillId, remoteByMappedId);
+                if (remote is not null)
                 {
+                    matchedPages.Add(remote.Id);
                     // Cache the page id locally if we hadn't yet.
                     if (string.IsNullOrEmpty(local.NotionPageId))
                         local.NotionPageId = remote.Id;
 
                     var localUpdated = ParseSqliteUtc(local.UpdatedAt);
-                    if (localUpdated > remote.LastEditedTime)
+                    if (pushFirst || localUpdated > remote.LastEditedTime)
                     {
+                        // The push also writes the bill's current ID to the page's "Bill ID".
                         await UpdatePageAsync(remote.Id, BuildBillProperties(local), token, ct).ConfigureAwait(false);
+                        RecordPush(local);
                         await _db.UpsertBillAsync(local).ConfigureAwait(false);
                         updated++;
                     }
@@ -150,7 +208,7 @@ public sealed class NotionSyncService : IDisposable
                     {
                         var merged = remote.ToBill(local.Id);
                         merged.NotionPageId = remote.Id;
-                        await _db.UpsertBillAsync(merged).ConfigureAwait(false);
+                        await SaveFromNotionAsync(merged).ConfigureAwait(false);
                         pulled++;
                     }
                     else
@@ -166,6 +224,7 @@ public sealed class NotionSyncService : IDisposable
                 else
                 {
                     var newPageId = await CreatePageAsync(dataSourceId!, BuildBillProperties(local), token, ct).ConfigureAwait(false);
+                    RecordPush(local);
                     local.NotionPageId = newPageId;
                     await _db.UpsertBillAsync(local).ConfigureAwait(false);
                     created++;
@@ -179,12 +238,14 @@ public sealed class NotionSyncService : IDisposable
 
         foreach (var (billId, remote) in remoteByBillId)
         {
-            if (localByBillId.ContainsKey(billId)) continue;
+            if (localByBillId.ContainsKey(billId) || matchedPages.Contains(remote.Id)) continue;
             try
             {
-                var pulledBill = remote.ToBill(billId);
+                // With sync on a legacy "Bill ID" maps to its synced ID; with sync off it is used as is.
+                var localId = host is not null && connector.Role != NotionRole.SyncOff ? host.MapNotionBillId(billId) : billId;
+                var pulledBill = remote.ToBill(localId);
                 pulledBill.NotionPageId = remote.Id;
-                await _db.UpsertBillAsync(pulledBill).ConfigureAwait(false);
+                await SaveFromNotionAsync(pulledBill).ConfigureAwait(false);
                 pulled++;
             }
             catch (Exception ex)
@@ -201,6 +262,21 @@ public sealed class NotionSyncService : IDisposable
         await SetLastSyncedAsync(DateTimeOffset.UtcNow).ConfigureAwait(false);
         return new NotionSyncResult(created, updated, pulled, archived, errors);
     }
+
+    private static NotionPage? FindPage(
+        Bill local,
+        IReadOnlyDictionary<string, NotionPage> byPageId,
+        IReadOnlyDictionary<string, NotionPage> byBillId,
+        IReadOnlyDictionary<string, NotionPage> byMappedId)
+    {
+        if (!string.IsNullOrEmpty(local.NotionPageId) && byPageId.TryGetValue(local.NotionPageId!, out var byPage)) return byPage;
+        if (byBillId.TryGetValue(local.Id, out var exact)) return exact;
+        return byMappedId.TryGetValue(local.Id, out var mapped) ? mapped : null;
+    }
+
+    /// <summary>A pulled bill: through the sync write path's Notion rule when there is one (setRemaining with source notion), else an upsert.</summary>
+    private Task SaveFromNotionAsync(Bill pulled)
+        => Host is { } host ? host.SaveBillFromNotionAsync(pulled) : _db.UpsertBillAsync(pulled);
 
     // ------------------------------------------------------------------
     // Payments + Snapshots (push only) — chunk 5c
@@ -223,11 +299,15 @@ public sealed class NotionSyncService : IDisposable
         if (string.IsNullOrWhiteSpace(dataSourceId))
             throw new InvalidOperationException($"Setting '{BillsDataSourceSetting}' is empty.");
 
+        var connector = await PrepareConnectorAsync().ConfigureAwait(false);
+        if (!connector.MayRun) return bill.NotionPageId ?? string.Empty;
+
         var properties = BuildBillProperties(bill);
 
         if (!string.IsNullOrEmpty(bill.NotionPageId))
         {
             await UpdatePageAsync(bill.NotionPageId!, properties, token!, ct).ConfigureAwait(false);
+            RecordPush(bill);
             return bill.NotionPageId!;
         }
 
@@ -235,12 +315,14 @@ public sealed class NotionSyncService : IDisposable
         if (existingPageId is not null)
         {
             await UpdatePageAsync(existingPageId, properties, token!, ct).ConfigureAwait(false);
+            RecordPush(bill);
             bill.NotionPageId = existingPageId;
             await _db.UpsertBillAsync(bill).ConfigureAwait(false);
             return existingPageId;
         }
 
         var newPageId = await CreatePageAsync(dataSourceId!, properties, token!, ct).ConfigureAwait(false);
+        RecordPush(bill);
         bill.NotionPageId = newPageId;
         await _db.UpsertBillAsync(bill).ConfigureAwait(false);
         return newPageId;
@@ -277,6 +359,7 @@ public sealed class NotionSyncService : IDisposable
         var dataSourceId = await _db.GetSettingAsync(PaymentsDataSourceSetting).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(dataSourceId))
             throw new InvalidOperationException($"Setting '{PaymentsDataSourceSetting}' is empty.");
+        if (!(await PrepareConnectorAsync().ConfigureAwait(false)).MayRun) return string.Empty;
 
         var properties = new Dictionary<string, object?>
         {
@@ -297,6 +380,7 @@ public sealed class NotionSyncService : IDisposable
         var dataSourceId = await _db.GetSettingAsync(SnapshotsDataSourceSetting).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(dataSourceId))
             throw new InvalidOperationException($"Setting '{SnapshotsDataSourceSetting}' is empty.");
+        if (!(await PrepareConnectorAsync().ConfigureAwait(false)).MayRun) return string.Empty;
 
         var properties = new Dictionary<string, object?>
         {

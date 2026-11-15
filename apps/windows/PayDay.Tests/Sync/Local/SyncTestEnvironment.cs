@@ -27,9 +27,12 @@ internal sealed class SyncTestEnvironment : IDisposable
 
     private readonly SqliteTestFiles _files = new();
 
-    public SyncTestEnvironment()
+    /// <param name="startMs">This device's clock at the start (default <see cref="T0"/>); another start simulates a device whose clock is off.</param>
+    /// <param name="path">An existing database file to open (a cloned install) instead of a new one.</param>
+    public SyncTestEnvironment(long? startMs = null, string? path = null)
     {
-        Path = _files.NewPath();
+        Time = new ManualTimeProvider(startMs ?? T0);
+        Path = path ?? _files.NewPath();
         Db = new SqliteDatabaseService(Path);
         Store = new InMemoryBackupStore();
         Backups = new BackupRotationService(Db, Store, () => DateTime.UnixEpoch.AddMilliseconds(Time.UnixMs));
@@ -39,7 +42,7 @@ internal sealed class SyncTestEnvironment : IDisposable
 
     public string Path { get; }
 
-    public ManualTimeProvider Time { get; } = new(T0);
+    public ManualTimeProvider Time { get; }
 
     public SqliteDatabaseService Db { get; }
 
@@ -57,7 +60,7 @@ internal sealed class SyncTestEnvironment : IDisposable
         await Db.InitializeAsync();
     }
 
-    public async Task<MigrationResult?> TurnOnAsync()
+    public async Task<TurnOnResult> TurnOnAsync()
     {
         Time.Advance(1000);
         return await Sync.TurnOnAsync(Backups);

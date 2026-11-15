@@ -41,6 +41,19 @@ public sealed record MigrationResult(
 /// </summary>
 public static class LegacyMigration
 {
+    /// <summary>
+    /// The rows of today's tables the migration could not carry over (<see cref="LegacyMapping.FindProblems"/>).
+    /// Read-only; run it on a storage that is not in a transaction (or inside one).
+    /// </summary>
+    public static IReadOnlyList<MigrationProblem> FindProblems(SqliteSyncStorage storage)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+        return LegacyMapping.FindProblems(
+            ReadAll(storage, "SELECT * FROM Bills;", SqliteDatabaseService.MapBill),
+            ReadAll(storage, "SELECT * FROM Payments;", SqliteDatabaseService.MapPayment),
+            ReadAll(storage, "SELECT * FROM Snapshots;", SqliteDatabaseService.MapSnapshot));
+    }
+
     public static MigrationResult Run(SqliteSyncStorage storage, TableMaterializer materializer, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(storage);
@@ -92,6 +105,10 @@ public static class LegacyMigration
 
             materializer.SetLocalIds(SyncEntities.Payment, rows.PaymentLocalIds);
             materializer.SetLocalIds(SyncEntities.BalanceSnapshot, rows.SnapshotLocalIds);
+            materializer.SetLegacyUpdatedAt(
+                bills.GroupBy(b => LegacyMapping.MapBillId(b.Id), StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().UpdatedAt, StringComparer.Ordinal),
+                hlc);
             materializer.RebuildAll(state);
             RequireNothingLost(storage, bills, payments, snapshots);
 

@@ -149,7 +149,9 @@ public sealed class TableMaterializer : ISyncMaterializer
             deleteBill.ExecuteNonQuery();
             return;
         }
-        UpsertBillRow(BillFromState(state, billId));
+        var row = BillFromState(state, billId);
+        if (LegacyUpdatedAt(state, billId) is { } legacy) row.UpdatedAt = legacy.UpdatedAt;
+        UpsertBillRow(row);
         foreach (var paymentId in state.LivePaymentsFor(billId))
         {
             if (!PaymentKinds.CountsAgainstRemaining(state.PaymentKind(paymentId))) continue;
@@ -193,6 +195,43 @@ public sealed class TableMaterializer : ISyncMaterializer
                 ? DateTimeOffset.FromUnixTimeMilliseconds(wall).UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
                 : null,
         };
+    }
+
+    /// <summary>
+    /// The bill's <c>UpdatedAt</c> from before sync, while nothing has changed it since the migration:
+    /// its latest record still carries the migration HLC. Otherwise null, and <c>UpdatedAt</c> is
+    /// derived from the HLCs (<c>data-model.md</c> 4.1). Without this every migrated bill would look
+    /// edited at the moment sync was turned on, newer than every Notion page.
+    /// </summary>
+    private LegacyStamp? LegacyUpdatedAt(SyncState state, string billId)
+    {
+        var cmd = _storage.Cached("SELECT updated_at, hlc FROM sync_legacy_updated WHERE bill_id = $b;", "$b");
+        Bind(cmd, "$b", billId);
+        string? updatedAt;
+        string hlc;
+        using (var reader = cmd.ExecuteReader())
+        {
+            if (!reader.Read()) return null;
+            updatedAt = reader.IsDBNull(0) ? null : reader.GetString(0);
+            hlc = reader.GetString(1);
+        }
+        var latest = state.Store.Fields(SyncEntities.Bill, billId).Select(f => f.Value.Hlc.Text).DefaultIfEmpty(string.Empty).Max(StringComparer.Ordinal);
+        return latest == hlc ? new LegacyStamp(updatedAt) : null;
+    }
+
+    /// <summary>Remembers each migrated bill's <c>UpdatedAt</c> and the migration HLC (see <see cref="LegacyUpdatedAt"/>). Inside the migration transaction.</summary>
+    internal void SetLegacyUpdatedAt(IReadOnlyDictionary<string, string?> updatedAtByBill, Clock.Hlc migrationHlc)
+    {
+        ArgumentNullException.ThrowIfNull(updatedAtByBill);
+        Execute("DELETE FROM sync_legacy_updated;");
+        var cmd = _storage.Cached("INSERT INTO sync_legacy_updated (bill_id, updated_at, hlc) VALUES ($b, $u, $h);", "$b", "$u", "$h");
+        foreach (var (billId, updatedAt) in updatedAtByBill)
+        {
+            Bind(cmd, "$b", billId);
+            Bind(cmd, "$u", updatedAt);
+            Bind(cmd, "$h", migrationHlc.Text);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     private void UpsertBillRow(Bill bill)
@@ -384,6 +423,16 @@ public sealed class TableMaterializer : ISyncMaterializer
         => s.Length == 7 && s[0] == '#' && s.Skip(1).All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F');
 
     // ---- Helpers ------------------------------------------------------------------------------------
+
+    /// <summary>A bill's pre-sync <c>UpdatedAt</c> (which may itself be null).</summary>
+    private sealed record LegacyStamp(string? UpdatedAt);
+
+    /// <summary>Forgets the local integer IDs (joining a vault replaces every synced row). Inside a sync transaction.</summary>
+    public void ClearLocalIds()
+    {
+        Execute("DELETE FROM sync_local_ids;");
+        Execute("DELETE FROM sync_legacy_updated;");
+    }
 
     private void MapLocalId(string entity, string syncId, long localId)
     {

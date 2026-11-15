@@ -3,8 +3,12 @@ using PayDay.Services;
 
 namespace PayDay.Tests;
 
+[Collection(TypeColorServiceTests.StaticState)]
 public class TypeColorServiceTests
 {
+    /// <summary>Test classes that touch <see cref="TypeColorService"/>'s static map run one at a time.</summary>
+    public const string StaticState = "TypeColorService static state";
+
     public TypeColorServiceTests()
     {
         // The service holds process-wide static state; reset before each test so

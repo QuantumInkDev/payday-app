@@ -72,7 +72,17 @@ public sealed class SyncReplica
     /// (joining a vault after the user agreed to replace this device's data, 12.2 step 3) every
     /// synced record is removed as well, in the same transaction.
     /// </summary>
-    public static SyncReplica Start(ISyncStorage storage, TimeProvider time, string vaultId, bool clearSyncedData = false, ISyncMaterializer? materializer = null)
+    /// <param name="alsoInTransaction">
+    /// Runs inside the same transaction after the reset, with the (possibly cleared) state: joining a
+    /// vault rebuilds the materialized tables here so they change together with the records.
+    /// </param>
+    public static SyncReplica Start(
+        ISyncStorage storage,
+        TimeProvider time,
+        string vaultId,
+        bool clearSyncedData = false,
+        ISyncMaterializer? materializer = null,
+        Action<SyncState>? alsoInTransaction = null)
     {
         ArgumentNullException.ThrowIfNull(storage);
         if (!Uuid.IsCanonical(vaultId)) throw new ArgumentException("Vault ID must be a canonical UUID.", nameof(vaultId));
@@ -82,8 +92,20 @@ public sealed class SyncReplica
             storage.Metadata.DeviceId = DeviceIds.NewRandom();
             storage.Metadata.VaultId = vaultId;
             if (clearSyncedData) storage.Records.Clear();
+            alsoInTransaction?.Invoke(new SyncState(storage.Records));
         });
         return new SyncReplica(storage, time, materializer);
+    }
+
+    /// <summary>
+    /// Changes local sync state (never records) under the replica's lock, in one transaction: for
+    /// example the vault ID, or snapshot first-listed times. <paramref name="update"/> must not call
+    /// back into the replica.
+    /// </summary>
+    public void Update(Action<ISyncMetadata> update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        lock (_gate) _storage.RunInTransaction(() => update(Metadata));
     }
 
     public string DeviceId { get; }
@@ -115,27 +137,62 @@ public sealed class SyncReplica
     public IReadOnlyList<ChangeRecord> Commit(Func<SyncState, Hlc, IReadOnlyList<ChangeRecord>> edit)
     {
         ArgumentNullException.ThrowIfNull(edit);
+        return CommitSteps(edit);
+    }
+
+    /// <summary>
+    /// One user action made of several writer rules that must see each other's effect (for example
+    /// unmarking a period's Regular payment and then each Extra payment of it, where the second unmark
+    /// must see the checkpoint the first one raised): one tick, and each step builds its records from
+    /// the state with the previous steps' records already merged. Everything is queued, the clock
+    /// saved and the rows materialized in one transaction; if any step throws, nothing is kept.
+    /// </summary>
+    public IReadOnlyList<ChangeRecord> CommitSteps(params Func<SyncState, Hlc, IReadOnlyList<ChangeRecord>>[] steps)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
         lock (_gate)
         {
             IReadOnlyList<ChangeRecord> written = Array.Empty<ChangeRecord>();
             _storage.RunInTransaction(() =>
             {
                 var hlc = HlcClock.Tick(Metadata.ClockState, NowMs, DeviceId);
-                var records = edit(State, hlc);
-                if (records.Count == 0) return;
-                if (records.Any(r => r.Hlc != hlc))
-                {
-                    throw new InvalidOperationException("Every record of one action carries that action's HLC.");
-                }
+                var all = new List<ChangeRecord>();
                 var changed = new SortedSet<RowKey>(RowKeyOrder.Instance);
-                foreach (var r in records)
+                foreach (var step in steps)
                 {
-                    if (State.Merge(r)) changed.Add(new RowKey(r.Entity, r.Id));
+                    var records = step(State, hlc);
+                    if (records.Any(r => r.Hlc != hlc))
+                    {
+                        throw new InvalidOperationException("Every record of one action carries that action's HLC.");
+                    }
+                    foreach (var r in records)
+                    {
+                        if (State.Merge(r)) changed.Add(new RowKey(r.Entity, r.Id));
+                    }
+                    all.AddRange(records);
                 }
-                Metadata.EnqueuePending(records);
+                if (all.Count == 0) return;
+                IReadOnlyList<ChangeRecord> sorted = all;
+                if (steps.Length > 1)
+                {
+                    // One action never writes one field twice (section 4.2): a later step's record for a
+                    // field replaces an earlier step's, and the local state holds exactly that value.
+                    var last = new Dictionary<(string, string, string), ChangeRecord>();
+                    foreach (var r in all) last[(r.Entity, r.Id, r.Field)] = r;
+                    sorted = ChangeRecord.SortByKey(last.Values);
+                    foreach (var r in sorted)
+                    {
+                        if (State.TryGet(r.Entity, r.Id, r.Field, out var cell) && cell.Hlc == r.Hlc && cell.Value != r.Value)
+                        {
+                            State.Store.Set(r.Entity, r.Id, r.Field, new SyncCell(r.Value, r.Hlc));
+                            changed.Add(new RowKey(r.Entity, r.Id));
+                        }
+                    }
+                }
+                Metadata.EnqueuePending(sorted);
                 Metadata.ClockState = hlc;
                 Materialize(changed);
-                written = records;
+                written = sorted;
             });
             return written;
         }
