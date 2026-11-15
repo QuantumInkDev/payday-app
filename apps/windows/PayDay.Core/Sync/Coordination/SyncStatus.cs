@@ -103,7 +103,65 @@ public enum CreateVaultOutcome
 
     /// <summary>Some rows cannot be migrated; see <see cref="CreateVaultResult.TurnOn"/>. Nothing changed.</summary>
     Blocked,
+
+    /// <summary>
+    /// Something failed before the vault existed (for example the pre-sync backup could not be
+    /// written): no vault, no recovery phrase; sync stays as it was. See <see cref="CreateVaultResult.Status"/>.
+    /// </summary>
+    Failed,
 }
+
+/// <summary>What <see cref="SyncCoordinator.ProbeVaultAsync"/> found on the drive.</summary>
+public enum VaultProbeOutcome
+{
+    /// <summary>No vault.json: offer to create a vault.</summary>
+    NoVault,
+
+    /// <summary>A vault exists: offer to join it.</summary>
+    VaultExists,
+
+    /// <summary>The vault on the drive is the one this device is in.</summary>
+    ThisDevicesVault,
+
+    /// <summary>The vault uses a newer sync format.</summary>
+    NeedsUpdate,
+
+    /// <summary>The drive sign-in expired.</summary>
+    SignedOut,
+
+    /// <summary>The drive could not be read; see <see cref="VaultProbe.Message"/>.</summary>
+    Failed,
+}
+
+public sealed record VaultProbe(VaultProbeOutcome Outcome, string? Message, string? ErrorCode);
+
+/// <summary>How leaving a vault ended.</summary>
+public enum LeaveVaultOutcome
+{
+    /// <summary>Sync is off and the vault key is gone from this device.</summary>
+    Left,
+
+    /// <summary>Sync is off, but the keystore refused to delete the vault key.</summary>
+    LeftKeyNotRemoved,
+
+    /// <summary>Sync could not be turned off (a local database error); see <see cref="LeaveVaultResult.Status"/>.</summary>
+    Failed,
+}
+
+/// <summary>What happened to the Notion connector when this device left (<c>sync-protocol.md</c> 12.5).</summary>
+public enum NotionRelease
+{
+    /// <summary>This device did not run the connector.</summary>
+    NotOwner,
+
+    /// <summary>It did; <c>NotionOwnerDeviceId: null</c> reached the drive, so other devices see the connector is free.</summary>
+    Released,
+
+    /// <summary>It did, but the change could not be uploaded (offline): other devices keep naming this device until Notion is connected on one of them.</summary>
+    NotUploaded,
+}
+
+public sealed record LeaveVaultResult(LeaveVaultOutcome Outcome, NotionRelease Notion, string Message, SyncStatus Status);
 
 /// <param name="RecoveryPhrase">The 24 words, shown once (12.1 step 7). Set for <see cref="CreateVaultOutcome.Created"/> and <see cref="CreateVaultOutcome.CreatedUploadPending"/>.</param>
 public sealed record CreateVaultResult(
@@ -124,8 +182,14 @@ public enum JoinVaultOutcome
     /// <summary>No vault on the drive: offer to create one.</summary>
     NoVault,
 
-    /// <summary>This device is already in that vault.</summary>
+    /// <summary>This device is already in that vault (and holds its key).</summary>
     AlreadyInVault,
+
+    /// <summary>
+    /// This device is in that vault but was locked (no key): the phrase or pairing code unlocked it in
+    /// place, keeping its identity and data.
+    /// </summary>
+    Unlocked,
 
     /// <summary>The phrase does not decode (<see cref="JoinVaultResult.ErrorCode"/>: <c>wrongWordCount</c>, <c>unknownWord</c>, <c>badChecksum</c>): "Check the words and try again."</summary>
     WrongPhrase,
