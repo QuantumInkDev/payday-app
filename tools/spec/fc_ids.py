@@ -10,9 +10,14 @@ import re
 
 NAMESPACE = "def9d7a0-dc52-41e0-906a-f9767c7f894d"
 
-_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-_UUID_ANYCASE_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_UUID_ANYCASE_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+# Every pattern is matched against the WHOLE string (fullmatch) and uses ASCII classes only.
+
+
+def ascii_lower(s):
+    return "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in s)
 
 
 class IdError(ValueError):
@@ -27,18 +32,18 @@ def _fmt(b):
 
 
 def is_canonical_uuid(s):
-    return isinstance(s, str) and bool(_UUID_RE.match(s))
+    return isinstance(s, str) and bool(_UUID_RE.fullmatch(s))
 
 
 def canonicalize_uuid(s):
     """Lowercase a UUID in 8-4-4-4-12 form. Raises if s is not a UUID."""
-    if not isinstance(s, str) or not _UUID_ANYCASE_RE.match(s):
+    if not isinstance(s, str) or not _UUID_ANYCASE_RE.fullmatch(s):
         raise IdError("notAUuid")
-    return s.lower()
+    return ascii_lower(s)
 
 
 def is_date(s):
-    if not isinstance(s, str) or not _DATE_RE.match(s):
+    if not isinstance(s, str) or not _DATE_RE.fullmatch(s):
         return False
     try:
         datetime.date.fromisoformat(s)
@@ -75,12 +80,12 @@ def name_paycheck(income_source_id, pay_date):
 
 
 def name_legacy_bill(old_id):
-    if not isinstance(old_id, str) or old_id == "" or is_canonical_uuid(old_id.lower()):
+    if not isinstance(old_id, str) or old_id == "" or is_canonical_uuid(ascii_lower(old_id)):
         raise IdError("notLegacy")
     return f"legacy-bill/{old_id}"
 
 
-_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+_TS_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z")
 
 
 def _require_occurrence(n):
@@ -98,7 +103,7 @@ def name_legacy_payment(bill_id, period_key, amount_cents, paid_at, n):
     _require_uuid(bill_id)
     _require_date(period_key)
     _require_cents(amount_cents)
-    if paid_at != "" and not (isinstance(paid_at, str) and _TS_RE.match(paid_at)):
+    if paid_at != "" and not (isinstance(paid_at, str) and _TS_RE.fullmatch(paid_at)):
         raise IdError("badInput")
     _require_occurrence(n)
     return f"legacy-payment/{bill_id}/{period_key}/{amount_cents}/{paid_at}/{n}"
@@ -141,8 +146,8 @@ def paycheck_id(income_source_id, pay_date):
 
 def migrate_bill_id(old_id):
     """Bill ID migration: UUID-shaped IDs are lowercased, anything else maps via UUIDv5."""
-    if isinstance(old_id, str) and _UUID_ANYCASE_RE.match(old_id):
-        return old_id.lower()
+    if isinstance(old_id, str) and _UUID_ANYCASE_RE.fullmatch(old_id):
+        return ascii_lower(old_id)
     return uuid5(NAMESPACE, name_legacy_bill(old_id))
 
 

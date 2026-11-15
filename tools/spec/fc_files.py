@@ -8,11 +8,17 @@ import re
 
 import fc_frame
 import fc_hlc
+import fc_ids
 
-_SEQ_NAME_RE = re.compile(r"^([0-9]{6,})\.chg$")
-_SNAP_NAME_RE = re.compile(r"^(.+)\.snap$")
-_PAIR_NAME_RE = re.compile(r"^([0-9a-f]{32})\.pair$")
-_QR_RE = re.compile(r"^FCPAIR:1:([0-9A-F]{32}):([0-9A-F]{64})$")
+_SEQ_NAME_RE = re.compile(r"([0-9]{6,})\.chg")
+_SNAP_NAME_RE = re.compile(r"(.+)\.snap", re.DOTALL)
+_PAIR_NAME_RE = re.compile(r"([0-9a-f]{32})\.pair")
+_QR_RE = re.compile(r"FCPAIR:1:([0-9A-F]{32}):([0-9A-F]{64})")
+_KEY_HEX_RE = re.compile(r"[0-9a-f]{64}")
+_KEY_CHECK_RE = re.compile(r"[0-9a-f]{32}")
+# Same separator set as the recovery phrase (fc_bip39.SEPARATORS).
+QR_TRIM = " \t\r\n\u00a0"
+# Every pattern is matched against the WHOLE string (fullmatch) and uses ASCII classes only.
 
 
 class FileError(ValueError):
@@ -28,7 +34,7 @@ def change_file_name(seq):
 
 
 def parse_change_file_name(name):
-    m = _SEQ_NAME_RE.match(name)
+    m = _SEQ_NAME_RE.fullmatch(name)
     if not m:
         return None
     seq = int(m.group(1))
@@ -38,14 +44,14 @@ def parse_change_file_name(name):
 
 
 def parse_snapshot_file_name(name):
-    m = _SNAP_NAME_RE.match(name)
+    m = _SNAP_NAME_RE.fullmatch(name)
     if not m or not fc_hlc.is_valid(m.group(1)):
         return None
     return m.group(1)
 
 
 def parse_pairing_file_name(name):
-    m = _PAIR_NAME_RE.match(name)
+    m = _PAIR_NAME_RE.fullmatch(name)
     return m.group(1) if m else None
 
 
@@ -68,7 +74,7 @@ def parse_path(path):
 
 
 MAX_SAFE_INT = (1 << 53) - 1
-_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+_TS_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z")
 
 
 def as_int(x):
@@ -96,6 +102,20 @@ def _reject_constant(name):
     raise FileError("malformed")  # NaN, Infinity, -Infinity are not JSON
 
 
+def _binary64(text):
+    """Every JSON number is the binary64 value it parses to (as in JavaScript). A number that
+    overflows binary64 (1e400, or a 400-digit integer) makes the payload malformed."""
+    v = float(text)  # never raises for valid JSON number text; overflow gives inf
+    if not math.isfinite(v):
+        raise FileError("malformed")
+    return v
+
+
+def _parse_int(text):
+    v = _binary64(text)
+    return int(text) if abs(v) <= MAX_SAFE_INT else v
+
+
 def _has_lone_surrogate(v):
     if isinstance(v, str):
         return any(0xD800 <= ord(c) <= 0xDFFF for c in v)
@@ -116,7 +136,8 @@ def parse_json_bytes(data):
     except UnicodeDecodeError:
         raise FileError("malformed")
     try:
-        value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant)
+        value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant,
+                           parse_float=_binary64, parse_int=_parse_int)
     except ValueError:
         raise FileError("malformed")
     if _has_lone_surrogate(value):
@@ -146,9 +167,9 @@ def check_envelope(payload, path, vault_id):
         gen = as_int(payload.get("generation"))
         key = payload.get("vaultKey")
         if (gen is None or gen < 1
-                or not isinstance(key, str) or not re.match(r"^[0-9a-f]{64}$", key)
+                or not isinstance(key, str) or not _KEY_HEX_RE.fullmatch(key)
                 or not fc_hlc.is_device_id(payload.get("deviceId"))
-                or not isinstance(payload.get("expiresAt"), str) or not _TS_RE.match(payload["expiresAt"])):
+                or not isinstance(payload.get("expiresAt"), str) or not _TS_RE.fullmatch(payload["expiresAt"])):
             raise FileError("malformed")
         return {"ignoredRecords": []}
     if payload.get("deviceId") != where["deviceId"]:
@@ -183,6 +204,8 @@ def check_vault(vault):
     if not isinstance(vault, dict) or vault.get("type") != "futurecheck-vault":
         raise FileError("malformed")
     _check_format_version(vault)
+    if not fc_ids.is_canonical_uuid(vault.get("vaultId")):
+        raise FileError("malformed")
     gens = vault.get("generations")
     if not isinstance(gens, list) or not gens:
         raise FileError("malformed")
@@ -192,7 +215,7 @@ def check_vault(vault):
         if gid is None or gid < 1:
             raise FileError("malformed")
         kc = g.get("keyCheck")
-        if not isinstance(kc, str) or not re.match(r"^[0-9a-f]{32}$", kc):
+        if not isinstance(kc, str) or not _KEY_CHECK_RE.fullmatch(kc):
             raise FileError("malformed")
         ids.append(gid)
     current = as_int(vault.get("currentGeneration"))
@@ -215,7 +238,8 @@ def pairing_qr(pairing_id, secret):
 
 
 def parse_pairing_qr(text):
-    m = _QR_RE.match(text.strip().upper())
+    folded = "".join(chr(ord(c) - 32) if "a" <= c <= "z" else c for c in text.strip(QR_TRIM))
+    m = _QR_RE.fullmatch(folded)
     if not m:
         raise FileError("badQr")
     return bytes.fromhex(m.group(1)), bytes.fromhex(m.group(2))

@@ -12,8 +12,9 @@ MAX_WALL = (1 << 48) - 1
 MAX_COUNTER = 0xFFFF
 SKEW_WARNING_MS = 10 * 60 * 1000  # 10 minutes
 
-_HLC_RE = re.compile(r"^([0-9a-f]{12})-([0-9a-f]{4})-([0-9a-f]{16})$")
-_DEVICE_RE = re.compile(r"^[0-9a-f]{16}$")
+_HLC_RE = re.compile(r"([0-9a-f]{12})-([0-9a-f]{4})-([0-9a-f]{16})")
+_DEVICE_RE = re.compile(r"[0-9a-f]{16}")
+# Every pattern is matched against the WHOLE string (fullmatch) and uses ASCII classes only.
 
 
 class HlcError(ValueError):
@@ -23,7 +24,7 @@ class HlcError(ValueError):
 
 
 def is_device_id(s):
-    return isinstance(s, str) and bool(_DEVICE_RE.match(s))
+    return isinstance(s, str) and bool(_DEVICE_RE.fullmatch(s))
 
 
 def encode(wall, counter, device):
@@ -39,7 +40,7 @@ def encode(wall, counter, device):
 def decode(s):
     if not isinstance(s, str):
         raise HlcError("malformed")
-    m = _HLC_RE.match(s)
+    m = _HLC_RE.fullmatch(s)
     if not m:
         raise HlcError("malformed")
     return int(m.group(1), 16), int(m.group(2), 16), m.group(3)
