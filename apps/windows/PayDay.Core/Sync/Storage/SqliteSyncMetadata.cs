@@ -186,9 +186,14 @@ internal sealed class SqliteSyncMetadata : ISyncMetadata
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Forgets all sync state. The device's sync settings (<c>sync_device</c>) and the materializer's local IDs are kept.</summary>
+    /// <summary>
+    /// Forgets all sync state, including the Notion connector's last-pushed values (a new device ID is
+    /// a new connector owner, which pushes before it pulls, <c>sync-protocol.md</c> 12.5). The device's
+    /// sync settings (<c>sync_device</c>) and the materializer's local IDs are kept.
+    /// </summary>
     public void Reset()
     {
+        Execute("DELETE FROM sync_notion_pushed;");
         Execute("DELETE FROM sync_meta;");
         Execute("DELETE FROM sync_outbox;");
         Execute("DELETE FROM sync_batch_records;");

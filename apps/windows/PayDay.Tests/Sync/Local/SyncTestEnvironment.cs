@@ -57,7 +57,7 @@ internal sealed class SyncTestEnvironment : IDisposable
         await Db.InitializeAsync();
     }
 
-    public async Task<MigrationResult?> TurnOnAsync()
+    public async Task<TurnOnResult> TurnOnAsync()
     {
         Time.Advance(1000);
         return await Sync.TurnOnAsync(Backups);

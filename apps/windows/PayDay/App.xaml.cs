@@ -61,8 +61,23 @@ public partial class App : Application
         await DatabaseService.Instance.InitializeAsync();
         Sync.Load();
         await TypeColorService.LoadAsync(Database);
+        // Colours merged from another device (raised after the merge committed, off the UI thread).
+        Sync.DataChanged += OnSyncDataChanged;
 
         MainWindow = new MainWindow();
         MainWindow.Activate();
+    }
+
+    private static async void OnSyncDataChanged(object? sender, SyncDataChangedEventArgs e)
+    {
+        if (!e.SettingsChanged) return;
+        try
+        {
+            await TypeColorService.LoadAsync(Database);
+        }
+        catch (Exception)
+        {
+            // A failed reload keeps the colours already loaded; the next change or start reloads them.
+        }
     }
 }

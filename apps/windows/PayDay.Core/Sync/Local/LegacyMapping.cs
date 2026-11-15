@@ -12,10 +12,25 @@ namespace PayDay.Sync.Local;
 public sealed class LegacyMigrationException : InvalidOperationException
 {
     public LegacyMigrationException(string message)
-        : base(message)
+        : this(message, Array.Empty<MigrationProblem>())
     {
     }
+
+    public LegacyMigrationException(string message, IReadOnlyList<MigrationProblem> problems)
+        : base(message)
+    {
+        Problems = problems ?? Array.Empty<MigrationProblem>();
+    }
+
+    /// <summary>The rows that stopped the migration, when the failure is about specific rows.</summary>
+    public IReadOnlyList<MigrationProblem> Problems { get; }
 }
+
+/// <summary>
+/// One row of today's tables the migration cannot carry over (<see cref="LegacyMapping.FindProblems"/>):
+/// the table, the row's ID as text, the offending column and its value, and a message for the UI.
+/// </summary>
+public sealed record MigrationProblem(string Table, string RowId, string Column, string? Value, string Message);
 
 /// <summary>
 /// Synced rows built from today's data: the plan-entity rows by entity and ID (every field except
@@ -126,17 +141,16 @@ public static class LegacyMapping
         ArgumentNullException.ThrowIfNull(bills);
         ArgumentNullException.ThrowIfNull(payments);
         ArgumentNullException.ThrowIfNull(snapshots);
+        if (FindProblems(bills, payments, snapshots) is { Count: > 0 } problems)
+        {
+            throw new LegacyMigrationException(problems[0].Message, problems);
+        }
         var result = new LegacyRows();
 
         var billRows = result.Rows[SyncEntities.Bill];
         foreach (var bill in bills)
         {
-            var id = MapBillId(bill.Id);
-            if (billRows.ContainsKey(id))
-            {
-                throw new LegacyMigrationException($"Two bills map to the same synced ID {id} (bill \"{bill.Id}\"); rename one before turning sync on.");
-            }
-            billRows[id] = AllBillFields(bill, NormalizeTimestamp(bill.CreatedAt));
+            billRows[MapBillId(bill.Id)] = AllBillFields(bill, NormalizeTimestamp(bill.CreatedAt));
         }
 
         var paymentRows = result.Rows[SyncEntities.Payment];
@@ -145,10 +159,6 @@ public static class LegacyMapping
         foreach (var p in payments.OrderBy(p => p.Id))
         {
             var billId = MapBillId(p.BillId);
-            if (!SyncDates.IsDate(p.PeriodKey))
-            {
-                throw new LegacyMigrationException($"Payment {p.Id.ToString(CultureInfo.InvariantCulture)} has a period key that is not a date (\"{p.PeriodKey}\").");
-            }
             var cents = SyncMoney.TryCents(p.AmountPaid, out var c) ? c : 0;
             var paidAt = NormalizeTimestamp(p.PaidAt) ?? string.Empty;
             var content = (billId, p.PeriodKey, cents, paidAt);
@@ -185,10 +195,6 @@ public static class LegacyMapping
         var snapshotOccurrences = new Dictionary<(string Date, long Cents), long>();
         foreach (var s in snapshots.OrderBy(s => s.Id))
         {
-            if (!SyncDates.IsDate(s.SnapshotDate))
-            {
-                throw new LegacyMigrationException($"Snapshot {s.Id.ToString(CultureInfo.InvariantCulture)} has a date that is not a date (\"{s.SnapshotDate}\").");
-            }
             var cents = SyncMoney.TryCents(s.TotalRemaining, out var c) ? c : 0;
             var key = (s.SnapshotDate, cents);
             var n = snapshotOccurrences.TryGetValue(key, out var seen) ? seen + 1 : 1;
@@ -204,6 +210,53 @@ public static class LegacyMapping
             result.SnapshotLocalIds[id] = s.Id;
         }
         return result;
+    }
+
+    /// <summary>
+    /// Every row of today's data that <see cref="Map"/> cannot carry over without losing or merging
+    /// it: a payment period key or a snapshot date that is not a <c>YYYY-MM-DD</c> date, and two bills
+    /// whose IDs map to the same synced ID. Empty when the data can be migrated. Read-only, so the UI
+    /// can list the rows to fix before anything is written.
+    /// </summary>
+    public static IReadOnlyList<MigrationProblem> FindProblems(IReadOnlyList<Bill> bills, IReadOnlyList<Payment> payments, IReadOnlyList<Snapshot> snapshots)
+    {
+        ArgumentNullException.ThrowIfNull(bills);
+        ArgumentNullException.ThrowIfNull(payments);
+        ArgumentNullException.ThrowIfNull(snapshots);
+        var problems = new List<MigrationProblem>();
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var bill in bills)
+        {
+            var id = MapBillId(bill.Id);
+            if (seen.TryGetValue(id, out var first))
+            {
+                problems.Add(new MigrationProblem("Bills", bill.Id ?? string.Empty, "Id", bill.Id,
+                    $"Two bills map to the same synced ID {id} (bills \"{first}\" and \"{bill.Id}\"); rename one before turning sync on."));
+            }
+            else
+            {
+                seen[id] = bill.Id ?? string.Empty;
+            }
+        }
+        foreach (var p in payments.OrderBy(p => p.Id))
+        {
+            if (!SyncDates.IsDate(p.PeriodKey))
+            {
+                var id = p.Id.ToString(CultureInfo.InvariantCulture);
+                problems.Add(new MigrationProblem("Payments", id, "PeriodKey", p.PeriodKey,
+                    $"Payment {id} has a period key that is not a date (\"{p.PeriodKey}\")."));
+            }
+        }
+        foreach (var s in snapshots.OrderBy(s => s.Id))
+        {
+            if (!SyncDates.IsDate(s.SnapshotDate))
+            {
+                var id = s.Id.ToString(CultureInfo.InvariantCulture);
+                problems.Add(new MigrationProblem("Snapshots", id, "SnapshotDate", s.SnapshotDate,
+                    $"Snapshot {id} has a date that is not a date (\"{s.SnapshotDate}\")."));
+            }
+        }
+        return problems;
     }
 
     /// <summary>

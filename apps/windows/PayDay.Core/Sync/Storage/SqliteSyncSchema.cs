@@ -15,6 +15,8 @@ namespace PayDay.Sync.Storage;
 ///   <item><term><c>sync_cursors</c>, <c>sync_merged_ahead</c>, <c>sync_snapshot_seen</c></term><description>Reading state (sections 10.2, 11.1).</description></item>
 ///   <item><term><c>sync_device</c></term><description>This device's sync settings (on/off, migration done); kept by <see cref="ISyncMetadata.Reset"/>.</description></item>
 ///   <item><term><c>sync_local_ids</c></term><description>The integer <c>Payments.Id</c> / <c>Snapshots.Id</c> the materializer gave each synced row, so local IDs stay stable.</description></item>
+///   <item><term><c>sync_legacy_updated</c></term><description>Each migrated bill's <c>UpdatedAt</c> from before sync and the migration HLC, so a bill nobody edited since keeps its old <c>UpdatedAt</c> (the Notion connector compares it with Notion's edit time).</description></item>
+///   <item><term><c>sync_notion_pushed</c></term><description>Per bill, the Remaining (cents) this device's Notion connector last wrote to Notion, for echo detection (<c>sync-protocol.md</c> 5.3; <c>data-model.md</c> 6.2). Cleared by <see cref="Engine.ISyncMetadata.Reset"/>.</description></item>
 /// </list>
 /// </summary>
 public static class SqliteSyncSchema
@@ -85,6 +87,15 @@ public static class SqliteSyncSchema
             PRIMARY KEY (entity, sync_id)
         ) WITHOUT ROWID;
         CREATE UNIQUE INDEX IF NOT EXISTS sync_local_ids_by_local ON sync_local_ids (entity, local_id);
+        CREATE TABLE IF NOT EXISTS sync_legacy_updated (
+            bill_id    TEXT PRIMARY KEY,
+            updated_at TEXT,
+            hlc        TEXT NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS sync_notion_pushed (
+            bill_id         TEXT PRIMARY KEY,
+            remaining_cents INTEGER NOT NULL
+        ) WITHOUT ROWID;
         """;
 
     /// <summary>True when the sync tables exist in the database <paramref name="connection"/> is open on. Read-only.</summary>

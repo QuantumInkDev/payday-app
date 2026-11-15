@@ -63,6 +63,48 @@ public sealed class BackupRotationService
         return fileName;
     }
 
+    /// <summary>File-name prefix of the backup written before sync is turned on (never rotated).</summary>
+    public const string PreSyncFileNamePrefix = "payday-pre-sync-";
+
+    /// <summary>File-name prefix of the backup written before joining a vault replaces this device's data (never rotated).</summary>
+    public const string PreJoinFileNamePrefix = "payday-pre-join-";
+
+    /// <summary>
+    /// Writes a backup of the full DB that rotation never deletes: the name starts with
+    /// <paramref name="prefix"/> (for example <see cref="PreSyncFileNamePrefix"/>) instead of
+    /// <see cref="FileNamePrefix"/>, so <see cref="ListAsync"/> and <see cref="TrimAsync"/> never see
+    /// it. A name already in the store gets a <c>-2</c>, <c>-3</c>, … suffix instead of being
+    /// overwritten. Returns the file name written.
+    /// </summary>
+    public async Task<string> CreateKeptAsync(string prefix, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(prefix) || prefix.StartsWith(FileNamePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("A kept backup needs its own prefix, distinct from the rotating one.", nameof(prefix));
+        }
+        var bills = await _db.GetAllBillsAsync().ConfigureAwait(false);
+        var payments = await _db.GetAllPaymentsAsync().ConfigureAwait(false);
+        var snapshots = await _db.GetAllSnapshotsAsync().ConfigureAwait(false);
+        var settings = await _db.GetAllSettingsAsync().ConfigureAwait(false);
+
+        var now = _utcNow();
+        var json = BackupSerializer.ToJson(bills, payments, snapshots, settings, exportedAt: now);
+        var existing = (await _store.ListAsync(ct).ConfigureAwait(false))
+            .Select(e => e.FileName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var stem = prefix + now.ToString(TimestampFormat, CultureInfo.InvariantCulture);
+        var fileName = stem + FileNameExtension;
+        for (var n = 2; existing.Contains(fileName); n++)
+        {
+            fileName = $"{stem}-{n.ToString(CultureInfo.InvariantCulture)}{FileNameExtension}";
+        }
+        await _store.WriteAsync(fileName, json, ct).ConfigureAwait(false);
+        return fileName;
+    }
+
+    /// <summary>The backup written before sync is turned on (<see cref="PreSyncFileNamePrefix"/>; never rotated).</summary>
+    public Task<string> CreatePreSyncAsync(CancellationToken ct = default) => CreateKeptAsync(PreSyncFileNamePrefix, ct);
+
     /// <summary>
     /// Returns the auto-backup entries known to the store, newest first.
     /// Filters out anything that doesn't match the

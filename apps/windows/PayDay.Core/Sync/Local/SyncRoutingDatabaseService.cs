@@ -24,17 +24,26 @@ namespace PayDay.Sync.Local;
 /// </list>
 /// Per-device settings (<c>Theme</c>, <c>LastNotionSync</c>, …) always go to the tables.
 /// <para>
-/// "Fields that changed" are measured against the values the bill object had when it was read through
-/// this service, so saving a page's copy of a bill never reverts a field another device changed in the
-/// meantime unless this device edited that field too.
+/// Every write holds <see cref="LocalSync"/>'s write gate, so none can slip in while sync is being
+/// turned on or off or a vault joined, and the replica cannot change under a write.
+/// </para>
+/// <para>
+/// "Fields that changed" are measured against the values the object had when it was read or written
+/// through this service (with sync on or off), so saving a page's copy of a bill never reverts a
+/// field another device changed in the meantime unless this device edited that field too. An object
+/// this service never saw is compared with the merged state. The same holds for the type colour map:
+/// only the colours that differ from the map last read are written.
 /// </para>
 /// </summary>
-public sealed class SyncRoutingDatabaseService : IDatabaseService
+public sealed class SyncRoutingDatabaseService : IDatabaseService, INotionSyncHost
 {
     private readonly IDatabaseService _tables;
     private readonly LocalSync _sync;
     private readonly BackupRotationService? _backups;
     private readonly ConditionalWeakTable<Bill, BillBaseline> _baselines = new();
+    private readonly object _typeColorsLock = new();
+    private string? _typeColorsLoaded;
+    private bool _typeColorsKnown;
 
     /// <param name="tables">Today's tables.</param>
     /// <param name="sync">Local sync; while it is off this service only passes calls through.</param>
@@ -53,15 +62,17 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
 
     // ---- Reads: always the tables ---------------------------------------------------------------------
 
-    public Task<string?> GetSettingAsync(string key) => _tables.GetSettingAsync(key);
+    public async Task<string?> GetSettingAsync(string key)
+    {
+        var value = await _tables.GetSettingAsync(key).ConfigureAwait(false);
+        if (key == TypeColorService.SettingKey) RememberTypeColors(value);
+        return value;
+    }
 
     public async Task<IReadOnlyList<Bill>> GetAllBillsAsync()
     {
         var bills = await _tables.GetAllBillsAsync().ConfigureAwait(false);
-        if (_sync.IsOn)
-        {
-            foreach (var bill in bills) Remember(bill);
-        }
+        foreach (var bill in bills) Remember(bill);
         return bills;
     }
 
@@ -71,7 +82,12 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
 
     public Task<IReadOnlyList<Snapshot>> GetAllSnapshotsAsync() => _tables.GetAllSnapshotsAsync();
 
-    public Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync() => _tables.GetAllSettingsAsync();
+    public async Task<IReadOnlyDictionary<string, string?>> GetAllSettingsAsync()
+    {
+        var all = await _tables.GetAllSettingsAsync().ConfigureAwait(false);
+        RememberTypeColors(all.TryGetValue(TypeColorService.SettingKey, out var colors) ? colors : null);
+        return all;
+    }
 
     // ---- Settings -----------------------------------------------------------------------------------
 
@@ -87,27 +103,52 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
             || key == TypeColorService.SettingKey;
     }
 
-    public Task SetSettingAsync(string key, string? value)
+    public async Task SetSettingAsync(string key, string? value)
     {
-        if (_sync.Replica is not { } replica || !IsSyncedSettingKey(key)) return _tables.SetSettingAsync(key, value);
-        replica.Commit((s, h) => SettingRecords(s, key, value, h));
-        return Task.CompletedTask;
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica || !IsSyncedSettingKey(key))
+            {
+                await _tables.SetSettingAsync(key, value).ConfigureAwait(false);
+            }
+            else
+            {
+                var loaded = TypeColorsBaseline();
+                replica.Commit((s, h) => SettingRecords(s, key, value, loaded, h));
+                if (_sync.IsOn) _sync.NotifyLocalEdit();
+            }
+            if (key == TypeColorService.SettingKey) RememberTypeColors(value);
+        }
     }
 
-    private static IReadOnlyList<ChangeRecord> SettingRecords(SyncState s, string key, string? value, Clock.Hlc h)
+    private static IReadOnlyList<ChangeRecord> SettingRecords(SyncState s, string key, string? value, (bool Known, string? Text) loaded, Clock.Hlc h)
     {
         var output = new List<ChangeRecord>();
         if (key == TypeColorService.SettingKey)
         {
-            // Today's whole-map value becomes one TypeColor/<type> row per type; only changed types are written.
-            var legacy = JsonData.Object((BackupSettings.LegacyTypeColorsKey, value is null ? JsonData.Null : JsonData.String(value)));
-            var desired = BackupSettings.MapForRestore(legacy);
-            foreach (var (k, v) in desired) output.AddRange(RowWriter.SetSetting(s, k, v, h));
-            foreach (var k in s.Ids(SyncEntities.Setting))
+            // Today's whole-map value becomes one TypeColor/<type> row per type.
+            var desired = TypeColorRows(value);
+            if (loaded.Known)
             {
-                if (k.StartsWith(SyncSettingKeys.TypeColorPrefix, StringComparison.Ordinal) && !desired.ContainsKey(k))
+                // Only the colours that differ from the map the caller last read: a colour another
+                // device set since then (and this map never saw) is left alone.
+                var before = TypeColorRows(loaded.Text);
+                foreach (var k in desired.Keys.Union(before.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal))
                 {
-                    output.AddRange(RowWriter.SetSetting(s, k, SyncValue.Null, h));
+                    var now = desired.TryGetValue(k, out var d) ? d : SyncValue.Null;
+                    var then = before.TryGetValue(k, out var b) ? b : SyncValue.Null;
+                    if (now != then) output.AddRange(RowWriter.SetSetting(s, k, now, h));
+                }
+            }
+            else
+            {
+                foreach (var (k, v) in desired) output.AddRange(RowWriter.SetSetting(s, k, v, h));
+                foreach (var k in s.Ids(SyncEntities.Setting))
+                {
+                    if (k.StartsWith(SyncSettingKeys.TypeColorPrefix, StringComparison.Ordinal) && !desired.ContainsKey(k))
+                    {
+                        output.AddRange(RowWriter.SetSetting(s, k, SyncValue.Null, h));
+                    }
                 }
             }
         }
@@ -123,17 +164,42 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
         return ChangeRecord.SortByKey(output);
     }
 
-    // ---- Bills ----------------------------------------------------------------------------------------
+    private static IReadOnlyDictionary<string, SyncValue> TypeColorRows(string? typeColorsJson)
+        => BackupSettings.MapForRestore(JsonData.Object((BackupSettings.LegacyTypeColorsKey, typeColorsJson is null ? JsonData.Null : JsonData.String(typeColorsJson))));
 
-    public Task UpsertBillAsync(Bill bill)
+    private void RememberTypeColors(string? text)
     {
-        ArgumentNullException.ThrowIfNull(bill);
-        if (_sync.Replica is not { } replica) return _tables.UpsertBillAsync(bill);
-        SaveBill(replica, bill);
-        return Task.CompletedTask;
+        lock (_typeColorsLock)
+        {
+            _typeColorsLoaded = text;
+            _typeColorsKnown = true;
+        }
     }
 
-    private void SaveBill(SyncReplica replica, Bill bill)
+    private (bool Known, string? Text) TypeColorsBaseline()
+    {
+        lock (_typeColorsLock) return (_typeColorsKnown, _typeColorsLoaded);
+    }
+
+    // ---- Bills ----------------------------------------------------------------------------------------
+
+    public async Task UpsertBillAsync(Bill bill)
+    {
+        ArgumentNullException.ThrowIfNull(bill);
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica)
+            {
+                await _tables.UpsertBillAsync(bill).ConfigureAwait(false);
+                Remember(bill);
+                return;
+            }
+            SaveBill(replica, bill, fromNotion: false);
+        }
+        _sync.NotifyLocalEdit();
+    }
+
+    private void SaveBill(SyncReplica replica, Bill bill, bool fromNotion)
     {
         var id = LegacyMapping.MapBillId(bill.Id);
         var exists = replica.Read((s, _) => s.Store.Fields(SyncEntities.Bill, id).Any());
@@ -145,23 +211,35 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
             fields["remainingCheckpoint"] = SyncValue.Number(LegacyMapping.Money(Math.Max(0, bill.Remaining)));
             replica.CreateRow(SyncEntities.Bill, id, fields);
         }
+        else if (fromNotion)
+        {
+            var lastPushed = _sync.GetNotionLastPushed(id);
+            replica.Commit((s, h) => BillEditRecords(s, id, bill, baseline: null, RemainingSource.Notion, lastPushed, h));
+        }
         else
         {
             var baseline = _baselines.TryGetValue(bill, out var b) ? b : null;
-            replica.Commit((s, h) => BillEditRecords(s, id, bill, baseline, h));
+            replica.Commit((s, h) => BillEditRecords(s, id, bill, baseline, RemainingSource.App, null, h));
         }
         bill.Id = id;
         bill.Remaining = replica.Read((s, _) => s.Remaining(id));
         Remember(bill);
     }
 
-    private static IReadOnlyList<ChangeRecord> BillEditRecords(SyncState s, string id, Bill bill, BillBaseline? baseline, Clock.Hlc h)
+    /// <summary>
+    /// The records of one bill save: the editable fields that differ from <paramref name="baseline"/>
+    /// (or, without one, from the merged state), an undelete when the row is not live, and
+    /// <c>setRemaining</c> when Remaining was edited.
+    /// </summary>
+    private static IReadOnlyList<ChangeRecord> BillEditRecords(
+        SyncState s, string id, Bill bill, BillBaseline? baseline, RemainingSource source, double? lastPushed, Clock.Hlc h)
     {
         var desired = LegacyMapping.EditableBillFields(bill);
         var changes = baseline is null
             ? desired
             : desired.Where(kv => !baseline.Fields.TryGetValue(kv.Key, out var before) || before != kv.Value)
                 .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+        // RowWriter.Edit writes only the fields whose value differs from the merged state.
         var output = new List<ChangeRecord>(RowWriter.Edit(s, SyncEntities.Bill, id, changes, h));
         var live = s.IsLive(SyncEntities.Bill, id);
         if (!live)
@@ -175,9 +253,9 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
         {
             if (live)
             {
-                output.AddRange(PaymentWriter.SetRemaining(s, id, LegacyMapping.Money(remaining), RemainingSource.App, null, h));
+                output.AddRange(PaymentWriter.SetRemaining(s, id, LegacyMapping.Money(remaining), source, lastPushed, h));
             }
-            else
+            else if (!(source == RemainingSource.Notion && lastPushed is { } pushed && SyncMoney.Cents(pushed) == SyncMoney.Cents(remaining)))
             {
                 output.Add(new ChangeRecord(SyncEntities.Bill, id, "remainingCheckpoint", SyncValue.Number(LegacyMapping.Money(remaining)), h));
             }
@@ -187,42 +265,70 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
 
     // ---- Payments -------------------------------------------------------------------------------------
 
-    public Task<long> MarkBillPaidAsync(string periodKey, Bill bill, double amount)
+    public async Task<long> MarkBillPaidAsync(string periodKey, Bill bill, double amount)
     {
         ArgumentNullException.ThrowIfNull(bill);
-        if (_sync.Replica is not { } replica) return _tables.MarkBillPaidAsync(periodKey, bill, amount);
-        var billId = LegacyMapping.MapBillId(bill.Id);
-        var localId = MarkPaid(replica, billId, periodKey, amount, null);
-        bill.Id = billId;
-        RefreshRemaining(replica, bill);
-        return Task.FromResult(localId);
+        long localId;
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica)
+            {
+                localId = await _tables.MarkBillPaidAsync(periodKey, bill, amount).ConfigureAwait(false);
+                Remember(bill);
+                return localId;
+            }
+            var billId = LegacyMapping.MapBillId(bill.Id);
+            localId = MarkPaid(replica, billId, periodKey, amount, null);
+            bill.Id = billId;
+            RefreshRemaining(replica, bill);
+        }
+        _sync.NotifyLocalEdit();
+        return localId;
     }
 
-    public Task UnmarkBillPaidAsync(string periodKey, Bill bill, double refunded)
+    public async Task UnmarkBillPaidAsync(string periodKey, Bill bill, double refunded)
     {
         ArgumentNullException.ThrowIfNull(bill);
-        if (_sync.Replica is not { } replica) return _tables.UnmarkBillPaidAsync(periodKey, bill, refunded);
-        var billId = LegacyMapping.MapBillId(bill.Id);
-        Unmark(replica, billId, periodKey);
-        bill.Id = billId;
-        RefreshRemaining(replica, bill);
-        return Task.CompletedTask;
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica)
+            {
+                await _tables.UnmarkBillPaidAsync(periodKey, bill, refunded).ConfigureAwait(false);
+                RememberRemaining(bill);
+                return;
+            }
+            var billId = LegacyMapping.MapBillId(bill.Id);
+            Unmark(replica, billId, periodKey);
+            bill.Id = billId;
+            RefreshRemaining(replica, bill);
+        }
+        _sync.NotifyLocalEdit();
     }
 
-    public Task<long> InsertPaymentAsync(Payment payment)
+    public async Task<long> InsertPaymentAsync(Payment payment)
     {
         ArgumentNullException.ThrowIfNull(payment);
-        if (_sync.Replica is not { } replica) return _tables.InsertPaymentAsync(payment);
-        var billId = LegacyMapping.MapBillId(payment.BillId);
-        payment.Id = MarkPaid(replica, billId, payment.PeriodKey, payment.AmountPaid, LegacyMapping.NormalizeTimestamp(payment.PaidAt));
-        payment.BillId = billId;
-        return Task.FromResult(payment.Id);
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica) return await _tables.InsertPaymentAsync(payment).ConfigureAwait(false);
+            var billId = LegacyMapping.MapBillId(payment.BillId);
+            payment.Id = MarkPaid(replica, billId, payment.PeriodKey, payment.AmountPaid, LegacyMapping.NormalizeTimestamp(payment.PaidAt));
+            payment.BillId = billId;
+        }
+        _sync.NotifyLocalEdit();
+        return payment.Id;
     }
 
-    public Task<int> DeletePaymentsForBillInPeriodAsync(string periodKey, string billId)
+    public async Task<int> DeletePaymentsForBillInPeriodAsync(string periodKey, string billId)
     {
-        if (_sync.Replica is not { } replica) return _tables.DeletePaymentsForBillInPeriodAsync(periodKey, billId);
-        return Task.FromResult(Unmark(replica, LegacyMapping.MapBillId(billId), periodKey));
+        int removed;
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica) return await _tables.DeletePaymentsForBillInPeriodAsync(periodKey, billId).ConfigureAwait(false);
+            removed = Unmark(replica, LegacyMapping.MapBillId(billId), periodKey);
+        }
+        _sync.NotifyLocalEdit();
+        return removed;
     }
 
     /// <summary>Marks the bill's Regular payment for the period; returns the payment's local ID (0 when it is not shown).</summary>
@@ -237,61 +343,84 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
     /// <summary>
     /// Today's unmark removes every payment of the bill in the period: the Regular one through the
     /// unmark rule, and any Extra payment of that period (from an old import) through deletePayment.
-    /// Returns how many payments were removed.
+    /// It is <b>one</b> user action: one HLC and one transaction, each rule seeing the checkpoint the
+    /// previous one raised. Returns how many payments were removed.
     /// </summary>
     private static int Unmark(SyncReplica replica, string billId, string periodKey)
     {
-        var removed = replica.UnmarkPaid(PaymentKinds.Regular, billId, periodKey).Count > 0 ? 1 : 0;
+        var steps = new List<Func<SyncState, Clock.Hlc, IReadOnlyList<ChangeRecord>>>
+        {
+            (s, h) => PaymentWriter.UnmarkPaid(s, PaymentKinds.Regular, billId, periodKey, h),
+        };
         var extras = replica.Read((s, _) => s.LivePaymentsFor(billId)
             .Where(p => s.PaymentKind(p) == PaymentKinds.Extra
                 && s.Value(SyncEntities.Payment, p, "periodKey") is { IsString: true } k && k.StringValue == periodKey)
             .ToArray());
-        foreach (var extra in extras)
-        {
-            if (replica.DeletePayment(extra).Count > 0) removed++;
-        }
-        return removed;
+        foreach (var extra in extras) steps.Add((s, h) => PaymentWriter.DeletePayment(s, extra, h));
+        var written = replica.CommitSteps(steps.ToArray());
+        return written.Count(r => r.Entity == SyncEntities.Payment && r.Field == SyncEntities.DeletedField && r.Value.IsTrue);
     }
 
     private void RefreshRemaining(SyncReplica replica, Bill bill)
     {
         bill.Remaining = replica.Read((s, _) => s.Remaining(bill.Id));
+        RememberRemaining(bill);
+    }
+
+    private void RememberRemaining(Bill bill)
+    {
         if (_baselines.TryGetValue(bill, out var baseline)) baseline.Remaining = LegacyMapping.Money(bill.Remaining);
     }
 
     // ---- Snapshots ------------------------------------------------------------------------------------
 
-    public Task<long> InsertSnapshotAsync(Snapshot snapshot)
+    public async Task<long> InsertSnapshotAsync(Snapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        if (_sync.Replica is not { } replica) return _tables.InsertSnapshotAsync(snapshot);
-        var id = replica.NewRowId();
-        replica.CreateRow(SyncEntities.BalanceSnapshot, id, new Dictionary<string, SyncValue>(StringComparer.Ordinal)
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
         {
-            ["snapshotDate"] = SyncValue.String(snapshot.SnapshotDate ?? string.Empty),
-            ["totalRemaining"] = SyncValue.Number(LegacyMapping.Money(snapshot.TotalRemaining)),
-            ["details"] = SyncValue.StringOrNull(snapshot.Details),
-            ["notionPageId"] = SyncValue.StringOrNull(snapshot.NotionPageId),
-        });
-        snapshot.Id = replica.Read((_, _) => LocalIdOf(SyncEntities.BalanceSnapshot, id)) ?? 0;
-        return Task.FromResult(snapshot.Id);
+            if (_sync.Replica is not { } replica) return await _tables.InsertSnapshotAsync(snapshot).ConfigureAwait(false);
+            var id = replica.NewRowId();
+            replica.CreateRow(SyncEntities.BalanceSnapshot, id, new Dictionary<string, SyncValue>(StringComparer.Ordinal)
+            {
+                ["snapshotDate"] = SyncValue.String(snapshot.SnapshotDate ?? string.Empty),
+                ["totalRemaining"] = SyncValue.Number(LegacyMapping.Money(snapshot.TotalRemaining)),
+                ["details"] = SyncValue.StringOrNull(snapshot.Details),
+                ["notionPageId"] = SyncValue.StringOrNull(snapshot.NotionPageId),
+            });
+            snapshot.Id = replica.Read((_, _) => LocalIdOf(SyncEntities.BalanceSnapshot, id)) ?? 0;
+        }
+        _sync.NotifyLocalEdit();
+        return snapshot.Id;
     }
 
-    public Task<int> DeleteSnapshotAsync(long id)
+    public async Task<int> DeleteSnapshotAsync(long id)
     {
-        if (_sync.Replica is not { } replica) return _tables.DeleteSnapshotAsync(id);
-        var syncId = replica.Read((_, _) => SyncIdOf(SyncEntities.BalanceSnapshot, id));
-        if (syncId is null) return Task.FromResult(0);
-        return Task.FromResult(replica.DeleteRow(SyncEntities.BalanceSnapshot, syncId).Count);
+        int count;
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica) return await _tables.DeleteSnapshotAsync(id).ConfigureAwait(false);
+            var syncId = replica.Read((_, _) => SyncIdOf(SyncEntities.BalanceSnapshot, id));
+            if (syncId is null) return 0;
+            count = replica.DeleteRow(SyncEntities.BalanceSnapshot, syncId).Count;
+        }
+        _sync.NotifyLocalEdit();
+        return count;
     }
 
-    public Task<int> DeleteAllSnapshotsAsync()
+    public async Task<int> DeleteAllSnapshotsAsync()
     {
-        if (_sync.Replica is not { } replica) return _tables.DeleteAllSnapshotsAsync();
-        var records = replica.Commit((s, h) => s.LiveIds(SyncEntities.BalanceSnapshot)
-            .SelectMany(id => RowWriter.Delete(s, SyncEntities.BalanceSnapshot, id, h))
-            .ToArray());
-        return Task.FromResult(records.Count);
+        int count;
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica) return await _tables.DeleteAllSnapshotsAsync().ConfigureAwait(false);
+            var records = replica.Commit((s, h) => s.LiveIds(SyncEntities.BalanceSnapshot)
+                .SelectMany(id => RowWriter.Delete(s, SyncEntities.BalanceSnapshot, id, h))
+                .ToArray());
+            count = records.Count;
+        }
+        _sync.NotifyLocalEdit();
+        return count;
     }
 
     // ---- Restore --------------------------------------------------------------------------------------
@@ -309,19 +438,23 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
         IReadOnlyList<Snapshot> snapshots,
         IReadOnlyDictionary<string, string?> settings)
     {
-        if (_sync.Replica is not { } replica)
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
         {
-            await _tables.ReplaceAllDataAsync(bills, payments, snapshots, settings).ConfigureAwait(false);
-            return;
+            if (_sync.Replica is not { } replica)
+            {
+                await _tables.ReplaceAllDataAsync(bills, payments, snapshots, settings).ConfigureAwait(false);
+                return;
+            }
+            ArgumentNullException.ThrowIfNull(settings);
+            var rows = LegacyMapping.Map(bills, payments, snapshots);
+            if (_backups is not null) await _backups.CreateAsync().ConfigureAwait(false);
+            replica.Restore(ToRestoreInput(rows, settings));
+            foreach (var (key, value) in settings)
+            {
+                if (!IsSyncedSettingKey(key) && key != "SchemaVersion") await _tables.SetSettingAsync(key, value).ConfigureAwait(false);
+            }
         }
-        ArgumentNullException.ThrowIfNull(settings);
-        var rows = LegacyMapping.Map(bills, payments, snapshots);
-        if (_backups is not null) await _backups.CreateAsync().ConfigureAwait(false);
-        replica.Restore(ToRestoreInput(rows, settings));
-        foreach (var (key, value) in settings)
-        {
-            if (!IsSyncedSettingKey(key) && key != "SchemaVersion") await _tables.SetSettingAsync(key, value).ConfigureAwait(false);
-        }
+        _sync.NotifyLocalEdit();
     }
 
     /// <summary>A mapped backup as the restore writer's input.</summary>
@@ -334,6 +467,53 @@ public sealed class SyncRoutingDatabaseService : IDatabaseService
             StringComparer.Ordinal);
         return new RestoreInput(byEntity, LegacyMapping.SettingsJson(settings));
     }
+
+    // ---- Notion connector (sync-protocol.md 12.5) ---------------------------------------------------
+
+    public NotionConnectorState GetNotionState()
+    {
+        if (_sync.Replica is not { } replica) return NotionConnectorState.SyncOff;
+        var (owner, name) = replica.Read((s, _) =>
+        {
+            var o = s.Value(SyncEntities.Setting, SyncSettingKeys.NotionOwnerDeviceId, SyncEntities.ValueField) is { IsString: true } v ? v.StringValue : null;
+            var n = o is not null && s.Value(SyncEntities.Device, o, "name") is { IsString: true } dn ? dn.StringValue : null;
+            return (o, n);
+        });
+        if (owner is null) return new NotionConnectorState(NotionRole.NoOwner);
+        if (owner != replica.DeviceId) return new NotionConnectorState(NotionRole.OtherDevice, owner, name);
+        return new NotionConnectorState(_sync.HasNotionPushes ? NotionRole.Owner : NotionRole.OwnerMustPushFirst, owner, name);
+    }
+
+    public async Task ClaimNotionAsync()
+    {
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica) return;
+            replica.SetSetting(SyncSettingKeys.NotionOwnerDeviceId, SyncValue.String(replica.DeviceId));
+            _sync.ClearNotionLastPushed();
+        }
+        _sync.NotifyLocalEdit();
+    }
+
+    public async Task SaveBillFromNotionAsync(Bill pulled)
+    {
+        ArgumentNullException.ThrowIfNull(pulled);
+        using (await _sync.EnterWriteAsync().ConfigureAwait(false))
+        {
+            if (_sync.Replica is not { } replica)
+            {
+                await _tables.UpsertBillAsync(pulled).ConfigureAwait(false);
+                Remember(pulled);
+                return;
+            }
+            SaveBill(replica, pulled, fromNotion: true);
+        }
+        _sync.NotifyLocalEdit();
+    }
+
+    public void RecordNotionPush(string billId, double remaining) => _sync.SetNotionLastPushed(billId, remaining);
+
+    public string MapNotionBillId(string notionBillId) => LegacyMapping.MapBillId(notionBillId);
 
     // ---- Helpers --------------------------------------------------------------------------------------
 

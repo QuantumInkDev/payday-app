@@ -72,14 +72,46 @@ public sealed class LegacyMigrationTests : IDisposable
         await PrepareAsync();
         var result = await _env.TurnOnAsync();
 
-        Assert.NotNull(result);
+        Assert.Equal(TurnOnStatus.TurnedOn, result.Status);
         var backupName = Assert.Single(_env.Store.WriteHistory);
+        Assert.Equal(backupName, result.BackupFileName);
+        Assert.Equal("payday-pre-sync-20250522-120001.json", backupName);
         var backup = BackupSerializer.FromJson(_env.Store.Snapshot()[backupName]);
         Assert.Equal(new[] { "1", "13", "27", "6F9619FF-8B86-D011-B42D-00C04FC964FF", "7", "c56a4180-65aa-42ec-a945-5fd21dec0538" },
             backup.Bills.Select(b => b.Id).Order(StringComparer.Ordinal));
         Assert.Equal(6, backup.Payments.Count);
         Assert.Equal(3, backup.Snapshots.Count);
         Assert.Equal("Dark", backup.Settings["Theme"]);
+    }
+
+    [Fact]
+    public async Task TheBackupBeforeSync_IsNeverDeletedByRotation()
+    {
+        await PrepareAsync();
+        var result = await _env.TurnOnAsync();
+        var preSync = result.BackupFileName!;
+
+        // Far more auto-backups than rotation keeps, each a second apart.
+        for (var i = 0; i < BackupRotationService.MaxBackups * 3; i++)
+        {
+            _env.Time.Advance(1000);
+            await _env.Backups.CreateAsync();
+        }
+
+        var files = _env.Store.Snapshot();
+        Assert.Contains(preSync, files.Keys);
+        Assert.Equal(BackupRotationService.MaxBackups, files.Keys.Count(k => k.StartsWith(BackupRotationService.FileNamePrefix, StringComparison.Ordinal)));
+        Assert.DoesNotContain(await _env.Backups.ListAsync(), e => e.FileName == preSync);
+        Assert.Equal(0, await _env.Backups.TrimAsync());
+        Assert.Contains(preSync, _env.Store.Snapshot().Keys);
+
+        // Turning sync on again within the same second keeps both backups.
+        await _env.Sync.TurnOffAsync();
+        _env.Time.UnixMs = SyncTestEnvironment.T0 + 1000;
+        var again = await _env.Sync.TurnOnAsync(_env.Backups);
+        Assert.Equal("payday-pre-sync-20250522-120001-2.json", again.BackupFileName);
+        Assert.StartsWith(BackupRotationService.PreSyncFileNamePrefix, again.BackupFileName, StringComparison.Ordinal);
+        Assert.Contains(preSync, _env.Store.Snapshot().Keys);
     }
 
     [Fact]
@@ -110,7 +142,7 @@ public sealed class LegacyMigrationTests : IDisposable
             Assert.Equal(old.Notes, now.Notes);
             Assert.Equal(old.NotionPageId, now.NotionPageId);
             Assert.Equal(old.CreatedAt, now.CreatedAt);
-            Assert.Equal("2025-05-22 12:00:01", now.UpdatedAt);
+            Assert.Equal(old.UpdatedAt, now.UpdatedAt); // nobody edited it since the migration: today's UpdatedAt stays
         }
 
         // The shapes the fixture covers survive: an inactive bill, Installments, a custom type, a yearly bill.
@@ -127,7 +159,7 @@ public sealed class LegacyMigrationTests : IDisposable
         Assert.Equal(SyncValue.Null, _env.Value(SyncEntities.Bill, BLower, "createdAt"));
         Assert.Equal(SyncValue.Null, _env.Value(SyncEntities.Bill, B1, "targetPayoffDate"));
         Assert.Equal(SyncValue.False, _env.Value(SyncEntities.Bill, B1, "deleted"));
-        Assert.Equal(6, result!.Bills);
+        Assert.Equal(6, result.Migration!.Bills);
     }
 
     [Fact]
@@ -212,11 +244,11 @@ public sealed class LegacyMigrationTests : IDisposable
     public async Task TurnOn_StampsEveryRecordWithOneHlc_QueuesThem_AndPaymentsAreAbsorbed()
     {
         await PrepareAsync();
-        var result = await _env.TurnOnAsync();
+        var result = (await _env.TurnOnAsync()).Migration!;
 
         var replica = _env.Sync.Replica!;
         var records = replica.Read((s, _) => s.AllRecords());
-        Assert.Equal(result!.Records, records.Count);
+        Assert.Equal(result.Records, records.Count);
         Assert.All(records, r => Assert.Equal(result.Hlc, r.Hlc));
         Assert.Equal(replica.DeviceId, result.Hlc.DeviceId);
         Assert.Equal(result.Hlc, replica.Metadata.ClockState);
@@ -237,12 +269,12 @@ public sealed class LegacyMigrationTests : IDisposable
         var values = _env.RecordValues();
         var device = _env.Sync.Replica!.DeviceId;
 
-        Assert.Null(await _env.TurnOnAsync());
+        Assert.Equal(TurnOnStatus.AlreadyOn, (await _env.TurnOnAsync()).Status);
         Assert.Single(_env.Store.WriteHistory);
         Assert.Equal(tables, _env.Dump("UpdatedAt"));
 
         // Off and on again: a fresh device ID, the same rows, IDs and values.
-        _env.Sync.TurnOff();
+        await _env.Sync.TurnOffAsync();
         Assert.False(_env.Sync.IsOn);
         Assert.Equal(tables, _env.Dump("UpdatedAt"));
         await _env.TurnOnAsync();
@@ -257,15 +289,30 @@ public sealed class LegacyMigrationTests : IDisposable
     {
         await PrepareAsync();
         _env.Exec("INSERT INTO Payments (Id, BillId, PeriodKey, AmountPaid) VALUES (9, '13', 'not-a-date', 1);");
+        _env.Exec("INSERT INTO Payments (Id, BillId, PeriodKey, AmountPaid) VALUES (10, '13', '2025-5-1', 1);");
+        _env.Exec("INSERT INTO Snapshots (Id, SnapshotDate, TotalRemaining) VALUES (8, '05/01/2025', 1);");
         var before = _env.Dump();
 
-        var error = await Assert.ThrowsAsync<LegacyMigrationException>(_env.TurnOnAsync);
-        Assert.Contains("Payment 9", error.Message, StringComparison.Ordinal);
+        // Every offending row is reported, so the UI can list them; nothing is written, not even the backup.
+        var result = await _env.TurnOnAsync();
+        Assert.Equal(TurnOnStatus.Blocked, result.Status);
+        Assert.False(result.IsOn);
+        Assert.Null(result.Migration);
+        Assert.Null(result.BackupFileName);
+        Assert.Equal(
+            new[] { ("Payments", "9", "PeriodKey", "not-a-date"), ("Payments", "10", "PeriodKey", "2025-5-1"), ("Snapshots", "8", "SnapshotDate", "05/01/2025") },
+            result.Problems.Select(p => (p.Table, p.RowId, p.Column, p.Value ?? string.Empty)));
+        Assert.Contains("Payment 9", result.Problems[0].Message, StringComparison.Ordinal);
+        Assert.Empty(_env.Store.WriteHistory);
         Assert.False(_env.Sync.IsOn);
         Assert.Equal(before, _env.Dump());
         Assert.Equal(TodaysTables, _env.Tables());
         using var reopened = LocalSync.Open(LocalSync.ConnectionStringFor(_env.Path));
         Assert.False(reopened.IsOn);
+
+        // Once the rows are fixed, sync turns on.
+        _env.Exec("UPDATE Payments SET PeriodKey = '2025-05-01' WHERE Id IN (9, 10); UPDATE Snapshots SET SnapshotDate = '2025-05-01' WHERE Id = 8;");
+        Assert.Equal(TurnOnStatus.TurnedOn, (await _env.TurnOnAsync()).Status);
     }
 
     [Fact]
@@ -275,9 +322,22 @@ public sealed class LegacyMigrationTests : IDisposable
         _env.Exec("INSERT INTO Bills (Id, Name, Type) VALUES ('c56a4180-65aa-42ec-a945-5FD21DEC0538', 'Fabrikam Gym copy', 'Fitness');");
         var before = _env.Dump();
 
-        await Assert.ThrowsAsync<LegacyMigrationException>(_env.TurnOnAsync);
+        var result = await _env.TurnOnAsync();
+        Assert.Equal(TurnOnStatus.Blocked, result.Status);
+        var problem = Assert.Single(result.Problems);
+        Assert.Equal(("Bills", "Id"), (problem.Table, problem.Column));
         Assert.Equal(before, _env.Dump());
         Assert.Equal(TodaysTables, _env.Tables());
+    }
+
+    [Fact]
+    public void Mapping_StillRefusesRowsItCannotCarryOver()
+    {
+        var error = Assert.Throws<LegacyMigrationException>(() => LegacyMapping.Map(
+            Array.Empty<Bill>(),
+            new[] { new Payment { Id = 3, BillId = "1", PeriodKey = "soon", AmountPaid = 1 } },
+            Array.Empty<Snapshot>()));
+        Assert.Equal("3", Assert.Single(error.Problems).RowId);
     }
 
     [Fact]
@@ -371,7 +431,7 @@ public sealed class LegacyMigrationTests : IDisposable
         Assert.Equal(0, _env.Count("Bills"));
 
         // With sync off an empty table is seeded, as today.
-        _env.Sync.TurnOff();
+        await _env.Sync.TurnOffAsync();
         await seeded.InitializeAsync();
         Assert.Equal(1, _env.Count("Bills"));
     }
