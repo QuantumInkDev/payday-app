@@ -118,8 +118,17 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
                 OnPropertyChanged();
                 return;
             }
-            s.Select(s.Options[value].Key);
             ClearMessages();
+            try
+            {
+                s.Select(s.Options[value].Key);
+            }
+            catch (Exception e)
+            {
+                ErrorMessage = $"Could not change the cloud drive: {e.Message}";
+                OnPropertyChanged();
+                return;
+            }
             OnPropertyChanged();
             OnProviderChanged();
             _ = RefreshAccountAsync();
@@ -222,7 +231,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
             ? $"{ProviderName} isn't configured in this build."
             : $"This PC syncs through {ProviderName}, which isn't set up in this copy of FutureCheck.";
 
-    public const string NotConfiguredDetail = "This copy of FutureCheck has no Google Drive or OneDrive app registration, so it cannot sign in. Everything else works as usual on this PC.";
+    public string NotConfiguredDetail => "This copy of FutureCheck has no Google Drive or OneDrive app registration, so it cannot sign in. Everything else works as usual on this PC.";
 
     // ---- Status -----------------------------------------------------------------------------------
 

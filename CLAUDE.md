@@ -50,7 +50,7 @@ Key packages:
   WindowsAppSDK auto-initializer throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process
   without package identity. That constraint is why the VMs live here, not in the app project.
   `InternalsVisibleTo("PayDay.Tests")` keeps helpers internal but test-visible.
-- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`, including `Conformance/` which runs `spec/conformance/core/*.json`. 1313 tests as of the last verified run (incl. every `spec/conformance/sync` case and the sync engine in `PayDay.Core/Sync/`). Runs on the Mac too (`export PATH=~/.dotnet:$PATH; dotnet test apps/windows/PayDay.Tests`).
+- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`, including `Conformance/` which runs `spec/conformance/core/*.json`. 1319 tests as of the last verified run (incl. every `spec/conformance/sync` case and the sync engine in `PayDay.Core/Sync/`). Runs on the Mac too (`export PATH=~/.dotnet:$PATH; dotnet test apps/windows/PayDay.Tests`).
 - **`spec/`** — the cross-platform contract: data model, sync protocol, and JSON conformance fixtures every app must pass. `tools/spec/check_fixtures.py` (Python reference) re-derives the sync fixtures.
 - **`tools/vm-build.sh`** — builds and tests a pushed commit on the arm64 Windows VM from the Mac.
 - **`planning/`** — the build plan and sprint tracking. `PAYDAY_WINUI3_PLAN.md` is the master plan

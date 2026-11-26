@@ -26,7 +26,9 @@ public interface IGoogleTokenSource
 /// the access token silently with the stored refresh token.
 /// <para>
 /// Kept in the credential store (Credential Manager on Windows): the refresh token and the account's
-/// e-mail address, nothing else. Access tokens stay in memory. Without a usable client
+/// e-mail address, nothing else. Access tokens stay in memory. Signing out only forgets them on this
+/// device: Google's revoke endpoint drops the whole grant for this client, which would sign out the
+/// user's other devices too. Without a usable client
 /// (<see cref="GoogleDriveConfig"/>) nothing signs in: <see cref="IsConfigured"/> is false and sign-in
 /// reports <see cref="DriveSignInOutcome.NotConfigured"/>.
 /// </para>
@@ -95,7 +97,12 @@ public sealed class GoogleOAuth : IGoogleTokenSource, IDriveAccount, IDisposable
             var url = AuthorizationUrl(_client.ClientId, redirectUri, state, Challenge(verifier));
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(SignInTimeout);
-            var waiting = receiver.WaitForRedirectAsync(q => RedirectPage(q, state), timeout.Token);
+            // Only the reply carrying this sign-in's state ends the wait; anything else (another
+            // local process, a stale tab) is answered with "not found" and ignored.
+            var waiting = receiver.WaitForRedirectAsync(
+                q => q.TryGetValue("state", out var s) && FixedTimeEquals(s, state),
+                q => RedirectPage(q),
+                timeout.Token);
             IReadOnlyDictionary<string, string> query;
             try
             {
@@ -168,10 +175,9 @@ public sealed class GoogleOAuth : IGoogleTokenSource, IDriveAccount, IDisposable
         return new Uri(GoogleDriveConfig.AuthorizationEndpoint + "?" + string.Join('&', query.Select(p => $"{p.Item1}={Uri.EscapeDataString(p.Item2)}")));
     }
 
-    private static string RedirectPage(IReadOnlyDictionary<string, string> query, string state)
+    private static string RedirectPage(IReadOnlyDictionary<string, string> query)
     {
-        var ok = query.ContainsKey("code") && query.TryGetValue("state", out var s) && FixedTimeEquals(s, state);
-        return ok
+        return query.ContainsKey("code") && !query.ContainsKey("error")
             ? "<p>Signed in to Google Drive. You can close this tab and return to FutureCheck.</p>"
             : "<p>Sign-in did not finish. Return to FutureCheck and try again.</p>";
     }
@@ -202,8 +208,8 @@ public sealed class GoogleOAuth : IGoogleTokenSource, IDriveAccount, IDisposable
         }
         if (!reply.Scopes.Contains(GoogleDriveConfig.DriveScope))
         {
-            // Google lets the user untick a permission on the consent page.
-            await RevokeAsync(refresh).ConfigureAwait(false);
+            // Google lets the user untick a permission on the consent page. The grant is not revoked:
+            // that would also end the sign-in of the user's other devices.
             return new DriveSignInResult(DriveSignInOutcome.Failed, null, "FutureCheck needs permission to keep its own data in your Google Drive. Sign in again and leave that permission ticked.");
         }
         var account = EmailFromIdToken(reply.IdToken);
@@ -253,13 +259,12 @@ public sealed class GoogleOAuth : IGoogleTokenSource, IDriveAccount, IDisposable
         }
     }
 
+    /// <summary>Forgets the refresh token and the account on this device (the grant itself stays, see the class notes).</summary>
     public async Task SignOutAsync(CancellationToken ct = default)
     {
-        string? refresh;
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            refresh = _credentials.Get(RefreshTokenKey);
             _credentials.Delete(RefreshTokenKey);
             _credentials.Delete(AccountKey);
             _accessToken = null;
@@ -267,21 +272,6 @@ public sealed class GoogleOAuth : IGoogleTokenSource, IDriveAccount, IDisposable
         finally
         {
             _lock.Release();
-        }
-        if (refresh is { Length: > 0 }) await RevokeAsync(refresh).ConfigureAwait(false);
-    }
-
-    /// <summary>Best effort: tells Google to drop the grant. A failure leaves nothing on this device either way.</summary>
-    private async Task RevokeAsync(string token)
-    {
-        try
-        {
-            using var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("token", token) });
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            using var _ = await _http.PostAsync(GoogleDriveConfig.RevocationEndpoint, content, timeout.Token).ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
         }
     }
 

@@ -54,7 +54,6 @@ public static class GoogleDriveConfig
 
     public const string AuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     public const string TokenEndpoint = "https://oauth2.googleapis.com/token";
-    public const string RevocationEndpoint = "https://oauth2.googleapis.com/revoke";
 
     /// <summary>
     /// The first usable client: the environment variables, then the settings, then the built-in one.

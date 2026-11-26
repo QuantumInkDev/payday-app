@@ -138,15 +138,40 @@ public sealed class GoogleOAuthTests : IDisposable
     }
 
     [Fact]
-    public async Task AReplyForAnotherSignIn_IsRefused()
+    public async Task AReplyForAnotherSignIn_IsIgnored_UntilTheSignInTimesOut()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         var auth = Auth(FollowRedirect(_ => "?code=fictional-code&state=somebody-elses-state"));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => auth.SignInAsync(cts.Token));
+
+        Assert.Empty(_endpoint.Requests);
+        Assert.Null(_credentials.Get(GoogleOAuth.RefreshTokenKey));
+    }
+
+    [Fact]
+    public async Task AStrayLocalRequest_DoesNotEndTheSignIn()
+    {
+        var auth = Auth(url =>
+        {
+            var q = LoopbackReceiver.ParseRedirectTarget("/" + url.Query)!;
+            _endpoint.LastAuthorization = q;
+            _ = Task.Run(async () =>
+            {
+                using var http = new HttpClient();
+                // Another local process gets there first, with the wrong state and with none.
+                var stray = await http.GetAsync(q["redirect_uri"] + "/?error=access_denied&state=wrong");
+                Assert.Equal(HttpStatusCode.NotFound, stray.StatusCode);
+                await http.GetAsync(q["redirect_uri"] + "/?code=forged");
+                await http.GetAsync(q["redirect_uri"] + $"/?code=fictional-code&state={Uri.EscapeDataString(q["state"])}");
+            });
+            return true;
+        });
 
         var result = await auth.SignInAsync();
 
-        Assert.Equal(DriveSignInOutcome.Failed, result.Outcome);
-        Assert.Empty(_endpoint.Requests);
-        Assert.Null(_credentials.Get(GoogleOAuth.RefreshTokenKey));
+        Assert.Equal(DriveSignInOutcome.SignedIn, result.Outcome);
+        Assert.Equal("fictional-code", _endpoint.Requests.Single()["code"]);
     }
 
     [Fact]
@@ -161,7 +186,7 @@ public sealed class GoogleOAuthTests : IDisposable
     }
 
     [Fact]
-    public async Task UntickingTheDrivePermission_FailsTheSignIn_AndRevokesTheGrant()
+    public async Task UntickingTheDrivePermission_FailsTheSignIn_AndStoresNothing()
     {
         _endpoint.GrantedScope = "openid email";
         var auth = Auth();
@@ -170,7 +195,7 @@ public sealed class GoogleOAuthTests : IDisposable
 
         Assert.Equal(DriveSignInOutcome.Failed, result.Outcome);
         Assert.Contains("permission", result.Message, StringComparison.Ordinal);
-        Assert.Equal(new[] { "fictional-refresh-1" }, _endpoint.Revoked);
+        Assert.Empty(_endpoint.Revoked);
         Assert.Null(_credentials.Get(GoogleOAuth.RefreshTokenKey));
     }
 
@@ -260,7 +285,7 @@ public sealed class GoogleOAuthTests : IDisposable
     }
 
     [Fact]
-    public async Task SigningOut_ForgetsTheAccount_AndRevokesTheGrant()
+    public async Task SigningOut_ForgetsTheAccountOnThisDeviceOnly()
     {
         var auth = Auth();
         await auth.SignInAsync();
@@ -268,7 +293,8 @@ public sealed class GoogleOAuthTests : IDisposable
         await auth.SignOutAsync();
 
         Assert.Empty(_credentials.Items);
-        Assert.Equal(new[] { "fictional-refresh-1" }, _endpoint.Revoked);
+        // Revoking would end the grant for the user's other devices too.
+        Assert.Empty(_endpoint.Revoked);
         Assert.Null(await auth.GetSignedInUserAsync());
         await Assert.ThrowsAsync<DriveException>(() => auth.GetAccessTokenAsync(false));
     }
@@ -289,8 +315,11 @@ public sealed class GoogleOAuthTests : IDisposable
     {
         using var receiver = new LoopbackReceiver();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var waiting = receiver.WaitForRedirectAsync(_ => "<p>done</p>", cts.Token);
+        var waiting = receiver.WaitForRedirectAsync(q => q.GetValueOrDefault("state") == "s", _ => "<p>done</p>", cts.Token);
         using var http = new HttpClient();
+        // A browser's idle pre-connection that never sends a request must not hold up the redirect.
+        using var idle = new TcpClient();
+        await idle.ConnectAsync(IPAddress.Loopback, receiver.Port, cts.Token);
 
         var favicon = await http.GetAsync(receiver.RedirectUri + "/favicon.ico", cts.Token);
         using (var raw = new TcpClient())
@@ -350,7 +379,7 @@ public sealed class GoogleOAuthTests : IDisposable
             var form = body.Split('&', StringSplitOptions.RemoveEmptyEntries)
                 .Select(p => p.Split('='))
                 .ToDictionary(p => Uri.UnescapeDataString(p[0].Replace('+', ' ')), p => Uri.UnescapeDataString(p[1].Replace('+', ' ')));
-            if (request.RequestUri!.AbsoluteUri == GoogleDriveConfig.RevocationEndpoint)
+            if (request.RequestUri!.AbsoluteUri == "https://oauth2.googleapis.com/revoke")
             {
                 Revoked.Add(form["token"]);
                 return new HttpResponseMessage(HttpStatusCode.OK);

@@ -38,6 +38,9 @@ public sealed class SyncCoordinator : IDisposable
     /// <summary><c>sync_device</c> key: <c>creating</c> until vault.json is on the drive, then <c>member</c>.</summary>
     public const string VaultStateKey = "vaultState";
 
+    /// <summary>Device setting: the <see cref="IDriveProvider.Key"/> of the provider holding this device's vault.</summary>
+    public const string DriveProviderKey = "driveProvider";
+
     /// <summary><c>sync_device</c> key: the vault's <c>createdAt</c>, kept until vault.json is uploaded.</summary>
     public const string VaultCreatedAtKey = "vaultCreatedAt";
 
@@ -230,6 +233,7 @@ public sealed class SyncCoordinator : IDisposable
                     _sync.SetDeviceSetting(PhraseUnconfirmedKey, newVaultId);
                     _sync.SetDeviceSetting(VaultCreatedAtKey, Timestamp(_time.GetUtcNow()));
                     _sync.SetDeviceSetting(VaultStateKey, Creating);
+                    _sync.SetDeviceSetting(DriveProviderKey, _drive.Key);
                     _sync.SetDeviceSetting(IdentityClashKey, null);
                     WriteDeviceRow(replica);
                     if (_hasNotionToken())
@@ -543,6 +547,7 @@ public sealed class SyncCoordinator : IDisposable
                 _keys.Save(vault.VaultId, generation, key);
                 _sync.Join(vault.VaultId, lease);
                 _sync.SetDeviceSetting(VaultStateKey, Member);
+                _sync.SetDeviceSetting(DriveProviderKey, _drive.Key);
                 _sync.SetDeviceSetting(VaultCreatedAtKey, null);
                 _sync.SetDeviceSetting(IdentityClashKey, null);
                 var replica = _sync.Replica!;
@@ -1444,6 +1449,14 @@ public sealed class SyncCoordinator : IDisposable
     {
         if (_pairing is not { } pairing) return;
         await _drive.DeleteAsync(pairing.File, ct).ConfigureAwait(false);
+        if (!_drive.EnforcesUniqueNames)
+        {
+            // An upload retried after its reply was lost can leave a second copy holding the same key.
+            foreach (var copy in await ListCopiesAsync(SyncPaths.PairingFolder, pairing.File.Path, ct).ConfigureAwait(false))
+            {
+                await _drive.DeleteAsync(copy, ct).ConfigureAwait(false);
+            }
+        }
         _pairing = null;
     }
 

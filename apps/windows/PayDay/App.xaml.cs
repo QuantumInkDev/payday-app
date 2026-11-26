@@ -179,7 +179,8 @@ public partial class App : Application
                     new DriveOption(DriveChoice.OneDriveKey, oneDriveAuth, new OneDriveDriveProvider(oneDriveAuth)),
                 },
                 Credentials,
-                inVault: Sync.IsOn);
+                inVault: Sync.IsOn,
+                vaultProviderKey: Sync.IsOn ? Sync.GetDeviceSetting(SyncCoordinator.DriveProviderKey) : null);
             DriveAccount = _drive;
             if (!_drive.IsConfigured) return;
             var coordinator = new SyncCoordinator(

@@ -605,7 +605,9 @@ public sealed class SyncPageViewModelTests : IDisposable
         await vm.LoadAsync();
 
         Assert.Equal(SyncScreen.Status, vm.Screen);
-        Assert.Equal("OneDrive", vm.ProviderName); // a vault from before the choice existed is on OneDrive
+        // The coordinator recorded its provider with the vault state.
+        Assert.Equal(((IDriveProvider)_world.Drive).Key, a.Env.Sync.GetDeviceSetting(SyncCoordinator.DriveProviderKey));
+        Assert.Equal("OneDrive", vm.ProviderName); // nothing recorded for this choice: a vault from before it existed is on OneDrive
         vm.SelectedProviderIndex = 0;
         Assert.Equal("OneDrive", vm.ProviderName);
         Assert.Null(store.Get(DriveChoice.ChoiceKey));
@@ -621,6 +623,13 @@ public sealed class SyncPageViewModelTests : IDisposable
         Assert.Equal(DriveChoice.GoogleDriveKey, Choice(google, oneDrive, store).CurrentKey);
         store.Set(DriveChoice.ChoiceKey, DriveChoice.OneDriveKey);
         Assert.Equal(DriveChoice.OneDriveKey, Choice(google, oneDrive, store).CurrentKey);
+
+        // In a vault, the provider recorded with the vault state wins over the stored choice.
+        Assert.Equal(DriveChoice.GoogleDriveKey, new DriveChoice(
+            new[] { new DriveOption(DriveChoice.GoogleDriveKey, google, _world.Drive), new DriveOption(DriveChoice.OneDriveKey, oneDrive, _world.Drive) },
+            store,
+            inVault: true,
+            vaultProviderKey: DriveChoice.GoogleDriveKey).CurrentKey);
 
         // A stored provider this build cannot sign in to: kept in a vault, replaced outside one.
         oneDrive.IsConfigured = false;
@@ -655,6 +664,7 @@ public sealed class SyncPageViewModelTests : IDisposable
         Assert.Equal(2, google.SignIns);
         Assert.Equal("Google Drive", choice.ProviderName);
         Assert.Equal(_world.Drive.Name, choice.Name);
+        Assert.Equal(DriveChoice.GoogleDriveKey, ((IDriveProvider)choice).Key);
         Assert.Equal(_world.Drive.EnforcesUniqueNames, choice.EnforcesUniqueNames);
     }
 

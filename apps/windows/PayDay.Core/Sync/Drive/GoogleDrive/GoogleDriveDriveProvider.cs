@@ -22,7 +22,10 @@ namespace PayDay.Sync.Drive.GoogleDrive;
 ///     a name and a parent. Deletes are permanent (<c>files.delete</c> skips the trash, 9.1).</item>
 ///   <item>Errors: 401 → one forced token refresh, then <see cref="DriveErrorKind.Unauthorized"/>;
 ///     403 rate limits, 429 and 5xx → retried honouring <c>Retry-After</c> within
-///     <see cref="MaxRetryTime"/>, then Transient; 403 <c>storageQuotaExceeded</c> → QuotaExceeded;
+///     <see cref="MaxRetryTime"/>, then Transient. A request that creates a file or folder is retried
+///     only after an answer that says nothing was created (429, a 403 rate limit): after a network
+///     failure, a timeout or a 5xx it may have been created, so it ends as Transient and the sync
+///     engine looks before it uploads again (10.1); 403 <c>storageQuotaExceeded</c> → QuotaExceeded;
 ///     other 403s → Unauthorized; 404 → NotFound; network failures and timeouts → Transient.</item>
 /// </list>
 /// Tests drive it with a fake <see cref="HttpMessageHandler"/>; it never touches the network itself.
@@ -32,6 +35,9 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
     public const string ApiBase = "https://www.googleapis.com/";
 
     public const string FolderMimeType = "application/vnd.google-apps.folder";
+
+    /// <summary>The alias Drive accepts for the app-data folder (and may report as a parent).</summary>
+    public const string AppDataAlias = "appDataFolder";
 
     /// <summary>Files up to this size go up in one multipart request (Google's limit for it is 5 MB).</summary>
     public const int MultipartLimit = 4 * 1024 * 1024;
@@ -119,7 +125,7 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
         var metadata = Metadata(name, parentId, folder: false);
         var bytes = data.ToArray();
         using var resp = bytes.Length <= MultipartLimit
-            ? await SendAsync(() => MultipartUpload(metadata, bytes), ct).ConfigureAwait(false)
+            ? await SendAsync(() => MultipartUpload(metadata, bytes), ct, creates: true).ConfigureAwait(false)
             : await ResumableUploadAsync(metadata, bytes, path, ct).ConfigureAwait(false);
         await EnsureSuccessAsync(resp, $"uploading {path}", ct).ConfigureAwait(false);
         var node = await ReadNodeAsync(resp, path, ct).ConfigureAwait(false);
@@ -169,7 +175,8 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
         /// <summary>Every folder at <c>root/segments…</c>, earliest-created first (ties by ID).</summary>
         public IReadOnlyList<Node> Resolve(string root, IReadOnlyList<string> segments)
         {
-            var current = FoldersNamed(new[] { AppDataId }, root);
+            // Top-level items may name the app-data folder by its ID or by its alias.
+            var current = FoldersNamed(new[] { AppDataId, AppDataAlias }, root);
             foreach (var segment in segments)
             {
                 if (current.Count == 0) break;
@@ -218,7 +225,7 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
         return (new Tree(appDataId, nodes), serverTime);
     }
 
-    /// <summary>The app-data folder's real ID (children list it as their parent, not the alias), and the server's clock.</summary>
+    /// <summary>The app-data folder's real ID (children may list it, or the alias, as their parent), and the server's clock.</summary>
     private async Task<(string Id, DateTimeOffset? Date)> GetAppDataIdAsync(CancellationToken ct)
     {
         using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "drive/v3/files/appDataFolder?fields=id"), ct).ConfigureAwait(false);
@@ -239,8 +246,9 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
         var (tree, _) = await ScanAsync(ct).ConfigureAwait(false);
         var levels = new List<string> { _root };
         levels.AddRange(segments);
-        // The deepest level that already exists, taking the earliest folder at each level.
-        var parentId = tree.AppDataId;
+        // The deepest level that already exists, taking the earliest folder at each level. A new
+        // top-level folder is created in the app-data folder by its documented alias.
+        var parentId = AppDataAlias;
         var depth = 0;
         for (; depth < levels.Count; depth++)
         {
@@ -254,7 +262,7 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
             using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"drive/v3/files?fields={Uri.EscapeDataString(FileFields)}")
             {
                 Content = new StringContent(metadata, Encoding.UTF8, "application/json"),
-            }, ct).ConfigureAwait(false);
+            }, ct, creates: true).ConfigureAwait(false);
             await EnsureSuccessAsync(resp, $"creating the folder {string.Join('/', levels.Take(depth + 1))}", ct).ConfigureAwait(false);
             parentId = (await ReadNodeAsync(resp, levels[depth], ct).ConfigureAwait(false)).Id;
         }
@@ -325,7 +333,7 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
             var content = new ByteArrayContent(bytes);
             content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             return new HttpRequestMessage(HttpMethod.Put, session) { Content = content };
-        }, ct).ConfigureAwait(false);
+        }, ct, creates: true).ConfigureAwait(false);
     }
 
     internal static bool IsGoogleApiUrl(Uri url)
@@ -339,7 +347,8 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
     /// <c>Retry-After</c> or an exponential backoff. Network failures are retried the same way.
     /// Returns the last response.
     /// </summary>
-    private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> make, CancellationToken ct)
+    /// <param name="creates">The request creates a file or folder: retried only when the answer says nothing was created.</param>
+    private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> make, CancellationToken ct, bool creates = false)
     {
         var refreshed = false;
         var started = System.Diagnostics.Stopwatch.StartNew();
@@ -357,14 +366,14 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
             }
             catch (HttpRequestException e)
             {
-                if (attempt >= MaxRetries || !CanWait(Backoff(attempt))) throw new DriveException(DriveErrorKind.Transient, "Google Drive could not be reached.", e);
+                if (creates || attempt >= MaxRetries || !CanWait(Backoff(attempt))) throw new DriveException(DriveErrorKind.Transient, "Google Drive could not be reached.", e);
                 waited += Backoff(attempt);
                 await _delay(Backoff(attempt), ct).ConfigureAwait(false);
                 continue;
             }
             catch (TaskCanceledException e) when (!ct.IsCancellationRequested)
             {
-                if (attempt >= MaxRetries || !CanWait(Backoff(attempt))) throw new DriveException(DriveErrorKind.Transient, "Google Drive did not answer in time.", e);
+                if (creates || attempt >= MaxRetries || !CanWait(Backoff(attempt))) throw new DriveException(DriveErrorKind.Transient, "Google Drive did not answer in time.", e);
                 waited += Backoff(attempt);
                 await _delay(Backoff(attempt), ct).ConfigureAwait(false);
                 continue;
@@ -377,7 +386,7 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
                 attempt--;
                 continue;
             }
-            if (attempt < MaxRetries && await IsRetryableAsync(resp, ct).ConfigureAwait(false))
+            if (attempt < MaxRetries && await IsRetryableAsync(resp, creates, ct).ConfigureAwait(false))
             {
                 var wait = RetryAfter(resp) ?? Backoff(attempt);
                 if (CanWait(wait))
@@ -392,10 +401,11 @@ public sealed class GoogleDriveDriveProvider : IDriveProvider, IDisposable
         }
     }
 
-    private static async Task<bool> IsRetryableAsync(HttpResponseMessage resp, CancellationToken ct)
+    private static async Task<bool> IsRetryableAsync(HttpResponseMessage resp, bool creates, CancellationToken ct)
     {
         var status = (int)resp.StatusCode;
-        if (status == 429 || status >= 500) return true;
+        if (status == 429) return true;
+        if (status >= 500) return !creates; // a create may have gone through before the error
         if (status != 403) return false;
         var (reason, _) = await ErrorAsync(resp, ct).ConfigureAwait(false);
         return IsRateLimit(reason);

@@ -33,39 +33,88 @@ public sealed class LoopbackReceiver : IDisposable
     public void Dispose() => _listener.Stop();
 
     /// <summary>
-    /// Waits for the redirect and returns its query parameters. <paramref name="page"/> picks the page
-    /// sent back to the browser from those parameters.
+    /// Waits for the redirect that <paramref name="accept"/> recognises (its <c>state</c> matches) and
+    /// returns its query parameters. <paramref name="page"/> picks the page sent back for it. Every
+    /// other request gets a 404 and the wait goes on, so a stray local request cannot end the sign-in.
+    /// Connections are served concurrently: a browser's idle pre-connection cannot hold up the redirect.
     /// </summary>
-    public async Task<IReadOnlyDictionary<string, string>> WaitForRedirectAsync(Func<IReadOnlyDictionary<string, string>, string> page, CancellationToken ct)
+    public async Task<IReadOnlyDictionary<string, string>> WaitForRedirectAsync(
+        Func<IReadOnlyDictionary<string, string>, bool> accept,
+        Func<IReadOnlyDictionary<string, string>, string> page,
+        CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(accept);
         ArgumentNullException.ThrowIfNull(page);
-        while (true)
+        var done = new TaskCompletionSource<IReadOnlyDictionary<string, string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var handlers = new List<Task>();
+        var acceptLoop = Task.Run(async () =>
         {
-            using var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
-            using var stream = client.GetStream();
-            string? target;
+            while (!stop.IsCancellationRequested)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await _listener.AcceptTcpClientAsync(stop.Token).ConfigureAwait(false);
+                }
+                catch (Exception) when (stop.IsCancellationRequested)
+                {
+                    return;
+                }
+                lock (handlers) handlers.Add(ServeAsync(client, accept, page, done, stop.Token));
+            }
+        }, CancellationToken.None);
+        try
+        {
+            return await done.Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            stop.Cancel();
             try
             {
-                using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                readTimeout.CancelAfter(TimeSpan.FromSeconds(10));
-                target = await ReadRequestTargetAsync(stream, readTimeout.Token).ConfigureAwait(false);
+                await acceptLoop.ConfigureAwait(false);
+                Task[] pending;
+                lock (handlers) pending = handlers.ToArray();
+                await Task.WhenAll(pending).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (Exception)
             {
-                continue; // a connection that never sent a request
             }
-            catch (IOException)
+        }
+    }
+
+    private static async Task ServeAsync(
+        TcpClient client,
+        Func<IReadOnlyDictionary<string, string>, bool> accept,
+        Func<IReadOnlyDictionary<string, string>, string> page,
+        TaskCompletionSource<IReadOnlyDictionary<string, string>> done,
+        CancellationToken ct)
+    {
+        using (client)
+        {
+            try
             {
-                continue;
+                var stream = client.GetStream();
+                string? target;
+                using (var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    readTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+                    target = await ReadRequestTargetAsync(stream, readTimeout.Token).ConfigureAwait(false);
+                }
+                var query = target is null ? null : ParseRedirectTarget(target);
+                if (query is null || !accept(query))
+                {
+                    await RespondAsync(stream, 404, "Not found", "<p>Not found.</p>", ct).ConfigureAwait(false);
+                    return;
+                }
+                await RespondAsync(stream, 200, "OK", page(query), ct).ConfigureAwait(false);
+                done.TrySetResult(query);
             }
-            var query = target is null ? null : ParseRedirectTarget(target);
-            if (query is null || !(query.ContainsKey("code") || query.ContainsKey("error")))
+            catch (Exception)
             {
-                await RespondAsync(stream, 404, "Not found", "<p>Not found.</p>", ct).ConfigureAwait(false);
-                continue;
+                // A connection that never sent a request, went away, or was cut off when the wait ended.
             }
-            await RespondAsync(stream, 200, "OK", page(query), ct).ConfigureAwait(false);
-            return query;
         }
     }
 

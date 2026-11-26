@@ -44,11 +44,15 @@ public sealed class DriveChoice : IDriveProvider, IDriveAccount, IDriveSelection
     /// <param name="options">Every provider in this build, configured or not, in the order offered.</param>
     /// <param name="store">Where this device's choice is kept.</param>
     /// <param name="inVault">
-    /// True when this device is in a vault: the stored provider is kept even when this build cannot
-    /// sign in to it, and with nothing stored OneDrive is assumed (the only provider before the choice
-    /// existed). Out of a vault an unusable stored choice gives way to the first configured provider.
+    /// True when this device is in a vault: its provider is kept even when this build cannot sign in
+    /// to it. Out of a vault an unusable stored choice gives way to the first configured provider.
     /// </param>
-    public DriveChoice(IReadOnlyList<DriveOption> options, ICredentialStore store, bool inVault)
+    /// <param name="vaultProviderKey">
+    /// The provider recorded with the vault state (<see cref="Coordination.SyncCoordinator.DriveProviderKey"/>),
+    /// which wins over the credential store's copy. With neither, OneDrive is assumed: the only
+    /// provider before the choice existed.
+    /// </param>
+    public DriveChoice(IReadOnlyList<DriveOption> options, ICredentialStore store, bool inVault, string? vaultProviderKey = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (options.Count == 0) throw new ArgumentException("At least one provider is required.", nameof(options));
@@ -58,7 +62,7 @@ public sealed class DriveChoice : IDriveProvider, IDriveAccount, IDriveSelection
         var stored = Find(_store.Get(ChoiceKey));
         var firstConfigured = options.FirstOrDefault(o => o.Account.IsConfigured);
         _current = inVault
-            ? stored ?? Find(OneDriveKey) ?? firstConfigured ?? options[0]
+            ? Find(vaultProviderKey) ?? stored ?? Find(OneDriveKey) ?? firstConfigured ?? options[0]
             : (stored is { Account.IsConfigured: true } ? stored : null) ?? firstConfigured ?? stored ?? options[0];
     }
 
@@ -99,6 +103,8 @@ public sealed class DriveChoice : IDriveProvider, IDriveAccount, IDriveSelection
     // ---- IDriveProvider ---------------------------------------------------------------------------
 
     public string Name => _current.Provider.Name;
+
+    public string Key => _current.Key;
 
     public bool EnforcesUniqueNames => _current.Provider.EnforcesUniqueNames;
 

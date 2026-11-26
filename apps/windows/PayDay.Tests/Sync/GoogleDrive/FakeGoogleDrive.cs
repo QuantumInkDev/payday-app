@@ -36,6 +36,9 @@ internal sealed class FakeGoogleDrive : HttpMessageHandler
 
     public DateTimeOffset Now { get; set; }
 
+    /// <summary>Top-level items report their parent as the alias <c>appDataFolder</c> instead of its ID.</summary>
+    public bool ReportAliasAsParent { get; set; }
+
     /// <summary>Entries per listing page.</summary>
     public int PageSize { get; set; } = 1000;
 
@@ -103,6 +106,14 @@ internal sealed class FakeGoogleDrive : HttpMessageHandler
         lock (_lock) return Add(name, false, parentId, data, created).Id;
     }
 
+    private readonly List<(Func<HttpRequestMessage, bool> Match, Func<HttpRequestMessage, HttpResponseMessage> Answer)> _rules = new();
+
+    /// <summary>Answers the next request that <paramref name="match"/> picks (once), whatever comes before it.</summary>
+    public void FailWhen(Func<HttpRequestMessage, bool> match, Func<HttpRequestMessage, HttpResponseMessage> answer)
+    {
+        lock (_lock) _rules.Add((match, answer));
+    }
+
     public void Fail(Func<HttpRequestMessage, HttpResponseMessage?> fault)
     {
         lock (_lock) _faults.Enqueue(fault);
@@ -168,6 +179,13 @@ internal sealed class FakeGoogleDrive : HttpMessageHandler
     private HttpResponseMessage Handle(HttpRequestMessage req, byte[] body)
     {
         if (_faults.Count > 0 && _faults.Dequeue()(req) is { } fault) return fault;
+        var rule = _rules.FindIndex(r => r.Match(req));
+        if (rule >= 0)
+        {
+            var answer = _rules[rule].Answer;
+            _rules.RemoveAt(rule);
+            return answer(req);
+        }
         var uri = req.RequestUri!;
         if (uri.Host != Host) return new HttpResponseMessage(HttpStatusCode.BadGateway);
         if (req.Headers.Authorization is not { Scheme: "Bearer" } auth || auth.Parameter is null || !ValidTokens.Contains(auth.Parameter))
@@ -238,6 +256,7 @@ internal sealed class FakeGoogleDrive : HttpMessageHandler
         }
         var name = meta["name"]!.GetValue<string>();
         var parent = meta["parents"]!.AsArray().Single()!.GetValue<string>();
+        if (parent == GoogleDriveDriveProvider.AppDataAlias) parent = AppDataId;
         if (parent != AppDataId && !_nodes.Any(n => n.Id == parent && n.IsFolder)) return Error(HttpStatusCode.NotFound, "notFound");
         var folder = meta["mimeType"]?.GetValue<string>() == FolderMime;
         if (folder != (data is null)) return Error(HttpStatusCode.BadRequest, "badContent");
@@ -265,7 +284,7 @@ internal sealed class FakeGoogleDrive : HttpMessageHandler
         return (Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(metaBody)), Encoding.Latin1.GetBytes(dataBody));
     }
 
-    private static JsonObject Describe(Node n)
+    private JsonObject Describe(Node n)
     {
         var o = new JsonObject
         {
@@ -273,7 +292,7 @@ internal sealed class FakeGoogleDrive : HttpMessageHandler
             ["name"] = n.Name,
             ["mimeType"] = n.IsFolder ? FolderMime : "application/octet-stream",
             ["createdTime"] = n.Created.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
-            ["parents"] = new JsonArray(n.Parent),
+            ["parents"] = new JsonArray(ReportAliasAsParent && n.Parent == AppDataId ? GoogleDriveDriveProvider.AppDataAlias : n.Parent),
         };
         if (!n.IsFolder) o["size"] = n.Data.Length.ToString(CultureInfo.InvariantCulture);
         return o;

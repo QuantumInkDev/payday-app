@@ -116,6 +116,51 @@ public sealed class GoogleDriveDriveProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task TopLevelItemsNamingTheAppFolderByItsAlias_AreFound()
+    {
+        _google.ReportAliasAsParent = true;
+        await _drive.UploadNewAsync($"devices/{Device}/000001.chg", Bytes("one"));
+        await _drive.UploadNewAsync("vault.json", Bytes("{}"));
+
+        Assert.Equal(new[] { "vault.json" }, (await _drive.ListAsync(string.Empty)).Files.Select(f => f.Path));
+        Assert.Single((await _drive.ListAsync($"devices/{Device}")).Files);
+        Assert.Single(_google.FolderPaths, p => p == "PayDay");
+    }
+
+    private static bool IsUpload(HttpRequestMessage r) => r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath.StartsWith("/upload/", StringComparison.Ordinal);
+
+    private int Uploads => _google.Requests.Count(r => r.Method == HttpMethod.Post && r.Uri.AbsolutePath.StartsWith("/upload/", StringComparison.Ordinal));
+
+    [Fact]
+    public async Task ACreateThatMayHaveGoneThrough_IsNotRepeated()
+    {
+        // A 5xx or a lost connection after the request was sent: Drive may have created the file, and
+        // the sync engine looks before uploading again.
+        _google.FailWhen(IsUpload, _ => FakeGoogleDrive.Error(HttpStatusCode.ServiceUnavailable, "backendError"));
+        var e = await Assert.ThrowsAsync<DriveException>(() => _drive.UploadNewAsync("snapshots/a.snap", Bytes("a")));
+        Assert.Equal(DriveErrorKind.Transient, e.Kind);
+        Assert.Equal(1, Uploads);
+
+        _google.FailWhen(IsUpload, _ => throw new HttpRequestException("connection reset"));
+        e = await Assert.ThrowsAsync<DriveException>(() => _drive.UploadNewAsync("snapshots/a.snap", Bytes("a")));
+        Assert.Equal(DriveErrorKind.Transient, e.Kind);
+        Assert.Equal(2, Uploads);
+        Assert.Empty(_waits);
+        Assert.Empty(_google.Paths);
+    }
+
+    [Fact]
+    public async Task ACreateRefusedForTheRateLimit_IsRetried()
+    {
+        _google.FailWhen(IsUpload, _ => FakeGoogleDrive.Error(HttpStatusCode.Forbidden, "userRateLimitExceeded"));
+
+        await _drive.UploadNewAsync("snapshots/a.snap", Bytes("a"));
+
+        Assert.Equal(2, Uploads);
+        Assert.Equal(new[] { "snapshots/a.snap" }, _google.Paths);
+    }
+
+    [Fact]
     public async Task FilesWithTheSameName_AreBothListed()
     {
         await _drive.UploadNewAsync("vault.json", Bytes("{\"a\":1}"));
@@ -295,7 +340,7 @@ public sealed class GoogleDriveDriveProviderTests : IDisposable
     [Fact]
     public async Task TwoDevices_CreateJoinAndConverge_ThroughTheGoogleDriveProvider()
     {
-        var google = new FakeGoogleDrive(DateTimeOffset.FromUnixTimeMilliseconds(SyncTestEnvironment.T0)) { PageSize = 3 };
+        var google = new FakeGoogleDrive(DateTimeOffset.FromUnixTimeMilliseconds(SyncTestEnvironment.T0)) { PageSize = 3, ReportAliasAsParent = true };
         using var a = new SyncTestEnvironment();
         using var b = new SyncTestEnvironment();
         await a.InitializeAsync();

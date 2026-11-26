@@ -47,7 +47,7 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 - A OneDrive app ID needs an Entra tenant now (personal accounts can't register apps on their own), so Google Drive was added as the default provider: `apps/windows/PayDay.Core/Sync/Drive/GoogleDrive/` (installed-app OAuth with PKCE and a loopback redirect, refresh token in Credential Manager, Drive API v3 in the hidden app-data folder, duplicate folder and file names handled, permanent deletes). No client ID or secret is committed.
 - `DriveChoice` picks the provider per device (Google Drive first, then OneDrive); the Sync page offers the choice while sync is off and keeps it fixed while in a vault. The page's text names the chosen provider.
-- Tests: 1313 on the Mac (fake Google Drive and token endpoint; two devices syncing end to end through the Google provider).
+- Tests: 1319 on the Mac (fake Google Drive and token endpoint; two devices syncing end to end through the Google provider). Review fixes: no Google revoke on sign-out (it would sign out the other PCs), the loopback listener ignores replies without this sign-in's state, creates are not repeated after an ambiguous failure, top-level items may name the app-data folder by its alias, the provider is recorded with the vault state, and cloud client settings stay out of backups.
 
 ---
 

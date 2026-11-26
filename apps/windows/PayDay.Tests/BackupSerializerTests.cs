@@ -24,6 +24,44 @@ public class BackupSerializerTests
     }
 
     [Fact]
+    public void ToJson_LeavesOutThisDevicesCloudSignInSettings()
+    {
+        var json = BackupSerializer.ToJson(
+            Array.Empty<Bill>(),
+            Array.Empty<Payment>(),
+            Array.Empty<Snapshot>(),
+            new Dictionary<string, string?>
+            {
+                ["PayAnchor"] = "2025-03-20",
+                ["GoogleDriveClientId"] = "000000000000-fictional.apps.googleusercontent.com",
+                ["GoogleDriveClientSecret"] = "fictional-secret",
+                ["OneDriveClientId"] = "00000000-0000-0000-0000-00000000c1d0",
+            });
+
+        var settings = BackupSerializer.FromJson(json).Settings;
+        Assert.Equal(new[] { "PayAnchor" }, settings.Keys);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Restoring_KeepsThisDevicesCloudSignInSettings()
+    {
+        using var env = new Sync.Local.SyncTestEnvironment();
+        await env.InitializeAsync();
+        await env.Db.SetSettingAsync("GoogleDriveClientSecret", "fictional-secret");
+        await env.Db.SetSettingAsync("Theme", "Dark");
+
+        await env.Db.ReplaceAllDataAsync(
+            Array.Empty<Bill>(),
+            Array.Empty<Payment>(),
+            Array.Empty<Snapshot>(),
+            new Dictionary<string, string?> { ["PayAnchor"] = "2025-03-20", ["GoogleDriveClientSecret"] = "from-an-old-backup" });
+
+        Assert.Equal("fictional-secret", await env.Db.GetSettingAsync("GoogleDriveClientSecret"));
+        Assert.Null(await env.Db.GetSettingAsync("Theme"));
+        Assert.Equal("2025-03-20", await env.Db.GetSettingAsync("PayAnchor"));
+    }
+
+    [Fact]
     public void RoundTrip_PreservesAllTables()
     {
         var bills = new[]
