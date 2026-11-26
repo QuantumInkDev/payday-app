@@ -534,13 +534,134 @@ public sealed class SyncPageViewModelTests : IDisposable
         Assert.False(SyncPageViewModel.IsInFolder(@"C:\Users\Someone\OneDriveBackup\phrase.txt", folders));
         Assert.False(SyncPageViewModel.IsInFolder(@"E:\phrase.txt", folders));
         Assert.Empty(SyncPageViewModel.OneDriveFolders(_ => null));
-        Assert.Contains("USB drive", SyncPageViewModel.PhraseFileAdvice, StringComparison.Ordinal);
+        Assert.Contains("USB drive", new SyncPageViewModel(null, new FakeDriveAccount()).PhraseFileAdvice, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePhraseFile_IsCheckedAgainstGoogleDriveFolders()
+    {
+        Assert.Equal("Google Drive", SyncPageViewModel.CloudServiceFor(@"G:\My Drive\phrase.txt", _ => null));
+        Assert.Equal("Google Drive", SyncPageViewModel.CloudServiceFor(@"C:\Users\Someone\My Drive\Notes\phrase.txt", _ => null));
+        Assert.Equal("Google Drive", SyncPageViewModel.CloudServiceFor(@"G:\Shared drives\Team\phrase.txt", _ => null));
+        Assert.Equal("OneDrive", SyncPageViewModel.CloudServiceFor(@"C:\Users\Someone\OneDrive\phrase.txt", k => k == "OneDrive" ? @"C:\Users\Someone\OneDrive" : null));
+        Assert.Null(SyncPageViewModel.CloudServiceFor(@"E:\My Drive.txt", _ => null));
+        Assert.Null(SyncPageViewModel.CloudServiceFor(@"E:\Backups\phrase.txt", _ => null));
+    }
+
+    private DriveChoice Choice(FakeDriveAccount google, FakeDriveAccount oneDrive, InMemoryCredentialStore store, bool inVault = false)
+        => new(
+            new[]
+            {
+                new DriveOption(DriveChoice.GoogleDriveKey, google, _world.Drive),
+                new DriveOption(DriveChoice.OneDriveKey, oneDrive, _world.Drive),
+            },
+            store,
+            inVault);
+
+    [Fact]
+    public async Task WithTwoProviders_TheOffScreenOffersAChoice_AndTheTextFollowsIt()
+    {
+        var a = await _world.AddDeviceAsync("Windows PC");
+        var store = new InMemoryCredentialStore();
+        var google = new FakeDriveAccount { ProviderName = "Google Drive", SignedInUser = null };
+        var oneDrive = new FakeDriveAccount { ProviderName = "OneDrive", SignedInUser = "someone@example.invalid" };
+        var vm = new SyncPageViewModel(a.Coordinator, Choice(google, oneDrive, store), null, a.Env.Time);
+        await vm.LoadAsync();
+
+        Assert.Equal(SyncScreen.Off, vm.Screen);
+        Assert.True(vm.HasProviderChoice);
+        Assert.Equal(new[] { "Google Drive", "OneDrive" }, vm.ProviderOptions);
+        Assert.Equal(0, vm.SelectedProviderIndex);
+        Assert.Contains("Google Drive", vm.OffText, StringComparison.Ordinal);
+        Assert.Null(vm.AccountName);
+
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        vm.SelectedProviderIndex = 1;
+        await Task.Yield();
+
+        Assert.Equal("OneDrive", vm.ProviderName);
+        Assert.Contains("OneDrive", vm.JoinText, StringComparison.Ordinal);
+        Assert.Contains(nameof(SyncPageViewModel.OffText), changed);
+        Assert.Equal("someone@example.invalid", vm.AccountName);
+        Assert.Equal(DriveChoice.OneDriveKey, store.Get(DriveChoice.ChoiceKey));
+
+        await vm.TurnOnAsync();
+        Assert.Equal(0, google.SignIns);
+        Assert.Equal(SyncScreen.Create, vm.Screen);
+        // Off the "Sync is off" screen the choice is closed.
+        vm.SelectedProviderIndex = 0;
+        Assert.Equal(1, vm.SelectedProviderIndex);
+        Assert.Equal("OneDrive", vm.ProviderName);
+    }
+
+    [Fact]
+    public async Task InAVault_TheProviderCannotBeChanged()
+    {
+        var (a, _, _) = await CreatedAsync();
+        var store = new InMemoryCredentialStore();
+        var choice = Choice(new FakeDriveAccount { ProviderName = "Google Drive" }, new FakeDriveAccount(), store, inVault: true);
+        var vm = new SyncPageViewModel(a.Coordinator, choice, null, a.Env.Time);
+        await vm.LoadAsync();
+
+        Assert.Equal(SyncScreen.Status, vm.Screen);
+        Assert.Equal("OneDrive", vm.ProviderName); // a vault from before the choice existed is on OneDrive
+        vm.SelectedProviderIndex = 0;
+        Assert.Equal("OneDrive", vm.ProviderName);
+        Assert.Null(store.Get(DriveChoice.ChoiceKey));
+    }
+
+    [Fact]
+    public void TheChoice_PrefersTheStoredProvider_ThenTheFirstConfiguredOne()
+    {
+        var store = new InMemoryCredentialStore();
+        var google = new FakeDriveAccount { ProviderName = "Google Drive" };
+        var oneDrive = new FakeDriveAccount();
+
+        Assert.Equal(DriveChoice.GoogleDriveKey, Choice(google, oneDrive, store).CurrentKey);
+        store.Set(DriveChoice.ChoiceKey, DriveChoice.OneDriveKey);
+        Assert.Equal(DriveChoice.OneDriveKey, Choice(google, oneDrive, store).CurrentKey);
+
+        // A stored provider this build cannot sign in to: kept in a vault, replaced outside one.
+        oneDrive.IsConfigured = false;
+        var inVault = Choice(google, oneDrive, store, inVault: true);
+        Assert.Equal(DriveChoice.OneDriveKey, inVault.CurrentKey);
+        Assert.False(inVault.IsConfigured);
+        Assert.Equal(DriveChoice.GoogleDriveKey, Choice(google, oneDrive, store).CurrentKey);
+        Assert.Single(inVault.Options);
+        Assert.Throws<ArgumentException>(() => inVault.Select(DriveChoice.OneDriveKey));
+
+        // Nothing configured at all.
+        google.IsConfigured = false;
+        var none = Choice(google, oneDrive, new InMemoryCredentialStore());
+        Assert.False(none.IsConfigured);
+        Assert.Empty(none.Options);
+        var vm = new SyncPageViewModel(null, none);
+        Assert.Equal("No cloud drive is set up in this copy of FutureCheck.", vm.NotConfiguredMessage);
+        Assert.False(vm.HasProviderChoice);
+    }
+
+    [Fact]
+    public async Task TheChoice_IsRememberedWhenSignInSucceeds_AndForwardsToTheChosenProvider()
+    {
+        var store = new InMemoryCredentialStore();
+        var google = new FakeDriveAccount { ProviderName = "Google Drive", NextSignIn = new DriveSignInResult(DriveSignInOutcome.Cancelled, null, null) };
+        var choice = Choice(google, new FakeDriveAccount(), store);
+
+        await choice.SignInAsync();
+        Assert.Null(store.Get(DriveChoice.ChoiceKey));
+        await choice.SignInAsync();
+        Assert.Equal(DriveChoice.GoogleDriveKey, store.Get(DriveChoice.ChoiceKey));
+        Assert.Equal(2, google.SignIns);
+        Assert.Equal("Google Drive", choice.ProviderName);
+        Assert.Equal(_world.Drive.Name, choice.Name);
+        Assert.Equal(_world.Drive.EnforcesUniqueNames, choice.EnforcesUniqueNames);
     }
 
     /// <summary>A drive account that signs in at once as a fictional user.</summary>
     private sealed class FakeDriveAccount : IDriveAccount
     {
-        public string ProviderName => "OneDrive";
+        public string ProviderName { get; init; } = "OneDrive";
 
         public bool IsConfigured { get; set; } = true;
 

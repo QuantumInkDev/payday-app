@@ -35,7 +35,7 @@
             <!-- Title -->
             <StackPanel Spacing="2">
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Sync" />
-                <TextBlock Style="{StaticResource SyncNote}" Text="Keep your bills and payments the same on every device. Your data is encrypted on this PC before it is uploaded: OneDrive only stores files it cannot read." />
+                <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.IntroText, Mode=OneWay}" />
             </StackPanel>
 
             <!-- Busy, errors and notes -->
@@ -71,8 +71,8 @@
             <!-- Not configured -->
             <Border Style="{StaticResource SyncCard}" Visibility="{x:Bind ViewModel.IsNotConfigured, Mode=OneWay, Converter={StaticResource Visible}}">
                 <StackPanel Spacing="6">
-                    <TextBlock FontWeight="SemiBold" Text="{x:Bind ViewModel.NotConfiguredMessage}" />
-                    <TextBlock Style="{StaticResource SyncNote}" Text="This copy of FutureCheck has no OneDrive app registration, so it cannot sign in. Everything else works as usual on this PC." />
+                    <TextBlock FontWeight="SemiBold" Text="{x:Bind ViewModel.NotConfiguredMessage, Mode=OneWay}" />
+                    <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.NotConfiguredDetail}" />
                 </StackPanel>
             </Border>
 
@@ -81,8 +81,16 @@
                 <StackPanel Spacing="12">
                     <StackPanel Spacing="4">
                         <TextBlock FontWeight="SemiBold" Text="Sync is off" />
-                        <TextBlock Style="{StaticResource SyncNote}" Text="Turning sync on signs in to OneDrive. If you don't use sync yet, this PC's data becomes your synced data (a backup is saved first). If you already sync another device, you join it with your recovery phrase or a pairing code." />
+                        <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.OffText, Mode=OneWay}" />
                     </StackPanel>
+                    <ComboBox
+                        MinWidth="220"
+                        AutomationProperties.Name="Sync through"
+                        Header="Sync through"
+                        IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}"
+                        ItemsSource="{x:Bind ViewModel.ProviderOptions}"
+                        SelectedIndex="{x:Bind ViewModel.SelectedProviderIndex, Mode=TwoWay}"
+                        Visibility="{x:Bind ViewModel.HasProviderChoice, Converter={StaticResource Visible}}" />
                     <Button
                         AutomationProperties.Name="Turn on sync"
                         Click="OnTurnOnClick"
@@ -96,10 +104,10 @@
             <Border Style="{StaticResource SyncCard}" Visibility="{x:Bind ViewModel.IsCreate, Mode=OneWay, Converter={StaticResource Visible}}">
                 <StackPanel Spacing="12">
                     <TextBlock FontWeight="SemiBold" Text="Start syncing from this PC" />
-                    <TextBlock Style="{StaticResource SyncNote}" Text="There is no FutureCheck vault on this OneDrive account yet. Creating one:" />
+                    <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.CreateIntroText, Mode=OneWay}" />
                     <StackPanel Margin="8,0,0,0" Spacing="4">
                         <TextBlock Style="{StaticResource SyncNote}" Text="• saves a backup of this PC's data first (kept, never rotated away);" />
-                        <TextBlock Style="{StaticResource SyncNote}" Text="• encrypts this PC's bills, payments, snapshots and synced settings and uploads them to the app's own OneDrive folder;" />
+                        <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.CreateUploadText, Mode=OneWay}" />
                         <TextBlock Style="{StaticResource SyncNote}" Text="• shows a 24-word recovery phrase once. Losing every device and the phrase loses the synced data." />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -123,7 +131,7 @@
                 <StackPanel Spacing="14">
                     <StackPanel Spacing="4">
                         <TextBlock FontWeight="SemiBold" Text="Join your vault" />
-                        <TextBlock Style="{StaticResource SyncNote}" Text="Your OneDrive already has a FutureCheck vault. Unlock it with your recovery phrase, or with the pairing code another device shows under Sync, Add a device." />
+                        <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.JoinText, Mode=OneWay}" />
                     </StackPanel>
                     <TextBox
                         Height="96"
@@ -187,7 +195,7 @@
                 <StackPanel Spacing="12">
                     <TextBlock FontWeight="SemiBold" Text="Save your recovery phrase" />
                     <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.RecoveryPhraseNote, Mode=OneWay}" />
-                    <TextBlock TextWrapping="Wrap" Text="These 24 words are the key to your synced data. You need them to add a device without a pairing code, or if this PC's key is lost. They are shown only now. Anyone with these words and access to your OneDrive can read your data, and if you lose every device and the words, the synced data is gone. Write them down or save them somewhere private." />
+                    <TextBlock Text="{x:Bind ViewModel.PhraseWarningText, Mode=OneWay}" TextWrapping="Wrap" />
                     <ItemsRepeater AutomationProperties.Name="Recovery phrase words" ItemsSource="{x:Bind ViewModel.RecoveryWords}">
                         <ItemsRepeater.Layout>
                             <UniformGridLayout
@@ -319,7 +327,7 @@
                         ToolTipService.ToolTip="Join the vault again under a new identity. This PC's data is backed up first."
                         Visibility="{x:Bind ViewModel.NeedsRejoin, Mode=OneWay, Converter={StaticResource Visible}}" />
                     <Button
-                        AutomationProperties.Name="Sign in to OneDrive again"
+                        AutomationProperties.Name="{x:Bind ViewModel.SignInAgainLabel, Mode=OneWay}"
                         Click="OnSignInAgainClick"
                         Content="Sign in again"
                         IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}"
@@ -356,7 +364,7 @@
             <Border Style="{StaticResource SyncCard}" Visibility="{x:Bind ViewModel.IsPairing, Mode=OneWay, Converter={StaticResource Visible}}">
                 <StackPanel Spacing="12">
                     <TextBlock FontWeight="SemiBold" Text="Add a device" />
-                    <TextBlock Style="{StaticResource SyncNote}" Text="On the new device, sign in to the same OneDrive account, choose Turn on sync, then scan this code (or type the code below). Show it only while pairing, don't screenshot or photograph it, and pair only on a OneDrive account that is yours alone." />
+                    <TextBlock Style="{StaticResource SyncNote}" Text="{x:Bind ViewModel.PairingText, Mode=OneWay}" />
                     <Image
                         x:Name="QrImage"
                         Width="270"

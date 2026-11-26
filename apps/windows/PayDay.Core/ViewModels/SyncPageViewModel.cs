@@ -11,7 +11,7 @@ namespace PayDay.ViewModels;
 /// <summary>Which part of the Sync page is showing.</summary>
 public enum SyncScreen
 {
-    /// <summary>This build cannot sign in to OneDrive (no client ID).</summary>
+    /// <summary>This build cannot sign in to any drive provider (no client ID).</summary>
     NotConfigured,
 
     /// <summary>Sync is off: "Turn on sync".</summary>
@@ -62,8 +62,8 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
     private PairingSession? _pairing;
     private DateTimeOffset _lastPairingSync;
 
-    /// <param name="coordinator">Null when this build has no OneDrive client ID.</param>
-    /// <param name="account">The drive account (sign in / out).</param>
+    /// <param name="coordinator">Null when this build has no drive provider it can sign in to.</param>
+    /// <param name="account">The drive account (sign in / out); a <see cref="IDriveSelection"/> (<see cref="DriveChoice"/>) also lets the user choose the provider while sync is off.</param>
     /// <param name="notion">For "Notion: connected on …"; optional.</param>
     /// <param name="dispatch">Runs an action on the UI thread (default: at once, for tests).</param>
     public SyncPageViewModel(SyncCoordinator? coordinator, IDriveAccount? account, NotionSyncService? notion = null, TimeProvider? time = null, Action<Action>? dispatch = null)
@@ -83,7 +83,95 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
 
     private bool Available => _coordinator is not null && _account is { IsConfigured: true };
 
-    public string ProviderName => _account?.ProviderName ?? "OneDrive";
+    public string ProviderName => _account?.ProviderName ?? "your cloud drive";
+
+    // ---- Choosing the provider (while sync is off) ------------------------------------------------
+
+    private IDriveSelection? Selection => _account as IDriveSelection;
+
+    /// <summary>The providers to choose from on the "Sync is off" screen; empty when there is no choice.</summary>
+    public IReadOnlyList<string> ProviderOptions => Selection is { } s && s.Options.Count > 1
+        ? s.Options.Select(o => o.Account.ProviderName).ToList()
+        : Array.Empty<string>();
+
+    public bool HasProviderChoice => ProviderOptions.Count > 0;
+
+    /// <summary>The chosen provider's position in <see cref="ProviderOptions"/>, or -1.</summary>
+    public int SelectedProviderIndex
+    {
+        get
+        {
+            if (Selection is not { } s) return -1;
+            var options = s.Options;
+            for (var i = 0; i < options.Count; i++)
+            {
+                if (options[i].Key == s.CurrentKey) return i;
+            }
+            return -1;
+        }
+        set
+        {
+            if (Selection is not { } s || value < 0 || value >= s.Options.Count || value == SelectedProviderIndex) return;
+            // The vault lives on one provider: the choice is only open while this device is not in one.
+            if (IsBusy || Screen != SyncScreen.Off || (_coordinator?.IsInVault ?? false))
+            {
+                OnPropertyChanged();
+                return;
+            }
+            s.Select(s.Options[value].Key);
+            ClearMessages();
+            OnPropertyChanged();
+            OnProviderChanged();
+            _ = RefreshAccountAsync();
+        }
+    }
+
+    private void OnProviderChanged()
+    {
+        OnPropertyChanged(nameof(ProviderName));
+        OnPropertyChanged(nameof(AccountText));
+        OnPropertyChanged(nameof(IntroText));
+        OnPropertyChanged(nameof(OffText));
+        OnPropertyChanged(nameof(CreateUploadText));
+        OnPropertyChanged(nameof(CreateIntroText));
+        OnPropertyChanged(nameof(JoinText));
+        OnPropertyChanged(nameof(PhraseWarningText));
+        OnPropertyChanged(nameof(PairingText));
+        OnPropertyChanged(nameof(SignInAgainLabel));
+        OnPropertyChanged(nameof(PhraseFileAdvice));
+        OnPropertyChanged(nameof(NotConfiguredMessage));
+    }
+
+    private async Task RefreshAccountAsync()
+    {
+        try
+        {
+            var name = await _account!.GetSignedInUserAsync().ConfigureAwait(true);
+            _dispatch(() => AccountName = name);
+        }
+        catch (Exception)
+        {
+            _dispatch(() => AccountName = null);
+        }
+    }
+
+    // ---- Text that names the provider -------------------------------------------------------------
+
+    public string IntroText => $"Keep your bills and payments the same on every device. Your data is encrypted on this PC before it is uploaded: {ProviderName} only stores files it cannot read.";
+
+    public string OffText => $"Turning sync on signs in to {ProviderName}. If you don't use sync yet, this PC's data becomes your synced data (a backup is saved first). If you already sync another device, you join it with your recovery phrase or a pairing code.";
+
+    public string CreateUploadText => $"• encrypts this PC's bills, payments, snapshots and synced settings and uploads them to the app's own {ProviderName} folder;";
+
+    public string CreateIntroText => $"There is no FutureCheck vault on this {ProviderName} account yet. Creating one:";
+
+    public string JoinText => $"Your {ProviderName} already has a FutureCheck vault. Unlock it with your recovery phrase, or with the pairing code another device shows under Sync, Add a device.";
+
+    public string PhraseWarningText => $"These 24 words are the key to your synced data. You need them to add a device without a pairing code, or if this PC's key is lost. They are shown only now. Anyone with these words and access to your {ProviderName} can read your data, and if you lose every device and the words, the synced data is gone. Write them down or save them somewhere private.";
+
+    public string PairingText => $"On the new device, sign in to the same {ProviderName} account, choose Turn on sync, then scan this code (or type the code below). Show it only while pairing, don't screenshot or photograph it, and pair only on a {ProviderName} account that is yours alone.";
+
+    public string SignInAgainLabel => $"Sign in to {ProviderName} again";
 
     // ---- State ------------------------------------------------------------------------------------
 
@@ -125,10 +213,16 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(AccountText))]
     private string? _accountName;
 
-    /// <summary>"Signed in to OneDrive as …", or empty.</summary>
+    /// <summary>"Signed in to Google Drive as …", or empty.</summary>
     public string AccountText => AccountName is { Length: > 0 } name ? $"Signed in to {ProviderName} as {name}." : string.Empty;
 
-    public string NotConfiguredMessage => Sync.Drive.OneDrive.OneDriveConfig.NotConfiguredMessage;
+    public string NotConfiguredMessage => _account is null || (Selection is { } s && s.Options.Count == 0)
+        ? "No cloud drive is set up in this copy of FutureCheck."
+        : Selection is null
+            ? $"{ProviderName} isn't configured in this build."
+            : $"This PC syncs through {ProviderName}, which isn't set up in this copy of FutureCheck.";
+
+    public const string NotConfiguredDetail = "This copy of FutureCheck has no Google Drive or OneDrive app registration, so it cannot sign in. Everything else works as usual on this PC.";
 
     // ---- Status -----------------------------------------------------------------------------------
 
@@ -224,7 +318,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
             "FutureCheck recovery phrase",
             string.Empty,
             "These 24 words unlock your synced FutureCheck data on a new device. Anyone who has them, and",
-            "access to your OneDrive, can read that data. Keep this file somewhere safe and private (or print",
+            $"access to your {ProviderName}, can read that data. Keep this file somewhere safe and private (or print",
             "it and delete the file). If you lose every device and these words, the synced data is lost.",
             string.Empty,
             _recoveryPhrase,
@@ -232,9 +326,9 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         });
 
     /// <summary>Shown before the file picker: the phrase file must not sit next to the vault.</summary>
-    public const string PhraseFileAdvice =
-        "Save the file somewhere OneDrive (or any other cloud service) does not back up, such as a USB drive, or print it and delete the file. "
-        + "A copy in OneDrive sits in the same account as your vault, so anyone who gets into that account would have both.";
+    public string PhraseFileAdvice =>
+        $"Save the file somewhere {ProviderName} (or any other cloud service) does not back up, such as a USB drive, or print it and delete the file. "
+        + $"A copy in {ProviderName} sits in the same account as your vault, so anyone who gets into that account would have both.";
 
     /// <summary>The OneDrive folders on this PC (personal and work), from the environment variables OneDrive sets.</summary>
     public static IReadOnlyList<string> OneDriveFolders(Func<string, string?> environment)
@@ -256,6 +350,28 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         static string Norm(string p) => p.Replace('/', '\\').TrimEnd('\\') + "\\";
         var target = Norm(path);
         return folders.Any(f => target.StartsWith(Norm(f), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> looks like a Google Drive for desktop folder: a path segment
+    /// named "My Drive", "Shared drives" or "Google Drive" (the streamed drive letter and the mirrored
+    /// folder both use them). Google Drive sets no environment variable to look it up by.
+    /// </summary>
+    public static bool IsInGoogleDriveFolder(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return path.Split('/', '\\').SkipLast(1).Any(segment =>
+            segment.Equals("My Drive", StringComparison.OrdinalIgnoreCase)
+            || segment.Equals("Shared drives", StringComparison.OrdinalIgnoreCase)
+            || segment.Equals("Google Drive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The cloud service that backs <paramref name="path"/> up ("OneDrive", "Google Drive"), or null.</summary>
+    public static string? CloudServiceFor(string path, Func<string, string?> environment)
+    {
+        if (IsInFolder(path, OneDriveFolders(environment))) return "OneDrive";
+        if (IsInGoogleDriveFolder(path)) return "Google Drive";
+        return null;
     }
 
     // ---- Pairing ----------------------------------------------------------------------------------
@@ -487,7 +603,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
                 Screen = SyncScreen.Blocked;
                 break;
             case CreateVaultOutcome.VaultExists:
-                InfoMessage = "A vault already exists on your OneDrive. Join it instead.";
+                InfoMessage = $"A vault already exists on your {ProviderName}. Join it instead.";
                 Screen = SyncScreen.Join;
                 break;
             case CreateVaultOutcome.AlreadyInVault:
@@ -509,8 +625,8 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         for (var i = 0; i < words.Length; i++) RecoveryWords.Add($"{i + 1}. {words[i]}");
         PhraseSaved = false;
         RecoveryPhraseNote = uploadPending is null ? "You haven't confirmed that you saved this phrase yet." : uploadPending.Value
-            ? "Your vault is set up on this PC. It will finish uploading to OneDrive on the next sync."
-            : "Your vault is on OneDrive.";
+            ? $"Your vault is set up on this PC. It will finish uploading to {ProviderName} on the next sync."
+            : $"Your vault is on {ProviderName}.";
         OnPropertyChanged(nameof(RecoveryPhraseFileText));
         Screen = SyncScreen.RecoveryPhrase;
     }
@@ -628,13 +744,13 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
                 ErrorMessage = "That isn't a FutureCheck pairing code.";
                 break;
             case JoinVaultOutcome.PairingNotFound:
-                ErrorMessage = "That pairing code wasn't found on OneDrive. It may have expired or not be uploaded yet. Try again in a moment, or start pairing again on the other device.";
+                ErrorMessage = $"That pairing code wasn't found on {ProviderName}. It may have expired or not be uploaded yet. Try again in a moment, or start pairing again on the other device.";
                 break;
             case JoinVaultOutcome.PairingExpired:
                 ErrorMessage = "That pairing code expired. Start pairing again on the other device.";
                 break;
             case JoinVaultOutcome.NoVault:
-                ErrorMessage = "There is no vault on this OneDrive account yet.";
+                ErrorMessage = $"There is no vault on this {ProviderName} account yet.";
                 Screen = SyncScreen.Create;
                 break;
             case JoinVaultOutcome.NeedsUpdate:
@@ -841,7 +957,7 @@ public sealed partial class SyncPageViewModel : ObservableObject, IDisposable
         ClearPairing();
         if (_coordinator is not null && !await _coordinator.CancelPairingAsync().ConfigureAwait(true))
         {
-            InfoMessage = "The pairing code will be removed from OneDrive on the next sync.";
+            InfoMessage = $"The pairing code will be removed from {ProviderName} on the next sync.";
         }
         Screen = SyncScreen.Status;
         RefreshStatus();

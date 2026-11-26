@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Navigation;
 using PayDay.Services;
 using PayDay.Sync.Coordination;
 using PayDay.Sync.Drive;
+using PayDay.Sync.Drive.GoogleDrive;
 using PayDay.Sync.Drive.OneDrive;
 using PayDay.Sync.Keys;
 using PayDay.Sync.Local;
@@ -48,10 +49,10 @@ public partial class App : Application
     /// <summary>Process-wide Notion sync service. Disposed when the app shuts down.</summary>
     public static NotionSyncService Notion { get; } = new(Database, Credentials);
 
-    /// <summary>The OneDrive account (sign in / out). Not configured in a build without a client ID.</summary>
+    /// <summary>The chosen drive's account (sign in / out) and the provider choice. Not configured in a build without any client ID.</summary>
     public static IDriveAccount? DriveAccount { get; private set; }
 
-    /// <summary>The sync loop against OneDrive; null when this build has no OneDrive client ID.</summary>
+    /// <summary>The sync loop against the chosen drive; null when this build can sign in to none.</summary>
     public static SyncCoordinator? SyncCoordinator { get; private set; }
 
     /// <summary>When to sync (launch, foreground, 5 s after an edit, every 5 minutes, "Sync now").</summary>
@@ -63,7 +64,7 @@ public partial class App : Application
     /// </summary>
     public static SyncPageViewModel? SyncPageModel { get; private set; }
 
-    private static OneDriveDriveProvider? _drive;
+    private static DriveChoice? _drive;
     private static bool _dialogOpen;
 
     /// <summary>
@@ -152,7 +153,8 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Builds the OneDrive provider, the coordinator and the scheduler, and starts the scheduler. With
+    /// Builds the drive providers (Google Drive, then OneDrive) and this device's choice between them,
+    /// the coordinator and the scheduler, and starts the scheduler. With
     /// sync off each scheduled sync returns at once without touching the network or the database, so
     /// the app behaves exactly as before until the user turns sync on from the Sync page.
     /// </summary>
@@ -160,13 +162,26 @@ public partial class App : Application
     {
         try
         {
-            var clientId = OneDriveConfig.Resolve(
+            var googleClient = GoogleDriveConfig.Resolve(
+                Environment.GetEnvironmentVariable(GoogleDriveConfig.ClientIdVariable),
+                Environment.GetEnvironmentVariable(GoogleDriveConfig.ClientSecretVariable),
+                await DatabaseService.Instance.GetSettingAsync(GoogleDriveConfig.ClientIdSettingKey),
+                await DatabaseService.Instance.GetSettingAsync(GoogleDriveConfig.ClientSecretSettingKey));
+            var googleAuth = new GoogleOAuth(googleClient, Credentials);
+            var oneDriveClientId = OneDriveConfig.Resolve(
                 Environment.GetEnvironmentVariable(OneDriveConfig.EnvironmentVariable),
                 await DatabaseService.Instance.GetSettingAsync(OneDriveConfig.SettingKey));
-            var auth = new OneDriveAuth(clientId, Credentials);
-            DriveAccount = auth;
-            if (!auth.IsConfigured) return;
-            _drive = new OneDriveDriveProvider(auth);
+            var oneDriveAuth = new OneDriveAuth(oneDriveClientId, Credentials);
+            _drive = new DriveChoice(
+                new[]
+                {
+                    new DriveOption(DriveChoice.GoogleDriveKey, googleAuth, new GoogleDriveDriveProvider(googleAuth)),
+                    new DriveOption(DriveChoice.OneDriveKey, oneDriveAuth, new OneDriveDriveProvider(oneDriveAuth)),
+                },
+                Credentials,
+                inVault: Sync.IsOn);
+            DriveAccount = _drive;
+            if (!_drive.IsConfigured) return;
             var coordinator = new SyncCoordinator(
                 Sync,
                 _drive,

@@ -69,7 +69,7 @@
                     AutomationProperties.Name="Sync"
                     Content="Sync"
                     Tag="sync"
-                    ToolTipService.ToolTip="Sync your data between devices through OneDrive">
+                    ToolTipService.ToolTip="Sync your data between devices through Google Drive or OneDrive">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE753;" />
                     </NavigationViewItem.Icon>
