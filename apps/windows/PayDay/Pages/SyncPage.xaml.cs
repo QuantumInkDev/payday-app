@@ -154,14 +154,14 @@ public sealed partial class SyncPage : Page, ISyncReloadable
         {
             XamlRoot = XamlRoot,
             Title = "Where to keep the phrase",
-            Content = new TextBlock { Text = SyncPageViewModel.PhraseFileAdvice, TextWrapping = TextWrapping.Wrap },
+            Content = new TextBlock { Text = ViewModel.PhraseFileAdvice, TextWrapping = TextWrapping.Wrap },
             PrimaryButtonText = "Choose a place…",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
         };
         if (await App.ShowDialogAsync(advice) != ContentDialogResult.Primary) return;
 
-        // Not Documents or Desktop: OneDrive usually backs those up, next to the vault.
+        // Not Documents or Desktop: OneDrive usually backs those up, possibly next to the vault.
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.ComputerFolder,
@@ -174,16 +174,16 @@ public sealed partial class SyncPage : Page, ISyncReloadable
         }
         var file = await picker.PickSaveFileAsync();
         if (file is null) return;
-        if (SyncPageViewModel.IsInFolder(file.Path, SyncPageViewModel.OneDriveFolders(Environment.GetEnvironmentVariable)))
+        if (SyncPageViewModel.CloudServiceFor(file.Path, Environment.GetEnvironmentVariable) is { } service)
         {
             var confirm = new ContentDialog
             {
                 XamlRoot = XamlRoot,
-                Title = "That folder is in OneDrive",
+                Title = $"That folder is in {service}",
                 Content = new TextBlock
                 {
                     TextWrapping = TextWrapping.Wrap,
-                    Text = "OneDrive backs this folder up to the same account as your vault, so anyone who gets into that account would have both your data and its key. Choose a USB drive or another folder instead.",
+                    Text = $"{service} backs this folder up to the cloud. If that is the account your vault is in, anyone who gets into it would have both your data and its key. Choose a USB drive or another folder instead.",
                 },
                 PrimaryButtonText = "Save here anyway",
                 CloseButtonText = "Choose another place",
@@ -228,8 +228,8 @@ public sealed partial class SyncPage : Page, ISyncReloadable
             Content = new TextBlock
             {
                 TextWrapping = TextWrapping.Wrap,
-                Text = "This PC stops syncing, forgets the vault key and signs out of OneDrive. Your data stays on this PC, "
-                    + "and your vault stays on OneDrive for your other devices. Changes made on this PC from now on stay here. "
+                Text = $"This PC stops syncing, forgets the vault key and signs out of {ViewModel.ProviderName}. Your data stays on this PC, "
+                    + $"and your vault stays on {ViewModel.ProviderName} for your other devices. Changes made on this PC from now on stay here. "
                     + "To sync again later you join the vault with your recovery phrase or a pairing code, and this PC's data is then replaced by the vault's (after a backup).",
             },
             PrimaryButtonText = "Turn off sync",

@@ -457,7 +457,15 @@ public class SqliteDatabaseService : IDatabaseService
         await ExecuteAsync(conn, tx, "DELETE FROM Payments;").ConfigureAwait(false);
         await ExecuteAsync(conn, tx, "DELETE FROM Snapshots;").ConfigureAwait(false);
         await ExecuteAsync(conn, tx, "DELETE FROM Bills;").ConfigureAwait(false);
-        await ExecuteAsync(conn, tx, "DELETE FROM Settings;").ConfigureAwait(false);
+        // Everything but this device's cloud sign-in configuration, which backups leave out.
+        await using (var clear = conn.CreateCommand())
+        {
+            clear.Transaction = tx;
+            var keep = BackupSerializer.DeviceOnlySettingKeys.ToList();
+            clear.CommandText = $"DELETE FROM Settings WHERE Key NOT IN ({string.Join(", ", keep.Select((_, i) => $"$k{i}"))});";
+            for (var i = 0; i < keep.Count; i++) clear.Parameters.AddWithValue($"$k{i}", keep[i]);
+            await clear.ExecuteNonQueryAsync().ConfigureAwait(false);
+        }
 
         foreach (var bill in bills)
         {
@@ -494,6 +502,7 @@ public class SqliteDatabaseService : IDatabaseService
         }
         foreach (var (key, value) in settings)
         {
+            if (BackupSerializer.DeviceOnlySettingKeys.Contains(key)) continue;
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = "INSERT INTO Settings(Key, Value) VALUES($k, $v);";

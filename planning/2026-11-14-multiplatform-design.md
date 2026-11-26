@@ -273,9 +273,11 @@ in the backup are applied only to the device doing the restore.
 
 ### 6.6 Provider order
 
-**OneDrive first (Claude's call):** it works on Windows, Mac, iOS and Android, and the existing
-user is on Windows. Google Drive second (common for Android users). Dropbox third. iCloud
-(CloudKit) only as a later convenience for Apple-only users — it can't reach Windows or Android.
+**Google Drive first (changed 2026-11-25):** it works on Windows, Mac, iOS, Android and the web,
+and its OAuth client needs only a free Google Cloud project, while a OneDrive app ID now needs an
+Entra tenant. OneDrive is built too (the first plan put it first) and is offered wherever a build
+has its app ID. Dropbox third. iCloud (CloudKit) only as a later convenience for Apple-only users —
+it can't reach Windows or Android.
 
 ### 6.7 The web app as a device
 
@@ -361,7 +363,7 @@ user is on Windows. Google Drive second (common for Android users). Dropbox thir
 4. **Write `spec/` and the first conformance fixtures** from the C# core plus the chosen features'
    data; wire them into `PayDay.Tests`.
 5. **Sync in the Windows app:** ID migration, balance checkpoints, HLC + tombstones, change files,
-   encryption, OneDrive, setup and pairing screens. Two Windows installs (VM + rig) syncing is the
+   encryption, Google Drive and OneDrive, setup and pairing screens. Two Windows installs (VM + rig) syncing is the
    exit test.
 6. **Notion connector rework** (OAuth function on Vercel, auto-created databases, adopt existing
    ones).

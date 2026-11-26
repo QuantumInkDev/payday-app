@@ -17,6 +17,17 @@ public static class BackupSerializer
 {
     public const int CurrentFormatVersion = 1;
 
+    /// <summary>
+    /// Developer settings that configure this copy's cloud sign-in (client IDs and the Google client
+    /// secret). They belong to the device, so backups leave them out.
+    /// </summary>
+    public static readonly IReadOnlySet<string> DeviceOnlySettingKeys = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Sync.Drive.GoogleDrive.GoogleDriveConfig.ClientIdSettingKey,
+        Sync.Drive.GoogleDrive.GoogleDriveConfig.ClientSecretSettingKey,
+        Sync.Drive.OneDrive.OneDriveConfig.SettingKey,
+    };
+
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -38,7 +49,7 @@ public static class BackupSerializer
             Bills = bills.ToList(),
             Payments = payments.ToList(),
             Snapshots = snapshots.ToList(),
-            Settings = settings.ToDictionary(kv => kv.Key, kv => kv.Value),
+            Settings = settings.Where(kv => !DeviceOnlySettingKeys.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value),
         };
         return JsonSerializer.Serialize(file, Options);
     }

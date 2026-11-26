@@ -43,11 +43,31 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 ---
 
+## Session 2026-11-25: Google Drive provider
+
+- A OneDrive app ID needs an Entra tenant now (personal accounts can't register apps on their own), so Google Drive was added as the default provider: `apps/windows/PayDay.Core/Sync/Drive/GoogleDrive/` (installed-app OAuth with PKCE and a loopback redirect, refresh token in Credential Manager, Drive API v3 in the hidden app-data folder, duplicate folder and file names handled, permanent deletes). No client ID or secret is committed.
+- `DriveChoice` picks the provider per device (Google Drive first, then OneDrive); the Sync page offers the choice while sync is off and keeps it fixed while in a vault. The page's text names the chosen provider.
+- Tests: 1319 on the Mac (fake Google Drive and token endpoint; two devices syncing end to end through the Google provider). Review fixes: no Google revoke on sign-out (it would sign out the other PCs), the loopback listener ignores replies without this sign-in's state, creates are not repeated after an ambiguous failure, top-level items may name the app-data folder by its alias, the provider is recorded with the vault state, and cloud client settings stay out of backups.
+
+---
+
 ## 🔴 CONTINUE HERE
 
 **Waiting on the developer, then design step 5's exit test:**
 
-1. **OneDrive app ID.** Register a free app at entra.microsoft.com (App registrations → New registration; supported account types "Accounts in any organizational directory and personal Microsoft accounts", which matches the app's /common sign-in; redirect "Public client/native" `http://localhost`; delegated `Files.ReadWrite.AppFolder` + `offline_access`). Supply it with `setx FUTURECHECK_ONEDRIVE_CLIENT_ID <id>` on each PC. Then run the manual test in the PR for the OneDrive provider (sign in, create vault, phrase, add a device, join from the second PC, lock/unlock, Notion owner, offline, turn off). Exit test: the VM and the rig syncing.
+1. **Google OAuth client** (free, any Google account, no billing). In console.cloud.google.com:
+   1. Create a project (for example "FutureCheck").
+   2. APIs & Services → Library → enable **Google Drive API**.
+   3. Google Auth Platform → Get started: app name FutureCheck, your support e-mail, audience **External**.
+   4. Data Access → Add or remove scopes: `.../auth/drive.appdata`, `openid`, `.../auth/userinfo.email`. All three are non-sensitive, so no Google review is needed.
+   5. Audience → **Publish app** (status "In production"). In "Testing", Google expires sign-ins after 7 days.
+   6. Clients → Create client → type **Desktop app**. Copy the client ID and the client secret (the secret is shown once; download the JSON).
+   7. On each PC: `setx FUTURECHECK_GOOGLE_CLIENT_ID <id>` and `setx FUTURECHECK_GOOGLE_CLIENT_SECRET <secret>`, then sign out of Windows and back in (or restart) so the app sees them.
+
+   Later platforms' clients (iOS, Android, web) must be created in the **same project**: the app-data folder belongs to the project.
+   Then the manual test: Sync → Sync through "Google Drive" → Turn on sync (browser sign-in) → create the vault → save the phrase → Add a device; on the second PC join with the code; then edit on each side, lock/unlock, Notion owner, offline, turn off. Exit test: the VM and the rig syncing.
+
+   OneDrive stays available for whoever has an Entra app ID (`FUTURECHECK_ONEDRIVE_CLIENT_ID`; registration details in `OneDriveConfig.cs`).
 2. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
 
 **Before seeding the vault** (design §11): export JSON backups from both the VM and the rig and decide which holds the real data.

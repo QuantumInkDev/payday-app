@@ -1,7 +1,7 @@
 # PayDay App (product name: FutureCheck)
 
-**Last Updated**: November 15, 2026
-**Project Phase**: Multi-platform step 5 (Windows sync) built — waiting on the OneDrive app ID for the two-PC exit test; PayDayKit (Swift) built on `feature/apple-app`
+**Last Updated**: November 25, 2026
+**Project Phase**: Multi-platform step 5 (Windows sync) built with Google Drive (default) and OneDrive providers — waiting on a Google OAuth client for the two-PC exit test; PayDayKit (Swift) built on `feature/apple-app`
 **Current Version**: unknown — no version string is set in any `.csproj`, and `SESSION_STATUS.md` does not record one
 
 ## 🚀 What This App Does
@@ -50,7 +50,7 @@ Key packages:
   WindowsAppSDK auto-initializer throws `COMException 0x80040154 REGDB_E_CLASSNOTREG` in any process
   without package identity. That constraint is why the VMs live here, not in the app project.
   `InternalsVisibleTo("PayDay.Tests")` keeps helpers internal but test-visible.
-- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`, including `Conformance/` which runs `spec/conformance/core/*.json`. 1244 tests as of the last verified run (incl. every `spec/conformance/sync` case and the sync engine in `PayDay.Core/Sync/`). Runs on the Mac too (`export PATH=~/.dotnet:$PATH; dotnet test apps/windows/PayDay.Tests`).
+- **`apps/windows/PayDay.Tests/`** — xUnit suite over `PayDay.Core`, including `Conformance/` which runs `spec/conformance/core/*.json`. 1319 tests as of the last verified run (incl. every `spec/conformance/sync` case and the sync engine in `PayDay.Core/Sync/`). Runs on the Mac too (`export PATH=~/.dotnet:$PATH; dotnet test apps/windows/PayDay.Tests`).
 - **`spec/`** — the cross-platform contract: data model, sync protocol, and JSON conformance fixtures every app must pass. `tools/spec/check_fixtures.py` (Python reference) re-derives the sync fixtures.
 - **`tools/vm-build.sh`** — builds and tests a pushed commit on the arm64 Windows VM from the Mac.
 - **`planning/`** — the build plan and sprint tracking. `PAYDAY_WINUI3_PLAN.md` is the master plan

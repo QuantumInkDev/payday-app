@@ -71,6 +71,12 @@ public interface IDriveProvider
     /// <summary>A short name for messages ("OneDrive").</summary>
     string Name { get; }
 
+    /// <summary>
+    /// A stable key for the provider, recorded with the vault state so a device in a vault always
+    /// reconnects to the provider that holds it (<see cref="DriveChoice"/>).
+    /// </summary>
+    string Key => Name;
+
     /// <summary>True when the provider refuses a second file with the same path (OneDrive, Dropbox); false for Google Drive.</summary>
     bool EnforcesUniqueNames { get; }
 
