@@ -18,6 +18,7 @@ public sealed partial class BillEditorDialog : ContentDialog
     private BillEditorDialog(Bill bill, bool isAddMode, IEnumerable<string>? extraTypes)
     {
         ViewModel = new BillEditorViewModel(bill, isAddMode, extraTypes);
+        _amountKeyUp = AmountBox_KeyUp;
         InitializeComponent();
     }
 
@@ -41,6 +42,20 @@ public sealed partial class BillEditorDialog : ContentDialog
 
     /// <summary>Only an Enter pressed in this same box counts (not the tail of an Enter that opened something).</summary>
     private object? _enterArmed;
+    private readonly KeyEventHandler _amountKeyUp;
+
+    /// <summary>
+    /// NumberBox handles Enter on its inner TextBox's KeyUp (it commits the typed text to Value there and
+    /// marks the event handled), so a plain KeyUp attribute never sees Enter. Listen with
+    /// handledEventsToo instead: the handler then runs after the commit. Loaded can fire more than once,
+    /// so remove before adding.
+    /// </summary>
+    private void AmountBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not UIElement box) return;
+        box.RemoveHandler(KeyUpEvent, _amountKeyUp);
+        box.AddHandler(KeyUpEvent, _amountKeyUp, handledEventsToo: true);
+    }
 
     private void AmountBox_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -48,9 +63,9 @@ public sealed partial class BillEditorDialog : ContentDialog
     }
 
     /// <summary>
-    /// Enter in an amount box saves, like the Save button. NumberBox handles Enter's KeyDown itself
-    /// (to commit the typed value), so the dialog's default button never sees it; KeyUp runs after the
-    /// value is committed. Hide() reports None, so the flag tells ShowAsync it was a save.
+    /// Enter in an amount box saves, like the Save button. NumberBox handles Enter itself (to commit the
+    /// typed value), so the dialog's default button never sees it; this runs after the commit (see
+    /// AmountBox_Loaded). Hide() reports None, so the flag tells ShowAsync it was a save.
     /// </summary>
     private void AmountBox_KeyUp(object sender, KeyRoutedEventArgs e)
     {

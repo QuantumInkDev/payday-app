@@ -38,7 +38,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <NumberBox
-                    KeyUp="AmountBox_KeyUp"
+                    Loaded="AmountBox_Loaded"
                     PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="0"
                     Header="Payment"
@@ -46,7 +46,7 @@
                     SpinButtonPlacementMode="Compact"
                     Value="{x:Bind ViewModel.Payment, Mode=TwoWay}" />
                 <NumberBox
-                    KeyUp="AmountBox_KeyUp"
+                    Loaded="AmountBox_Loaded"
                     PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="1"
                     Header="APR (%)"
@@ -62,7 +62,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <NumberBox
-                    KeyUp="AmountBox_KeyUp"
+                    Loaded="AmountBox_Loaded"
                     PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="0"
                     Header="Remaining"
@@ -70,7 +70,7 @@
                     SpinButtonPlacementMode="Hidden"
                     Value="{x:Bind ViewModel.Remaining, Mode=TwoWay}" />
                 <NumberBox
-                    KeyUp="AmountBox_KeyUp"
+                    Loaded="AmountBox_Loaded"
                     PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="1"
                     Header="Available"
@@ -78,7 +78,7 @@
                     SpinButtonPlacementMode="Hidden"
                     Value="{x:Bind ViewModel.Available, Mode=TwoWay}" />
                 <NumberBox
-                    KeyUp="AmountBox_KeyUp"
+                    Loaded="AmountBox_Loaded"
                     PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="2"
                     Header="Limit"
@@ -93,7 +93,7 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <NumberBox
-                    KeyUp="AmountBox_KeyUp"
+                    Loaded="AmountBox_Loaded"
                     PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="0"
                     Header="Due Day (1–31)"

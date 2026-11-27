@@ -15,6 +15,7 @@ public sealed partial class PayDayPage : Page, ISyncReloadable
     public PayDayPage()
     {
         ViewModel = new PayDayPageViewModel(App.Database, App.Notion, App.Backups);
+        _amountKeyUp = AmountBox_KeyUp;
         InitializeComponent();
         DataContext = ViewModel;
         Loaded += OnPageLoaded;
@@ -27,6 +28,20 @@ public sealed partial class PayDayPage : Page, ISyncReloadable
 
     /// <summary>Only an Enter pressed in this same box counts (not the tail of an Enter that opened something).</summary>
     private object? _enterArmed;
+    private readonly KeyEventHandler _amountKeyUp;
+
+    /// <summary>
+    /// NumberBox handles Enter on its inner TextBox's KeyUp (it commits the typed text to Value there and
+    /// marks the event handled), so a plain KeyUp attribute never sees Enter. Listen with
+    /// handledEventsToo instead: the handler then runs after the commit. Loaded can fire more than once,
+    /// so remove before adding.
+    /// </summary>
+    private void AmountBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not UIElement box) return;
+        box.RemoveHandler(KeyUpEvent, _amountKeyUp);
+        box.AddHandler(KeyUpEvent, _amountKeyUp, handledEventsToo: true);
+    }
 
     private void AmountBox_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -34,9 +49,9 @@ public sealed partial class PayDayPage : Page, ISyncReloadable
     }
 
     /// <summary>
-    /// Enter in a bill's amount box marks it paid, same as the Mark Paid button. KeyUp, not KeyDown:
-    /// NumberBox commits the typed text to Value on Enter's KeyDown (and handles it), so by KeyUp the
-    /// two-way binding has already updated the row's amount.
+    /// Enter in a bill's amount box marks it paid, same as the Mark Paid button. This runs after NumberBox
+    /// has committed the typed text (see AmountBox_Loaded), so the two-way binding has already updated
+    /// the row's amount.
     /// </summary>
     private void AmountBox_KeyUp(object sender, KeyRoutedEventArgs e)
     {
