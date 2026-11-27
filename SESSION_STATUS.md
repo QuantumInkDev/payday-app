@@ -55,17 +55,11 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 **Waiting on the developer, then design step 5's exit test:**
 
-1. **Google OAuth client** (free, any Google account, no billing). In console.cloud.google.com:
-   1. Create a project (for example "FutureCheck").
-   2. APIs & Services → Library → enable **Google Drive API**.
-   3. Google Auth Platform → Get started: app name FutureCheck, your support e-mail, audience **External**.
-   4. Data Access → Add or remove scopes: `.../auth/drive.appdata`, `openid`, `.../auth/userinfo.email`. All three are non-sensitive, so no Google review is needed.
-   5. Audience → **Publish app** (status "In production"). In "Testing", Google expires sign-ins after 7 days.
-   6. Clients → Create client → type **Desktop app**. Copy the client ID and the client secret (the secret is shown once; download the JSON).
-   7. On each PC: `setx FUTURECHECK_GOOGLE_CLIENT_ID <id>` and `setx FUTURECHECK_GOOGLE_CLIENT_SECRET <secret>`, then sign out of Windows and back in (or restart) so the app sees them.
+1. **Google OAuth client: done 2026-11-27.** The Cloud project exists and Google Drive API is enabled. The consent screen is External and **In production**: scopes `drive.appdata`, `openid`, `userinfo.email`; homepage = the repo, privacy policy = `PRIVACY.md`. A Desktop app client was created. Its ID and secret are **not** in the repo: they live on the Mac in `~/.config/futurecheck/google-oauth-desktop.env` (mode 600), and as user environment variables on the rig and the VM (`FUTURECHECK_GOOGLE_CLIENT_ID` / `FUTURECHECK_GOOGLE_CLIENT_SECRET`, set with `setx`). Sign out of Windows and back in (or restart) once on each PC so newly launched apps see them.
 
    Later platforms' clients (iOS, Android, web) must be created in the **same project**: the app-data folder belongs to the project.
-   Then the manual test: Sync → Sync through "Google Drive" → Turn on sync (browser sign-in) → create the vault → save the phrase → Add a device; on the second PC join with the code; then edit on each side, lock/unlock, Notion owner, offline, turn off. Exit test: the VM and the rig syncing.
+
+   **Next: the manual test.** Both clones now match `main` (the rig was reset 2026-11-27; its old `.gitignore` edit and a `payday.db` copy are in `Documents\FutureCheck-backup-2026-11-27`). On the rig the installed app is still the May build, running from the untracked old-layout `PayDay\bin\…\AppX` folder; never `git clean` that clone. Install the new build over it (same package identity, so LocalState is kept) only after closing PayDay and taking a fresh JSON backup. Then: Sync → Sync through "Google Drive" → Turn on sync (browser sign-in) → create the vault → save the phrase → Add a device; on the second PC join with the code; then edit on each side, lock/unlock, Notion owner, offline, turn off. Exit test: the VM and the rig syncing.
 
    OneDrive stays available for whoever has an Entra app ID (`FUTURECHECK_ONEDRIVE_CLIENT_ID`; registration details in `OneDriveConfig.cs`).
 2. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
