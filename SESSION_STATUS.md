@@ -63,7 +63,7 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
    OneDrive stays available for whoever has an Entra app ID (`FUTURECHECK_ONEDRIVE_CLIENT_ID`; registration details in `OneDriveConfig.cs`).
 1b. **Flexible pay schedules (developer requirement, 2026-11-27):** weekly, every two weeks, twice a month (e.g. 1st & 15th) and monthly, not just 14-day periods. Proposal and open questions in `planning/2026-11-27-pay-schedules.md`. Build after the sync exit test, before the Mac app (spec + fixtures first).
-1c. **Monetization (developer direction, 2026-11-27):** free for the first 2 pay periods, then a one-time unlock (~$10 intro → ~$20). Proposal: one unlock for every device in the vault, recorded as a synced entitlement; stores' IAP where required, a merchant-of-record license key for direct/web. Prices and store rules pending the research bot. See `planning/2026-11-27-monetization.md`.
+1c. **Monetization (decided 2026-11-27):** 30-day full trial, then a one-time unlock: $9.99 launch price → $19.99. One unlock for every device in the vault (synced entitlement carrying purchase proof); store IAP on Apple/Play, Polar for Windows/web; no license-key UI in App Store builds (confirm the vault unlock with App Review). See `planning/2026-11-27-monetization.md`.
 2. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
 
 **Before seeding the vault** (design §11): export JSON backups from both the VM and the rig and decide which holds the real data.

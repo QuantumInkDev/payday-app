@@ -1,8 +1,12 @@
 # FutureCheck monetization: free trial, then a one-time unlock
 
-**Date:** 2026-11-27 · **Status:** the model is the developer's direction. The mechanism is Claude's
-proposal, updated with the research bot's report (Ray, 2026-11-27; summary and sources at the end).
-The price and trial length are recommendations awaiting the developer's OK.
+**Date:** 2026-11-27 · **Status: decided** (developer, 2026-11-27):
+- **Price:** $9.99 launch price, then $19.99.
+- **Trial:** 30 days, full features. After it, viewing and export stay available.
+- **Unlock:** one unlock for every device in the vault.
+- **Selling:** Polar for Windows and web sales; no license-key entry in App Store builds.
+
+Research summary and sources are at the end.
 
 ## Direction (developer)
 
