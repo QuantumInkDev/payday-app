@@ -31,9 +31,9 @@
   }
 
   body {
-    background-color: var(--color-bg);
-    color: var(--color-fg);
-    font-family: var(--font-sans);
+    background-color: var(--fc-color-bg);
+    color: var(--fc-color-text);
+    font-family: var(--fc-font-sans);
   }
 
   :target {

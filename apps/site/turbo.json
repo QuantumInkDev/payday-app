@@ -4,7 +4,14 @@
   "tasks": {
     "build": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/PRIVACY.md"],
-      "env": ["NEXT_PUBLIC_SITE_URL", "VERCEL_ENV", "VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL"]
+      "outputs": ["dist/**"],
+      "env": [
+        "SITE_URL",
+        "PUBLIC_SITE_URL",
+        "VERCEL_ENV",
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        "VERCEL_URL"
+      ]
     }
   }
 }

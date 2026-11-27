@@ -1,0 +1,21 @@
+---
+// Built to dist/404.html, which Vercel serves for any unknown path. No canonical URL, and noindex.
+import Container from "../components/Container.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Page not found" canonicalPath={null} indexing="noindex">
+  <Container class="py-24 sm:py-32">
+    <div class="max-w-xl">
+      <p class="text-sm font-semibold tracking-wide text-accent uppercase">404</p>
+      <h1 class="mt-3 text-4xl font-semibold tracking-tight">Page not found</h1>
+      <p class="mt-4 text-lg text-muted">That page doesn't exist, or it has moved.</p>
+      <a
+        href="/"
+        class="mt-8 inline-block rounded-md bg-accent px-5 py-3 font-semibold text-accent-contrast hover:opacity-90"
+      >
+        Back to the home page
+      </a>
+    </div>
+  </Container>
+</BaseLayout>

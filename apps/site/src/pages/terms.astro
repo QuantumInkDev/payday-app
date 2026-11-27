@@ -1,0 +1,34 @@
+---
+// PLACEHOLDER. The terms of use are not written yet. This page is kept out of search results
+// (noindex) and out of the sitemap (unlistedPaths in site.config.ts) until the real terms replace it.
+import Container from "../components/Container.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { siteConfig } from "../site.config";
+---
+
+<BaseLayout
+  title="Terms of use"
+  description={`The ${siteConfig.name} terms of use (placeholder; not yet published).`}
+  canonicalPath="/terms"
+  indexing="noindex"
+>
+  <Container class="py-16 sm:py-24">
+    <article class="max-w-3xl">
+      <p role="note" class="rounded-md border border-accent bg-surface px-4 py-3 text-sm font-semibold">
+        Placeholder: the terms of use have not been written yet. Nothing on this page is in effect.
+      </p>
+      <h1 class="mt-10 text-4xl font-semibold tracking-tight sm:text-5xl">Terms of use</h1>
+      <p class="mt-6 leading-7 text-muted">
+        The {siteConfig.name} terms of use will be published here. Until then, see the
+        <a href="/privacy" class="text-accent underline underline-offset-4">privacy policy</a>
+        for how {siteConfig.name} handles your data, or
+        <a
+          href={siteConfig.issuesUrl}
+          class="text-accent underline underline-offset-4"
+          rel="noopener noreferrer">open an issue</a
+        >
+        with any questions.
+      </p>
+    </article>
+  </Container>
+</BaseLayout>

@@ -4,7 +4,7 @@
  * PLACEHOLDER VALUES. The designer replaces them from design/site/DESIGN.md.
  *
  * These are plain CSS custom properties so any consumer can use them, with or without Tailwind.
- * apps/site maps them to Tailwind utilities in src/app/globals.css (@theme inline), so renaming
+ * apps/site maps them to Tailwind utilities in src/styles/global.css (@theme inline), so renaming
  * or adding a token here also needs a line there.
  */
 

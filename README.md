@@ -10,7 +10,7 @@ Only folders marked "present" exist today; the rest are planned (design section 
 ```
 PayDayApp/
 ├── apps/
-│   ├── site/             # present: marketing website (Next.js); see apps/site/README.md
+│   ├── site/             # present: marketing website (Astro); see apps/site/README.md
 │   ├── windows/          # present: PayDay/, PayDay.Core/, PayDay.Tests/
 │   ├── apple/            # planned: macOS + iOS, with PayDayKit Swift package
 │   ├── android/          # planned

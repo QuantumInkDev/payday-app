@@ -1,0 +1,24 @@
+---
+// The privacy policy's single source of truth is PRIVACY.md at the repository root. Astro renders
+// it at build time; edit the policy there, not here. (apps/site/turbo.json lists it as a build
+// input, so a policy change rebuilds the site.)
+import { Content as PrivacyPolicy } from "../../../../PRIVACY.md";
+import Container from "../components/Container.astro";
+import Prose from "../components/Prose.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { siteConfig } from "../site.config";
+---
+
+<BaseLayout
+  title="Privacy policy"
+  description={`How ${siteConfig.name} handles your data: stored on your device, optional end-to-end encrypted sync through your own cloud drive, and no analytics or tracking.`}
+  canonicalPath="/privacy"
+>
+  <Container class="py-16 sm:py-24">
+    <article class="max-w-3xl">
+      <Prose>
+        <PrivacyPolicy />
+      </Prose>
+    </article>
+  </Container>
+</BaseLayout>

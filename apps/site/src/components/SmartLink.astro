@@ -1,0 +1,19 @@
+---
+/** A site link. External URLs get rel="noopener noreferrer"; internal paths are plain anchors. */
+import type { NavLink } from "../site.config";
+
+type Props = {
+  link: NavLink;
+  class?: string;
+};
+
+const { link, class: className } = Astro.props;
+---
+
+<a
+  href={link.href}
+  class={className}
+  rel={link.external ? "noopener noreferrer" : undefined}
+>
+  <slot>{link.label}</slot>
+</a>

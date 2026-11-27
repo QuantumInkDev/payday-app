@@ -1,0 +1,49 @@
+---
+/**
+ * The one shared <head>: title, description, canonical URL, robots, Open Graph and Twitter
+ * metadata. Every page sets its tags through BaseLayout, which passes them here.
+ */
+import { absoluteUrl, robotsContent, siteConfig, type PageIndexing } from "../site.config";
+import "../styles/global.css";
+
+export type HeadProps = {
+  /** Page title. The site name is appended; omit it to use the site's default title. */
+  title?: string;
+  /** Meta description. Defaults to the site description. */
+  description?: string;
+  /** Canonical path, such as "/privacy". Null for pages with no canonical URL (the 404 page). */
+  canonicalPath: string | null;
+  /** Whether search engines may index the page. Previews are never indexed. */
+  indexing?: PageIndexing;
+};
+
+type Props = HeadProps;
+
+const { title, description = siteConfig.description, canonicalPath, indexing = "index" } =
+  Astro.props;
+
+const defaultTitle = `${siteConfig.name}: ${siteConfig.tagline}`;
+const fullTitle = title ? `${title} | ${siteConfig.name}` : defaultTitle;
+const canonicalUrl = canonicalPath === null ? null : absoluteUrl(canonicalPath);
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+<meta name="application-name" content={siteConfig.name} />
+<meta name="robots" content={robotsContent(indexing)} />
+{canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+<link rel="sitemap" href="/sitemap-index.xml" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={siteConfig.name} />
+<meta property="og:locale" content={siteConfig.locale} />
+<meta property="og:title" content={fullTitle} />
+<meta property="og:description" content={description} />
+{canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />

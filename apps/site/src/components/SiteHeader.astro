@@ -1,0 +1,22 @@
+---
+import { siteConfig } from "../site.config";
+import Container from "./Container.astro";
+import SmartLink from "./SmartLink.astro";
+---
+
+<header class="sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur">
+  <Container class="flex h-16 items-center justify-between gap-6">
+    <a href="/" class="text-lg font-semibold tracking-tight">{siteConfig.name}</a>
+    <nav aria-label="Main">
+      <ul class="hidden items-center gap-6 text-sm text-muted md:flex">
+        {
+          siteConfig.nav.map((link) => (
+            <li>
+              <SmartLink link={link} class="hover:text-fg" />
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </Container>
+</header>
