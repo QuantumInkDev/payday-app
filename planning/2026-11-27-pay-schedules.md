@@ -1,7 +1,7 @@
 # Flexible pay schedules
 
-**Date:** 2026-11-27 · **Status:** requirement decided by the developer; design below is a proposal
-(Claude's call) to be finalised in `spec/` before building.
+**Date:** 2026-11-27 · **Status:** requirement and the decisions below are the developer's; the setting layout is a
+proposal (Claude's call) to be finalised in `spec/` before building.
 
 ## Requirement
 
@@ -55,17 +55,26 @@ The rules don't change. A monthly bill goes in the period that contains its due 
 rate `Bi-Weekly` keeps its own 14-day cycle. With weekly periods, some periods get no monthly bills,
 and that's expected.
 
-## Open questions
+## Decisions (developer, 2026-11-27)
 
-1. **Changing schedule mid-stream.** `Regular` payment IDs come from (billId, periodKey), so a new
-   schedule gives new period keys. A bill already marked paid in the current period could show as
-   unpaid again. Proposal: keep old payments untouched, and when a bill's new current period has no
-   `Regular` payment, treat one whose `paidAt` falls inside the new period as covering it. This
-   needs a fixture.
-2. **Pay dates on weekends or holidays.** Many employers pay the Friday before. Offer an
-   "if payday falls on a weekend, use the Friday before" toggle? That isn't in v1 unless the
-   developer wants it.
-3. **Several income sources on different cadences.** Periods follow one schedule, `PaySchedule`.
+1. **Changing schedule mid-stream: nothing is inferred.** A bill counts as paid in a period only if
+   the user explicitly marked it paid. After a schedule change, a bill's new current period counts
+   as paid only if there is an explicit `Regular` payment for that bill whose `paidAt` falls inside
+   the new period. A bill that wasn't explicitly paid stays unpaid. Old payments are never rewritten.
+   This needs a fixture.
+2. **Weekend paydays: offered as a choice.** Setting: "If payday falls on a weekend" → *Use the
+   Friday before* / *Keep the date*. It shifts the period start the same way for every cadence.
+   Holidays are not in v1.
+3. **New: "Start next pay period" button.** This is the manual version of today's automatic 3 PM
+   early start, for when a check lands early.
+   - If every bill in the current period is paid, start the next period right away.
+   - If any are unpaid, warn first and name how many are left ("2 bills in this period aren't
+     marked paid. Start the next period anyway?"). Unpaid bills keep showing as overdue in the
+     period they belong to, as they do today.
+   - It's synced, so every device agrees which period is current. Proposed: a synced setting holding
+     the `periodKey` of the period started early. The early start ends at that period's normal start
+     time.
+4. **Several income sources on different cadences.** Periods follow one schedule, `PaySchedule`.
    Income from other sources lands in whichever period contains its pay date (feature scope #1
    already works this way).
 
@@ -80,6 +89,8 @@ Android apps then reach parity through the conformance fixtures. Work:
 3. Windows:
    - `PayPeriodService` builds periods from the schedule.
    - Settings and onboarding get a schedule picker. Today the Settings page only has an anchor date.
+   - The weekend option and the "Start next pay period" button (with its warning) go on the PayDay
+     page.
    - Every "biweekly" string in the app UI becomes cadence-neutral.
 4. Website: the pay-schedule element (`data-roadmap="pay-schedules"`) goes live once Windows ships
    it.
