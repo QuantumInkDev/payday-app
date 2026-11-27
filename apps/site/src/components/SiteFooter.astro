@@ -1,33 +1,81 @@
 ---
 import { siteConfig } from "../site.config";
-import Container from "./Container.astro";
+import Logo from "./Logo.astro";
 import SmartLink from "./SmartLink.astro";
 ---
 
-<footer class="border-t border-border bg-surface">
-  <Container class="grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
-    <div>
-      <p class="font-semibold">{siteConfig.name}</p>
-      <p class="mt-2 text-sm text-muted">{siteConfig.tagline}</p>
-    </div>
-    {
-      siteConfig.footer.map((group) => (
-        <nav aria-label={group.title}>
-          <p class="text-sm font-semibold">{group.title}</p>
-          <ul class="mt-3 space-y-2 text-sm text-muted">
-            {group.links.map((link) => (
-              <li>
-                <SmartLink link={link} class="hover:text-fg" />
-              </li>
-            ))}
-          </ul>
-        </nav>
-      ))
-    }
-  </Container>
-  <Container class="border-t border-border py-6 text-xs text-muted">
-    <p>
-      {siteConfig.name} keeps your data on your devices. No accounts, no servers, no tracking.
-    </p>
-  </Container>
+<footer class="footer site-offset" data-print-hide>
+  <div class="zone">
+    <Logo mark={false} />
+    <nav aria-label="Footer">
+      <ul>
+        {
+          siteConfig.footer.map((link) => (
+            <li>
+              <SmartLink link={link} />
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+    <p>All displayed financial figures are invented sample data.</p>
+  </div>
 </footer>
+
+<style>
+  .footer {
+    --fc-focus: var(--fc-focus-on-hero);
+    --logo-size: 22px;
+    --logo-tracking: -0.03em;
+    background: var(--fc-hero);
+    color: var(--fc-on-hero);
+  }
+
+  .zone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 30px;
+    padding-block: 28px;
+  }
+
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 22px;
+    font-size: 14px;
+  }
+
+  ul :global(a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  p {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 50rem) {
+    .zone {
+      display: block;
+      padding-block: 25px;
+    }
+
+    nav {
+      margin-top: 8px;
+    }
+
+    ul {
+      gap: 0 18px;
+    }
+
+    p {
+      max-width: 43ch;
+      margin-top: 12px;
+      font-size: 12px;
+    }
+  }
+</style>

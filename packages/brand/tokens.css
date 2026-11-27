@@ -1,44 +1,132 @@
 /*
- * FutureCheck brand tokens.
+ * FutureCheck brand tokens (Open Relay).
  *
- * PLACEHOLDER VALUES. The designer replaces them from design/site/DESIGN.md.
- *
- * These are plain CSS custom properties so any consumer can use them, with or without Tailwind.
- * apps/site maps them to Tailwind utilities in src/styles/global.css (@theme inline), so renaming
- * or adding a token here also needs a line there.
+ * Source: design/site/DESIGN.md, "Drop-in brand tokens", copied as given. Change the values there
+ * first, then here. Plain CSS custom properties with no Tailwind dependency. Font files and
+ * component styles are separate: apps/site declares the @font-face rules and maps these tokens to
+ * Tailwind utilities in src/styles/global.css (@theme inline), so adding or renaming a token here
+ * also needs a line there.
  */
 
+/* FutureCheck — Open Relay. Plain shared tokens; no reset or font requests. */
 :root {
-  /* Color */
-  --fc-color-bg: #ffffff;
-  --fc-color-surface: #f4f5f7;
-  --fc-color-text: #14161a;
-  --fc-color-muted: #5b616e;
-  --fc-color-border: #dde0e5;
-  --fc-color-accent: #2f6fed;
-  --fc-color-accent-contrast: #ffffff;
-
-  /* Type */
-  --fc-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --fc-font-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
-
-  /* Shape */
-  --fc-radius-sm: 0.375rem;
-  --fc-radius-md: 0.75rem;
-  --fc-radius-lg: 1.25rem;
-
-  /* Layout */
-  --fc-content-width: 72rem;
+  color-scheme: light;
+  --fc-petrol: #073e43;
+  --fc-glacier: #d7eef0;
+  --fc-apricot: #ff9255;
+  --fc-warm: #f7f6f2;
+  --fc-bg: #d7eef0;
+  --fc-surface: #ffffff;
+  --fc-surface-muted: #f7f6f2;
+  --fc-device: #d7eef0;
+  --fc-drive: #ffe2cf;
+  --fc-text: #073e43;
+  --fc-text-muted: #27636b;
+  --fc-border: #bdcdcd;
+  --fc-control-border: #27636b;
+  --fc-accent: #ff9255;
+  --fc-accent-hover: #ffa574;
+  --fc-accent-active: #f78140;
+  --fc-on-accent: #073e43;
+  --fc-selected: #073e43;
+  --fc-on-selected: #ffffff;
+  --fc-selection-soft: #d7eef0;
+  --fc-radio-surface: #ffffff;
+  --fc-focus: #073e43;
+  --fc-hero: #073e43;
+  --fc-on-hero: #d7eef0;
+  --fc-hero-muted: #d7eef0;
+  --fc-hero-rule: #527b7f;
+  --fc-focus-on-hero: #d7eef0;
+  --fc-font-display: "Chakra Petch", system-ui, sans-serif;
+  --fc-font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --fc-text-body: 1.125rem;
+  --fc-text-small: 0.875rem;
+  --fc-text-caption: 0.75rem;
+  --fc-text-h1: clamp(4.75rem, 7.1vw, 6.875rem);
+  --fc-text-h2: clamp(2.75rem, 4.2vw, 3.875rem);
+  --fc-text-h3: 1.5625rem;
+  --fc-text-figure: 2.6875rem;
+  --fc-leading-body: 1.6;
+  --fc-leading-display: 1.05;
+  --fc-tracking-display: -0.04em;
+  --fc-radius-action: 0.5625rem;
+  --fc-radius-control: 0.625rem;
+  --fc-radius-row: 0.75rem;
+  --fc-radius-panel: 1.5rem;
+  --fc-radius-pill: 999px;
+  --fc-space-unit: 0.25rem;
+  --fc-rail: 13.5rem;
+  --fc-page-max: 95rem;
+  --fc-reading-max: 42rem;
+  --fc-gutter: clamp(2rem, 4.2vw, 4.75rem);
+  --fc-section: clamp(3rem, 6vw, 5.25rem);
+  --fc-shadow-popover: 0 12px 32px rgb(7 62 67 / 0.15);
+  --fc-duration-fast: 120ms;
+  --fc-duration-response: 240ms;
+  --fc-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
+/* Keep explicit and system-dark values identical. Explicit light wins. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fc-bg: #092d32;
+  --fc-surface: #123b40;
+  --fc-surface-muted: #0b252a;
+  --fc-device: #17484e;
+  --fc-drive: #44372f;
+  --fc-text: #e4f4f4;
+  --fc-text-muted: #b5d3d5;
+  --fc-border: #3d6368;
+  --fc-control-border: #83afb3;
+  --fc-selected: #d7eef0;
+  --fc-on-selected: #073e43;
+  --fc-selection-soft: #17484e;
+  --fc-radio-surface: #123b40;
+  --fc-focus: #d7eef0;
+  --fc-shadow-popover: 0 12px 32px rgb(0 0 0 / 0.3);
+}
 @media (prefers-color-scheme: dark) {
-  :root {
-    --fc-color-bg: #0f1115;
-    --fc-color-surface: #181b21;
-    --fc-color-text: #eceef2;
-    --fc-color-muted: #9aa1ad;
-    --fc-color-border: #2a2f38;
-    --fc-color-accent: #6d9bff;
-    --fc-color-accent-contrast: #0f1115;
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
+    --fc-bg: #092d32;
+    --fc-surface: #123b40;
+    --fc-surface-muted: #0b252a;
+    --fc-device: #17484e;
+    --fc-drive: #44372f;
+    --fc-text: #e4f4f4;
+    --fc-text-muted: #b5d3d5;
+    --fc-border: #3d6368;
+    --fc-control-border: #83afb3;
+    --fc-selected: #d7eef0;
+    --fc-on-selected: #073e43;
+    --fc-selection-soft: #17484e;
+    --fc-radio-surface: #123b40;
+    --fc-focus: #d7eef0;
+    --fc-shadow-popover: 0 12px 32px rgb(0 0 0 / 0.3);
   }
+}
+@media (min-width: 109.375rem) {
+  :root { --fc-text-h1: 7.375rem; }
+}
+@media (max-width: 71.875rem) and (min-width: 50.0625rem) {
+  :root {
+    --fc-rail: 11.875rem;
+    --fc-gutter: 2.125rem;
+    --fc-text-h1: 4.8125rem;
+    --fc-text-h2: 2.875rem;
+  }
+}
+@media (max-width: 50rem) {
+  :root {
+    --fc-rail: 0rem;
+    --fc-gutter: 1.5rem;
+    --fc-text-body: 1rem;
+    --fc-text-h1: clamp(3.0625rem, 10.8vw, 5rem);
+    --fc-text-h2: 2.8125rem;
+    --fc-text-figure: 2.4375rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --fc-duration-fast: 0ms; --fc-duration-response: 0ms; }
 }

@@ -2,41 +2,241 @@
 @import "@futurecheck/brand/tokens.css";
 
 /*
- * Map the brand tokens (packages/brand/tokens.css) to Tailwind utilities, for example bg-surface,
- * text-muted, border-border, bg-accent, rounded-lg and max-w-content. "inline" keeps the var()
- * references, so the dark-mode token values apply without extra utilities.
+ * Self-hosted fonts (no runtime font requests). The files and their SIL Open Font License texts
+ * live in public/fonts/; source details are in design/site/fonts/v2-0411876b-SOURCES.md. These are
+ * the Google Fonts latin subsets, so unicode-range matches that subset and other characters fall
+ * back to the system face. Only these two faces exist: Chakra Petch 600 and IBM Plex Sans 400. With
+ * font-synthesis: none (body, below), no bold or italic is faked. BaseHead.astro preloads both
+ * files; keep its URLs in step with these.
+ */
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/chakra-petch-600-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-sans-400-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+ * Tailwind v4 bridge, as given in design/site/DESIGN.md. "inline" keeps the var() references, so
+ * utilities resolve the live semantic variables at the element and the dark values apply without
+ * extra utilities. Examples: bg-fc-bg, text-fc-muted, rounded-fc-action, max-w-fc-page.
  */
 @theme inline {
-  --color-bg: var(--fc-color-bg);
-  --color-surface: var(--fc-color-surface);
-  --color-fg: var(--fc-color-text);
-  --color-muted: var(--fc-color-muted);
-  --color-border: var(--fc-color-border);
-  --color-accent: var(--fc-color-accent);
-  --color-accent-contrast: var(--fc-color-accent-contrast);
-
-  --font-sans: var(--fc-font-sans);
-  --font-mono: var(--fc-font-mono);
-
-  --radius-sm: var(--fc-radius-sm);
-  --radius-md: var(--fc-radius-md);
-  --radius-lg: var(--fc-radius-lg);
-
-  --container-content: var(--fc-content-width);
+  --color-fc-bg: var(--fc-bg);
+  --color-fc-surface: var(--fc-surface);
+  --color-fc-surface-muted: var(--fc-surface-muted);
+  --color-fc-device: var(--fc-device);
+  --color-fc-drive: var(--fc-drive);
+  --color-fc-text: var(--fc-text);
+  --color-fc-muted: var(--fc-text-muted);
+  --color-fc-border: var(--fc-border);
+  --color-fc-control: var(--fc-control-border);
+  --color-fc-accent: var(--fc-accent);
+  --color-fc-accent-hover: var(--fc-accent-hover);
+  --color-fc-accent-active: var(--fc-accent-active);
+  --color-fc-on-accent: var(--fc-on-accent);
+  --color-fc-selected: var(--fc-selected);
+  --color-fc-on-selected: var(--fc-on-selected);
+  --color-fc-selection-soft: var(--fc-selection-soft);
+  --color-fc-radio: var(--fc-radio-surface);
+  --color-fc-focus: var(--fc-focus);
+  --color-fc-hero: var(--fc-hero);
+  --color-fc-on-hero: var(--fc-on-hero);
+  --color-fc-hero-muted: var(--fc-hero-muted);
+  --color-fc-hero-rule: var(--fc-hero-rule);
+  --color-fc-focus-on-hero: var(--fc-focus-on-hero);
+  --font-display: var(--fc-font-display);
+  --font-body: var(--fc-font-body);
+  --text-fc-body: var(--fc-text-body);
+  --text-fc-small: var(--fc-text-small);
+  --text-fc-caption: var(--fc-text-caption);
+  --text-fc-h1: var(--fc-text-h1);
+  --text-fc-h2: var(--fc-text-h2);
+  --text-fc-h3: var(--fc-text-h3);
+  --text-fc-figure: var(--fc-text-figure);
+  --radius-fc-action: var(--fc-radius-action);
+  --radius-fc-control: var(--fc-radius-control);
+  --radius-fc-row: var(--fc-radius-row);
+  --radius-fc-panel: var(--fc-radius-panel);
+  --radius-fc-pill: var(--fc-radius-pill);
+  --spacing-fc-rail: var(--fc-rail);
+  --spacing-fc-gutter: var(--fc-gutter);
+  --spacing-fc-section: var(--fc-section);
+  --container-fc-page: var(--fc-page-max);
+  --container-fc-reading: var(--fc-reading-max);
+  --shadow-fc-popover: var(--fc-shadow-popover);
+  --ease-fc-out: var(--fc-ease-out);
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    scroll-padding-top: 1.75rem;
   }
 
   body {
-    background-color: var(--fc-color-bg);
-    color: var(--fc-color-text);
-    font-family: var(--fc-font-sans);
+    background-color: var(--fc-bg);
+    color: var(--fc-text);
+    font-family: var(--fc-font-body);
+    font-size: var(--fc-text-body);
+    font-weight: 400;
+    line-height: var(--fc-leading-body);
+    font-synthesis: none;
   }
 
-  :target {
-    scroll-margin-top: 5rem;
+  h1,
+  h2 {
+    font-family: var(--fc-font-display);
+    font-weight: 600;
+    letter-spacing: var(--fc-tracking-display);
+    line-height: var(--fc-leading-display);
+  }
+
+  h2 {
+    font-size: var(--fc-text-h2);
+  }
+
+  h3 {
+    font-family: var(--fc-font-body);
+    font-size: var(--fc-text-h3);
+    font-weight: 400;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  p {
+    max-width: 60ch;
+  }
+
+  /* Prose links stay underlined at rest (Tailwind's preflight removes the underline). */
+  a {
+    color: inherit;
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 5px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  a,
+  button,
+  label {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A real 3 px outline. Sections on petrol set --fc-focus to --fc-focus-on-hero. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--fc-focus);
+    outline-offset: 5px;
+  }
+
+  /* main takes focus from the skip link; it is not a control, so it gets no ring. */
+  main:focus {
+    outline: none;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  @media (forced-colors: active) {
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    summary:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+
+  /* Print: white page, dark text, navigation and controls removed, full content visible. */
+  @media print {
+    html,
+    body {
+      background: #fff;
+      color: #000;
+    }
+
+    [data-print-hide] {
+      display: none !important;
+    }
+
+    .site-offset {
+      margin-left: 0 !important;
+    }
+  }
+}
+
+@layer components {
+  /* A full-width color zone's centered content area. */
+  .zone {
+    max-width: var(--fc-page-max);
+    margin-inline: auto;
+    padding-inline: var(--fc-gutter);
+  }
+
+  /* The one apricot action: a link, petrol text on apricot, no scale jump. */
+  .action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    padding: 13px 25px;
+    border-radius: var(--fc-radius-action);
+    background: var(--fc-accent);
+    color: var(--fc-on-accent);
+    font-size: 17px;
+    line-height: 1.3;
+    text-decoration-line: none;
+    transition: background-color var(--fc-duration-fast) var(--fc-ease-out);
+  }
+
+  .action:hover {
+    background: var(--fc-accent-hover);
+  }
+
+  .action:active {
+    background: var(--fc-accent-active);
+  }
+
+  @media (max-width: 50rem) {
+    .action {
+      min-height: 54px;
+      padding-inline: 22px;
+      font-size: 16px;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .action {
+      border: 2px solid ButtonText;
+    }
   }
 }

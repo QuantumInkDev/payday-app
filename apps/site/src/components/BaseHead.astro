@@ -1,7 +1,8 @@
 ---
 /**
  * The one shared <head>: title, description, canonical URL, robots, Open Graph and Twitter
- * metadata. Every page sets its tags through BaseLayout, which passes them here.
+ * metadata, the favicon and the font preloads. Every page sets its tags through BaseLayout, which
+ * passes them here.
  */
 import { absoluteUrl, robotsContent, siteConfig, type PageIndexing } from "../site.config";
 import "../styles/global.css";
@@ -25,6 +26,13 @@ const { title, description = siteConfig.description, canonicalPath, indexing = "
 const defaultTitle = `${siteConfig.name}: ${siteConfig.tagline}`;
 const fullTitle = title ? `${title} | ${siteConfig.name}` : defaultTitle;
 const canonicalUrl = canonicalPath === null ? null : absoluteUrl(canonicalPath);
+
+// Both faces render above the fold on every page (display type and body copy), so both are
+// preloaded. Keep in step with the @font-face URLs in src/styles/global.css.
+const preloadFonts = [
+  "/fonts/chakra-petch-600-latin.woff2",
+  "/fonts/ibm-plex-sans-400-latin.woff2",
+] as const;
 ---
 
 <meta charset="utf-8" />
@@ -36,6 +44,14 @@ const canonicalUrl = canonicalPath === null ? null : absoluteUrl(canonicalPath);
 <meta name="robots" content={robotsContent(indexing)} />
 {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 <link rel="sitemap" href="/sitemap-index.xml" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+{preloadFonts.map((href) => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin />)}
+
+<!--
+  Interactive illustration controls only work with JavaScript. Without it, hide them and keep the
+  default (server-rendered) sample state, so nothing on the page is a dead control.
+-->
+<noscript><style is:inline>[data-js-only]{display:none!important}</style></noscript>
 
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content={siteConfig.name} />

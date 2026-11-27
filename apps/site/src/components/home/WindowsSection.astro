@@ -1,0 +1,91 @@
+---
+/**
+ * Home section 4 (#windows): "Windows now. More places next." No download link until Quantum
+ * provides an approved release URL, and no store badges for the planned platforms.
+ */
+const planned = ["macOS", "iOS", "Android", "Web"] as const;
+---
+
+<section class="availability zone" id="windows" aria-labelledby="windows-title">
+  <h2 id="windows-title">Windows now.<br />More places next.</h2>
+  <div>
+    <p>
+      Track bills, see your dashboard and insights charts, and compare snowball and avalanche payoff
+      strategies on Windows.
+    </p>
+    <p class="planned">macOS, iOS, Android, and web are planned. They aren't available yet.</p>
+    <ul class="platforms" aria-label="Planned platforms">
+      {planned.map((platform) => <li>{platform}</li>)}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .availability {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(40px, 5vw, 82px);
+    padding-block: 76px;
+  }
+
+  p {
+    max-width: 44ch;
+    font-size: 18px;
+  }
+
+  .planned {
+    margin-top: 19px;
+    color: var(--fc-text-muted);
+    font-size: 15px;
+  }
+
+  .platforms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+
+  .platforms li {
+    padding: 5px 12px;
+    border: 1px solid color-mix(in srgb, var(--fc-control-border) 40%, transparent);
+    border-radius: var(--fc-radius-pill);
+  }
+
+  @media (forced-colors: active) {
+    .platforms li {
+      border-color: CanvasText;
+    }
+  }
+
+  @media (max-width: 71.875rem) and (min-width: 50.0625rem) {
+    .availability {
+      gap: 30px;
+    }
+  }
+
+  @media (max-width: 50rem) {
+    .availability {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+      padding-block: 49px;
+    }
+
+    p {
+      font-size: 16px;
+    }
+
+    .planned {
+      margin-top: 17px;
+      font-size: 14px;
+    }
+
+    .platforms {
+      gap: 8px;
+      margin-top: 19px;
+      font-size: 13px;
+    }
+  }
+</style>

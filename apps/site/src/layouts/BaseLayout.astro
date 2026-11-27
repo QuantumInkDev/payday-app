@@ -6,21 +6,39 @@ import SiteHeader from "../components/SiteHeader.astro";
 type Props = HeadProps;
 ---
 
-<html lang="en">
+<html lang="en-US">
   <head>
     <BaseHead {...Astro.props} />
   </head>
-  <body class="flex min-h-dvh flex-col antialiased">
-    <a
-      href="#main"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-sm focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-contrast"
-    >
-      Skip to content
-    </a>
+  <body>
+    <a href="#main" class="skip" data-print-hide>Skip to content</a>
     <SiteHeader />
-    <main id="main" class="flex-1">
+    <main id="main" tabindex="-1" class="site-offset">
       <slot />
     </main>
     <SiteFooter />
   </body>
 </html>
+
+<style>
+  .skip {
+    position: fixed;
+    top: -120px;
+    left: 20px;
+    z-index: 20;
+    padding: 12px 18px;
+    border-radius: var(--fc-radius-action);
+    background: var(--fc-accent);
+    color: var(--fc-on-accent);
+    text-decoration-line: none;
+  }
+
+  .skip:focus {
+    top: 16px;
+  }
+
+  /* The fixed rail's width; zero at 800 px and below, where the rail is a normal header. */
+  :global(.site-offset) {
+    margin-left: var(--fc-rail);
+  }
+</style>

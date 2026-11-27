@@ -1,0 +1,67 @@
+---
+/**
+ * The FutureCheck logo: the only place the logo is drawn, so the studio artwork
+ * (design/site/logo/) replaces it here in one change.
+ *
+ * TEMPORARY. The wordmark is live text in the display face and the mark is the small inline mark
+ * from the v3 design study. Neither is final artwork.
+ *
+ * Size it from the parent with --logo-size (font size of the wordmark; the mark scales with it).
+ */
+import { siteConfig } from "../site.config";
+
+type Props = {
+  /** Show the small mark before the wordmark. */
+  mark?: boolean;
+  class?: string;
+};
+
+const { mark = true, class: className } = Astro.props;
+---
+
+<a href="/" class:list={["logo", className]} aria-label={`${siteConfig.name} home`}>
+  {
+    mark && (
+      <svg viewBox="0 0 30 34" aria-hidden="true" focusable="false">
+        <path d="M4 5h10v10H4zM17 21h10v10H17z" fill="currentColor" />
+        <path
+          d="m6 24 6 6L25 8"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    )
+  }
+  <span>{siteConfig.name}</span>
+</a>
+
+<style>
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.41em;
+    min-height: 44px;
+    font-family: var(--fc-font-display);
+    font-size: var(--logo-size, 22px);
+    font-weight: 600;
+    letter-spacing: var(--logo-tracking, -1px);
+    line-height: 1.1;
+    white-space: nowrap;
+    text-decoration-line: none;
+  }
+
+  .logo svg {
+    display: block;
+    flex: none;
+    width: 1.27em;
+    height: 1.45em;
+  }
+
+  .logo:hover span {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+  }
+</style>

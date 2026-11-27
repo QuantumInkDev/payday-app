@@ -1,5 +1,5 @@
 /**
- * Site-wide configuration: name, base URL, navigation and footer links.
+ * Site-wide configuration: name, base URL, navigation, footer links and roadmap flags.
  *
  * The base URL is the only place the domain appears. Set SITE_URL (or PUBLIC_SITE_URL) to the
  * canonical origin, for example https://futurecheck.app once the domain is live. Without it, a
@@ -13,11 +13,6 @@ export type NavLink = {
   label: string;
   href: string;
   external?: boolean;
-};
-
-export type FooterGroup = {
-  title: string;
-  links: readonly NavLink[];
 };
 
 const LOCAL_URL = "http://localhost:4321";
@@ -51,45 +46,35 @@ const isNonProductionDeployment =
 
 export const siteConfig = {
   name: "FutureCheck",
-  tagline: "Plan every paycheck before it lands.",
+  tagline: "Put bills in paycheck order.",
   description:
-    "FutureCheck is a personal finance tracker built around biweekly pay periods. Bills, credit cards, loans, subscriptions and installment plans, stored on your device with optional end-to-end encrypted sync through your own cloud drive.",
+    "Put bills in paycheck order. FutureCheck is a local-first personal finance tracker for Windows, with optional encrypted sync through your own drive.",
   locale: "en_US",
   baseUrl: resolveBaseUrl(),
   allowIndexing: !isNonProductionDeployment,
   repoUrl: REPO_URL,
   issuesUrl: ISSUES_URL,
+  /** The home sections. Root-relative, so they work from every page. */
   nav: [
-    { label: "Pay periods", href: "/#pay-periods" },
-    { label: "Features", href: "/#features" },
-    { label: "Privacy", href: "/#privacy" },
-    { label: "Platforms", href: "/#platforms" },
-    { label: "FAQ", href: "/#faq" },
+    { label: "Your paychecks", href: "/#pay-period" },
+    { label: "Your data", href: "/#privacy" },
+    { label: "Windows", href: "/#windows" },
   ],
   footer: [
-    {
-      title: "Product",
-      links: [
-        { label: "Features", href: "/#features" },
-        { label: "Platforms", href: "/#platforms" },
-        { label: "FAQ", href: "/#faq" },
-      ],
-    },
-    {
-      title: "Legal",
-      links: [
-        { label: "Privacy policy", href: "/privacy" },
-        { label: "Terms of use", href: "/terms" },
-      ],
-    },
-    {
-      title: "Project",
-      links: [
-        { label: "Source code", href: REPO_URL, external: true },
-        { label: "Report an issue", href: ISSUES_URL, external: true },
-      ],
-    },
+    { label: "Home", href: "/" },
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
+    { label: "Source code", href: REPO_URL, external: true },
+    { label: "Report an issue", href: ISSUES_URL, external: true },
   ],
+  /**
+   * Roadmap previews. Each flag renders an element tagged data-roadmap="<name>" that describes
+   * something not yet available. Keep every flag false in production until Quantum approves it.
+   */
+  roadmap: {
+    /** The "Coming soon" pay-schedule chooser on the home page (data-roadmap="pay-schedules"). */
+    paySchedules: false,
+  },
 } as const satisfies {
   name: string;
   tagline: string;
@@ -100,7 +85,8 @@ export const siteConfig = {
   repoUrl: string;
   issuesUrl: string;
   nav: readonly NavLink[];
-  footer: readonly FooterGroup[];
+  footer: readonly NavLink[];
+  roadmap: Record<string, boolean>;
 };
 
 /**

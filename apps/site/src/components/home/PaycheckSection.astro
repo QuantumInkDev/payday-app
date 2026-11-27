@@ -1,0 +1,392 @@
+---
+/**
+ * Home section 2 (#pay-period): "Less calendar. More next paycheck." with the switchable sample
+ * paycheck, plus the roadmap pay-schedule chooser when siteConfig.roadmap.paySchedules is on.
+ *
+ * The default view (This paycheck, every 2 weeks) is rendered here at build time, so it shows
+ * without JavaScript. The script below only re-renders the panel when a control changes.
+ */
+import { defaultSchedule, periodView } from "../../data/sample";
+import { siteConfig } from "../../site.config";
+import SchedulePreview from "./SchedulePreview.astro";
+
+const initial = periodView(defaultSchedule, 0);
+---
+
+<section class="period zone" id="pay-period" aria-labelledby="period-title">
+  <div class="period-main">
+    <div class="period-copy">
+      <h2 id="period-title">Less calendar.<br />More next<br />paycheck.</h2>
+      <p>
+        A bill list is useful. A bill list grouped by the paycheck that covers it is better. Check
+        this period, look ahead to the next, and mark bills paid as you go.
+      </p>
+      <p class="boundary">
+        You enter and track your bills, credit cards, loans, subscriptions, and installment plans.
+        FutureCheck doesn't connect to your bank, import transactions, or send payments.
+      </p>
+      <ul class="tools">
+        <li>
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path
+              d="m3 10 4 4 10-9"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"></path>
+          </svg>Dashboard and insights charts
+        </li>
+        <li>
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path
+              d="m3 10 4 4 10-9"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"></path>
+          </svg>Snowball and avalanche payoff plans
+        </li>
+      </ul>
+    </div>
+
+    <div class="demo">
+      <div class="switch" role="group" aria-label="Choose a sample paycheck" data-js-only>
+        <button type="button" data-period="0" aria-pressed="true" aria-controls="sample-period">
+          This paycheck
+        </button>
+        <button type="button" data-period="1" aria-pressed="false" aria-controls="sample-period">
+          Next paycheck
+        </button>
+      </div>
+      <p class="sample-caption">
+        Invented sample data.<span data-js-only> Try switching paychecks.</span>
+      </p>
+      <div id="sample-period" aria-live="polite" aria-atomic="true">
+        <p class="period-heading" data-sample-label>{initial.label}</p>
+        <ul class="bill-list" data-sample-rows>
+          {
+            initial.rows.map((row) => (
+              <li>
+                <span>{row.name}</span>
+                <span class="amount">{row.amount}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <div class="total">
+          <span class="total-label">Sample planned bills</span>
+          <span class="total-amount amount" data-sample-total>{initial.total}</span>
+        </div>
+      </div>
+      <p class="demo-note">
+        A paycheck illustration, not a product screenshot.<br />No real dates or financial data.
+      </p>
+    </div>
+  </div>
+
+  {siteConfig.roadmap.paySchedules && <SchedulePreview feedback={initial.feedback} />}
+</section>
+
+<script>
+  import { defaultSchedule, isScheduleId, periodView, type PeriodIndex } from "../../data/sample";
+
+  const panel = document.getElementById("sample-period");
+  const periodButtons = document.querySelectorAll<HTMLButtonElement>("button[data-period]");
+
+  if (panel) {
+    const label = panel.querySelector("[data-sample-label]");
+    const rows = panel.querySelector("[data-sample-rows]");
+    const total = panel.querySelector("[data-sample-total]");
+    let schedule = defaultSchedule;
+    let period: PeriodIndex = 0;
+
+    const render = () => {
+      const view = periodView(schedule, period);
+      if (label) label.textContent = view.label;
+      if (total) total.textContent = view.total;
+      rows?.replaceChildren(
+        ...view.rows.map((row) => {
+          const item = document.createElement("li");
+          const name = document.createElement("span");
+          const amount = document.createElement("span");
+          name.textContent = row.name;
+          amount.className = "amount";
+          amount.textContent = row.amount;
+          item.append(name, amount);
+          return item;
+        }),
+      );
+      periodButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.period === String(period)));
+      });
+      // The roadmap chooser may be absent (its flag is off by default).
+      const feedback = document.getElementById("schedule-feedback");
+      if (feedback) feedback.textContent = view.feedback;
+      // One restrained response to a person's action; reduced motion removes it in CSS.
+      panel.classList.remove("sample-changing");
+      void panel.offsetWidth;
+      panel.classList.add("sample-changing");
+    };
+
+    periodButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        period = button.dataset.period === "1" ? 1 : 0;
+        render();
+      });
+    });
+
+    document.querySelectorAll<HTMLInputElement>('input[name="schedule"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked && isScheduleId(input.value)) {
+          schedule = input.value;
+          render();
+        }
+      });
+    });
+  }
+</script>
+
+<style>
+  .period {
+    padding-block: 83px 78px;
+  }
+
+  .period-main {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(40px, 5vw, 82px);
+  }
+
+  .period-copy > p {
+    max-width: 40ch;
+    margin-top: 25px;
+  }
+
+  .period-copy .boundary {
+    margin-top: 18px;
+    color: var(--fc-text-muted);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .tools {
+    display: grid;
+    gap: 14px;
+    margin-top: 30px;
+    font-size: 15px;
+  }
+
+  .tools li {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+
+  .tools svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+  }
+
+  .demo {
+    min-width: 0;
+    padding: 28px 30px 22px;
+    border-radius: 22px;
+    background: var(--fc-surface);
+  }
+
+  .switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    padding: 5px;
+    border-radius: 11px;
+    background: var(--fc-surface-muted);
+  }
+
+  .switch button {
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font-size: 16px;
+    transition:
+      background-color var(--fc-duration-fast) var(--fc-ease-out),
+      color var(--fc-duration-fast) var(--fc-ease-out);
+  }
+
+  .switch button[aria-pressed="true"] {
+    background: var(--fc-selected);
+    color: var(--fc-on-selected);
+  }
+
+  .sample-caption {
+    margin-block: 19px 8px;
+    color: var(--fc-text-muted);
+    font-size: 12px;
+  }
+
+  .period-heading {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+    margin-bottom: 8px;
+    font-size: 19px;
+    line-height: 1.35;
+  }
+
+  .bill-list :global(li) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 20px;
+    padding-block: 15px;
+    border-top: 1px solid var(--fc-border);
+    font-size: 17px;
+  }
+
+  .demo :global(.amount) {
+    font-variant-numeric: tabular-nums lining-nums;
+    white-space: nowrap;
+  }
+
+  .total {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 14px;
+    margin-top: 9px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: var(--fc-device);
+  }
+
+  .total-label {
+    max-width: 13ch;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .total-amount {
+    font-family: var(--fc-font-display);
+    font-size: var(--fc-text-figure);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: var(--fc-tracking-display);
+  }
+
+  .demo-note {
+    margin-top: 15px;
+    color: var(--fc-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  @keyframes settle {
+    from {
+      opacity: 0.45;
+      transform: translateY(4px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  :global(.sample-changing) {
+    animation: settle var(--fc-duration-response) ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(.sample-changing) {
+      animation: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .switch button[aria-pressed="true"] {
+      border: 2px solid ButtonText;
+    }
+  }
+
+  @media (max-width: 71.875rem) and (min-width: 50.0625rem) {
+    .period-main {
+      gap: 30px;
+    }
+
+    .demo {
+      padding-inline: 23px;
+    }
+  }
+
+  @media (max-width: 50rem) {
+    .period {
+      padding-block: 49px;
+    }
+
+    .period-main {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 30px;
+    }
+
+    .period-copy > p {
+      margin-top: 22px;
+    }
+
+    .period-copy .boundary {
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .tools {
+      gap: 11px;
+      margin-top: 22px;
+      font-size: 14px;
+    }
+
+    .demo {
+      padding: 20px 21px;
+      border-radius: 18px;
+    }
+
+    .switch button {
+      padding-inline: 8px;
+      font-size: 14px;
+    }
+
+    .sample-caption {
+      margin-top: 17px;
+      font-size: 12px;
+    }
+
+    .period-heading {
+      min-height: 43px;
+      font-size: 17px;
+    }
+
+    .bill-list :global(li) {
+      padding-block: 14px;
+      font-size: 15px;
+    }
+
+    .total {
+      padding: 13px 15px;
+    }
+
+    .total-label {
+      font-size: 13px;
+    }
+
+    .demo-note {
+      font-size: 12px;
+    }
+  }
+</style>

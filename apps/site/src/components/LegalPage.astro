@@ -1,0 +1,235 @@
+---
+/**
+ * The shared shell for /privacy and /terms: a quiet glacier title band (the "intro" slot: H1,
+ * effective date or status, short introduction) above a white reading surface (the default slot).
+ *
+ * With `contents`, a compact list of the sections precedes the prose; on wide screens it sits
+ * beside the prose instead. All text stays visible without JavaScript and in print.
+ *
+ * The slotted content comes from the page (or from rendered Markdown), so its styles are :global()
+ * and scoped under this component's wrappers.
+ */
+export type LegalHeading = { slug: string; text: string };
+
+type Props = {
+  /** Sections for the contents list. Omit for a page too short to need one. */
+  contents?: readonly LegalHeading[];
+};
+
+const { contents } = Astro.props;
+---
+
+<article class="legal">
+  <div class="legal-band">
+    <div class="zone">
+      <div class="legal-intro">
+        <slot name="intro" />
+      </div>
+    </div>
+  </div>
+  <div class="legal-surface">
+    <div class:list={["zone", "legal-grid", { "has-contents": contents && contents.length > 0 }]}>
+      {
+        contents && contents.length > 0 && (
+          <nav class="legal-toc" aria-label="On this page" data-print-hide>
+            <p class="legal-toc-title">On this page</p>
+            <ul>
+              {contents.map((heading) => (
+                <li>
+                  <a href={`#${heading.slug}`}>{heading.text}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )
+      }
+      <div class="legal-prose">
+        <slot />
+      </div>
+    </div>
+  </div>
+</article>
+
+<style>
+  .legal-band {
+    padding-block: 64px 48px;
+    background: var(--fc-bg);
+  }
+
+  .legal-intro {
+    max-width: var(--fc-reading-max);
+  }
+
+  .legal-intro :global(h1) {
+    font-size: var(--fc-text-h2);
+    overflow-wrap: break-word;
+  }
+
+  .legal-intro :global(p) {
+    max-width: 62ch;
+    margin-top: 18px;
+    font-size: 17px;
+    line-height: 1.65;
+  }
+
+  .legal-intro :global(h1 + p) {
+    margin-top: 22px;
+    color: var(--fc-text-muted);
+    font-size: 15px;
+  }
+
+  .legal-surface {
+    padding-block: 48px 80px;
+    background: var(--fc-surface);
+  }
+
+  .legal-grid {
+    display: grid;
+    grid-template-columns: minmax(0, var(--fc-reading-max));
+    gap: 32px;
+  }
+
+  .legal-toc {
+    padding: 18px 20px;
+    border-radius: var(--fc-radius-row);
+    background: var(--fc-surface-muted);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .legal-toc-title {
+    margin-bottom: 6px;
+    color: var(--fc-text-muted);
+    font-size: 14px;
+  }
+
+  .legal-toc a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .legal-prose {
+    min-width: 0;
+    font-size: 17px;
+    line-height: 1.75;
+  }
+
+  .legal-prose :global(h2) {
+    margin-top: 44px;
+    font-family: var(--fc-font-body);
+    font-size: var(--fc-text-h3);
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: -0.025em;
+    scroll-margin-top: 1.75rem;
+  }
+
+  .legal-prose :global(h2:first-child) {
+    margin-top: 0;
+  }
+
+  .legal-prose :global(p),
+  .legal-prose :global(ul),
+  .legal-prose :global(ol) {
+    max-width: 66ch;
+    margin-top: 14px;
+  }
+
+  .legal-prose :global(ul) {
+    padding-left: 1.4em;
+    list-style: disc;
+  }
+
+  .legal-prose :global(ol) {
+    padding-left: 1.4em;
+    list-style: decimal;
+  }
+
+  .legal-prose :global(li + li) {
+    margin-top: 8px;
+  }
+
+  .legal-prose :global(li > ul),
+  .legal-prose :global(li > ol) {
+    margin-top: 8px;
+  }
+
+  .legal-prose :global(li::marker) {
+    color: var(--fc-text-muted);
+  }
+
+  .legal-prose :global(a),
+  .legal-prose :global(code) {
+    overflow-wrap: anywhere;
+  }
+
+  .legal-prose :global(code) {
+    padding: 0.1em 0.35em;
+    border-radius: 6px;
+    background: var(--fc-surface-muted);
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+
+  /* Wide enough for the contents list beside a full reading column without squeezing it. */
+  @media (min-width: 80rem) {
+    .legal-grid.has-contents {
+      grid-template-columns: minmax(0, var(--fc-reading-max)) minmax(12rem, 15rem);
+      gap: 64px;
+      align-items: start;
+    }
+
+    .has-contents .legal-toc {
+      position: sticky;
+      top: 28px;
+      grid-row: 1;
+      grid-column: 2;
+    }
+
+    .has-contents .legal-prose {
+      grid-row: 1;
+      grid-column: 1;
+    }
+  }
+
+  @media (max-width: 50rem) {
+    .legal-band {
+      padding-block: 40px 32px;
+    }
+
+    .legal-intro :global(p) {
+      font-size: 16px;
+    }
+
+    .legal-intro :global(h1 + p) {
+      font-size: 14px;
+    }
+
+    .legal-surface {
+      padding-block: 32px 56px;
+    }
+
+    .legal-prose {
+      font-size: 16px;
+    }
+
+    .legal-prose :global(h2) {
+      margin-top: 36px;
+      font-size: 22px;
+    }
+  }
+
+  @media print {
+    .legal-band,
+    .legal-surface {
+      padding-block: 0 16px;
+      background: #fff;
+      color: #000;
+    }
+
+    .legal-prose :global(a[href^="http"])::after {
+      content: " (" attr(href) ")";
+    }
+  }
+</style>

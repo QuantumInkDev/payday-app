@@ -1,22 +1,151 @@
 ---
-import { siteConfig } from "../site.config";
-import Container from "./Container.astro";
-import SmartLink from "./SmartLink.astro";
+/**
+ * The site rail: a fixed warm-white column above 800 px, and a normal header in document flow at
+ * 800 px and below (all links stay visible in a wrapping row). The links point at the home
+ * sections; on a legal page, a link to that page is added and marked current.
+ */
+import { siteConfig, type NavLink } from "../site.config";
+import Logo from "./Logo.astro";
+
+const currentPagePaths: Record<string, NavLink> = {
+  "/privacy": { label: "Privacy policy", href: "/privacy" },
+  "/terms": { label: "Terms", href: "/terms" },
+};
+
+const pathname = Astro.url.pathname.replace(/\/$/, "") || "/";
+const currentPage = currentPagePaths[pathname];
+const links: readonly NavLink[] = currentPage ? [...siteConfig.nav, currentPage] : siteConfig.nav;
 ---
 
-<header class="sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur">
-  <Container class="flex h-16 items-center justify-between gap-6">
-    <a href="/" class="text-lg font-semibold tracking-tight">{siteConfig.name}</a>
-    <nav aria-label="Main">
-      <ul class="hidden items-center gap-6 text-sm text-muted md:flex">
-        {
-          siteConfig.nav.map((link) => (
-            <li>
-              <SmartLink link={link} class="hover:text-fg" />
-            </li>
-          ))
-        }
-      </ul>
-    </nav>
-  </Container>
+<header class="rail" data-print-hide>
+  <Logo />
+  <nav aria-label="Main">
+    <ul>
+      {
+        links.map((link) => (
+          <li>
+            <a href={link.href} aria-current={link === currentPage ? "page" : undefined}>
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+  <div class="rail-bottom">
+    <svg viewBox="0 0 85 38" aria-hidden="true" focusable="false">
+      <path
+        d="M3 27h17c15 0 10-18 25-18h37"
+        stroke="currentColor"
+        stroke-width="3"
+        fill="none"
+        stroke-linecap="round"></path>
+      <circle cx="79" cy="9" r="5" fill="currentColor"></circle>
+    </svg>
+    <p>No account to make.<br />No bank to connect.</p>
+  </div>
 </header>
+
+<style>
+  .rail {
+    --logo-size: 22px;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    width: var(--fc-rail);
+    padding: 35px 24px 30px;
+    overflow-y: auto;
+    background: var(--fc-surface-muted);
+    color: var(--fc-text);
+  }
+
+  ul {
+    display: grid;
+    gap: 10px;
+    margin-top: 89px;
+  }
+
+  nav a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 46px;
+    font-size: 15px;
+    text-decoration-line: none;
+  }
+
+  nav a::before {
+    content: "";
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+  }
+
+  nav a[aria-current="page"]::before {
+    background: currentColor;
+  }
+
+  nav a:hover {
+    text-decoration-line: underline;
+  }
+
+  .rail-bottom {
+    margin-top: auto;
+    padding-top: 24px;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  .rail-bottom svg {
+    display: block;
+    width: 85px;
+    height: 38px;
+    margin-bottom: 18px;
+  }
+
+  @media (max-width: 71.875rem) and (min-width: 50.0625rem) {
+    .rail {
+      --logo-size: 20px;
+      padding-inline: 18px;
+    }
+  }
+
+  @media (max-width: 50rem) {
+    .rail {
+      --logo-size: 23px;
+      position: static;
+      gap: 13px;
+      width: auto;
+      padding: 20px var(--fc-gutter) 12px;
+      overflow: visible;
+    }
+
+    ul {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0 16px;
+      margin: 0;
+    }
+
+    /* The study's 40 px rows, enlarged to a 44 px target for production. */
+    nav a {
+      gap: 7px;
+      min-height: 44px;
+      font-size: 14px;
+    }
+
+    nav a::before {
+      width: 5px;
+      height: 5px;
+    }
+
+    .rail-bottom {
+      display: none;
+    }
+  }
+</style>

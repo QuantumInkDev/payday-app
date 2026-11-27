@@ -1,9 +1,20 @@
 ---
 // PLACEHOLDER. The terms of use are not written yet. This page is kept out of search results
 // (noindex) and out of the sitemap (unlistedPaths in site.config.ts) until the real terms replace it.
-import Container from "../components/Container.astro";
+// The list below reserves the sections the terms will need (design/site/DESIGN.md, "Terms"); it is
+// structure only, not legal text.
+import LegalPage from "../components/LegalPage.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { siteConfig } from "../site.config";
+
+const plannedSections = [
+  "The app and its license",
+  "Your data and backups",
+  "Optional third-party services",
+  "No bank connection or payment execution",
+  "Disclaimers and liability",
+  "Changes and contact",
+] as const;
 ---
 
 <BaseLayout
@@ -12,23 +23,52 @@ import { siteConfig } from "../site.config";
   canonicalPath="/terms"
   indexing="noindex"
 >
-  <Container class="py-16 sm:py-24">
-    <article class="max-w-3xl">
-      <p role="note" class="rounded-md border border-accent bg-surface px-4 py-3 text-sm font-semibold">
+  <LegalPage>
+    <Fragment slot="intro">
+      <h1>Terms of use</h1>
+      <p role="note" class="draft-note">
         Placeholder: the terms of use have not been written yet. Nothing on this page is in effect.
       </p>
-      <h1 class="mt-10 text-4xl font-semibold tracking-tight sm:text-5xl">Terms of use</h1>
-      <p class="mt-6 leading-7 text-muted">
-        The {siteConfig.name} terms of use will be published here. Until then, see the
-        <a href="/privacy" class="text-accent underline underline-offset-4">privacy policy</a>
-        for how {siteConfig.name} handles your data, or
-        <a
-          href={siteConfig.issuesUrl}
-          class="text-accent underline underline-offset-4"
-          rel="noopener noreferrer">open an issue</a
-        >
-        with any questions.
+      <p>
+        The {siteConfig.name} terms of use will be published here. Until then, see the{" "}
+        <a href="/privacy">privacy policy</a> for how {siteConfig.name} handles your data, or{" "}
+        <a href={siteConfig.issuesUrl} rel="noopener noreferrer">open an issue</a> with any questions.
       </p>
-    </article>
-  </Container>
+    </Fragment>
+    <h2>What the terms will cover</h2>
+    <ul>
+      {plannedSections.map((section) => <li>{section}</li>)}
+    </ul>
+  </LegalPage>
 </BaseLayout>
+
+<style>
+  /* Scoped under .legal-intro so it outranks LegalPage's "h1 + p" meta-line style. */
+  :global(.legal-intro) .draft-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border: 2px solid var(--fc-control-border);
+    border-radius: var(--fc-radius-row);
+    background: var(--fc-surface);
+    color: var(--fc-text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .draft-note::before {
+    content: "";
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--fc-accent);
+  }
+
+  @media (forced-colors: active) {
+    .draft-note::before {
+      background: CanvasText;
+    }
+  }
+</style>

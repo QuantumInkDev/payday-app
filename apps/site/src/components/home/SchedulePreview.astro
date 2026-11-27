@@ -1,0 +1,251 @@
+---
+/**
+ * ROADMAP PREVIEW (data-roadmap="pay-schedules"). Rendered only when
+ * siteConfig.roadmap.paySchedules is true, which it is not by default: Windows supports every 2
+ * weeks only. The radios change only the sample above (PaycheckSection's script listens for them);
+ * the choice is never stored. "1st & 15th" is a generic schedule definition, not anyone's pay dates.
+ */
+import { defaultSchedule, schedules, type ScheduleId } from "../../data/sample";
+
+type Props = {
+  /** The feedback line for the default schedule, rendered at build time. */
+  feedback: string;
+};
+
+const { feedback } = Astro.props;
+
+const options: readonly { id: ScheduleId; label: string; detail?: string }[] = [
+  { id: "weekly", label: schedules.weekly.name },
+  { id: "biweekly", label: schedules.biweekly.name },
+  { id: "semimonthly", label: schedules.semimonthly.name, detail: "(1st & 15th)" },
+  { id: "monthly", label: schedules.monthly.name },
+];
+---
+
+<div class="schedule-preview" data-roadmap="pay-schedules">
+  <div class="schedule-intro">
+    <span class="coming">Coming soon</span>
+    <h3>More ways to line it up.</h3>
+  </div>
+  <p>
+    Try a schedule in this preview. Windows currently supports every 2 weeks only. The other
+    schedules aren't available yet.
+  </p>
+  <fieldset class="schedules" data-js-only>
+    <legend>Preview a pay schedule</legend>
+    <div class="schedule-options">
+      {
+        options.map((option) => (
+          <label class="schedule-choice">
+            <input
+              class="schedule-radio"
+              type="radio"
+              name="schedule"
+              value={option.id}
+              aria-controls="sample-period schedule-feedback"
+              checked={option.id === defaultSchedule}
+            />
+            <span>
+              {option.label}
+              {option.detail && <small>{` ${option.detail}`}</small>}
+            </span>
+          </label>
+        ))
+      }
+    </div>
+  </fieldset>
+  <p class="schedule-feedback" id="schedule-feedback" aria-live="polite" data-js-only>
+    {feedback}
+  </p>
+</div>
+
+<style>
+  .schedule-preview {
+    margin-top: 47px;
+    padding: 29px 32px 27px;
+    border-radius: 20px;
+    background: var(--fc-surface-muted);
+  }
+
+  .schedule-intro {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  h3 {
+    font-size: 22px;
+  }
+
+  .coming {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: var(--fc-radius-pill);
+    background: var(--fc-accent);
+    color: var(--fc-on-accent);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .schedule-preview > p {
+    max-width: 70ch;
+    color: var(--fc-text-muted);
+    font-size: 15px;
+  }
+
+  .schedules {
+    min-width: 0;
+    margin: 20px 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  legend {
+    margin-bottom: 11px;
+    padding: 0;
+    font-size: 14px;
+  }
+
+  .schedule-options {
+    display: grid;
+    grid-template-columns: 0.8fr 1fr 1.6fr 0.8fr;
+    gap: 10px;
+  }
+
+  .schedule-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 57px;
+    padding: 10px 13px;
+    border: 2px solid var(--fc-control-border);
+    border-radius: var(--fc-radius-control);
+    font-size: 15px;
+    line-height: 1.35;
+    cursor: pointer;
+  }
+
+  .schedule-choice:has(input:checked) {
+    border-color: var(--fc-selected);
+    background: var(--fc-selection-soft);
+  }
+
+  .schedule-choice:has(input:focus-visible) {
+    background: var(--fc-selection-soft);
+  }
+
+  .schedule-choice small {
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  /* Pay-schedule radio recipe from DESIGN.md: native semantics, explicit brand paint. */
+  .schedule-radio {
+    appearance: none;
+    -webkit-appearance: none;
+    accent-color: var(--fc-selected);
+    display: grid;
+    place-content: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 2px solid var(--fc-control-border);
+    border-radius: 50%;
+    background: var(--fc-radio-surface);
+    cursor: pointer;
+  }
+
+  .schedule-radio::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: transparent;
+  }
+
+  .schedule-radio:checked {
+    border-color: var(--fc-selected);
+  }
+
+  .schedule-radio:checked::before {
+    background: var(--fc-selected);
+  }
+
+  .schedule-radio:focus-visible {
+    outline: 3px solid var(--fc-focus);
+    outline-offset: 4px;
+  }
+
+  .schedule-feedback {
+    margin-top: 12px;
+    color: var(--fc-text-muted);
+    font-size: 13px;
+  }
+
+  @media (forced-colors: active) {
+    .schedule-choice:has(input:checked) {
+      border: 2px solid Highlight;
+    }
+
+    .schedule-radio {
+      appearance: auto;
+      -webkit-appearance: auto;
+    }
+
+    .schedule-radio::before {
+      display: none;
+    }
+
+    .schedule-radio:focus-visible {
+      outline-color: Highlight;
+    }
+  }
+
+  @media (max-width: 71.875rem) and (min-width: 50.0625rem) {
+    .schedule-options {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 50rem) {
+    .schedule-preview {
+      margin-top: 29px;
+      padding: 22px 20px;
+      border-radius: 16px;
+    }
+
+    .schedule-intro {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .schedule-preview > p {
+      font-size: 14px;
+    }
+
+    .schedule-options {
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .schedule-choice {
+      gap: 7px;
+      min-height: 65px;
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    .schedule-choice small {
+      font-size: 12px;
+    }
+
+    .schedule-feedback {
+      font-size: 12px;
+    }
+  }
+</style>

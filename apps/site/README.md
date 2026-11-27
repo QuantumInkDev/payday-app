@@ -1,8 +1,12 @@
 # @futurecheck/site
 
 The FutureCheck marketing website: Astro (static output, TypeScript strict) with Tailwind CSS v4
-through `@tailwindcss/vite`, built to `dist/`. Pages ship no client JavaScript; anything interactive
-later is a small Astro island or inline script on the page that needs it.
+through `@tailwindcss/vite`, built to `dist/`. The design is Open Relay: `design/site/DESIGN.md` is the
+contract and `design/site/v3-open-relay.html` the reference rendering.
+
+Only the home page ships client JavaScript: two small inline module scripts (about 1 KB gzipped)
+for the paycheck switcher and the data-route switcher. Without JavaScript the page shows the
+default sample and the on-device state, and the inert switches are hidden (`data-js-only`).
 
 Routes: `/` (landing), `/privacy` (rendered from the repo-root `PRIVACY.md` at build time),
 `/terms` (placeholder, noindex, not in the sitemap), a 404 page, `/sitemap-index.xml` (from
@@ -27,17 +31,38 @@ To preview the static build, run `pnpm --filter @futurecheck/site preview`, or s
 
 ## Where things live
 
-- `src/site.config.ts`: site name, tagline, base URL, nav and footer links, and the pages kept out
-  of the sitemap. The domain appears nowhere else. `astro.config.ts` passes the base URL to Astro
-  as `site`.
+- `src/site.config.ts`: site name, tagline, base URL, nav and footer links, roadmap flags, and the
+  pages kept out of the sitemap. The domain appears nowhere else. `astro.config.ts` passes the base
+  URL to Astro as `site`.
+- Roadmap flags (`siteConfig.roadmap`): each renders an element tagged `data-roadmap="<name>"` for
+  something not yet available. `paySchedules` (the "Coming soon" pay-schedule chooser) is `false`
+  and stays off in production until approved.
 - `src/pages/`: routes, plus `robots.txt.ts` (prerendered to `robots.txt`).
+- `src/components/home/`: the home sections (hero, paycheck switcher, schedule preview, your data,
+  Windows). `src/data/sample.ts` holds the invented sample bills; both the build-time render and the
+  client script read it, and totals are always derived from the rows.
+- `src/components/Logo.astro`: the only place the logo is drawn. It is a temporary text wordmark
+  plus the study's small mark; studio's artwork in `design/site/logo/` replaces it there.
+  `public/favicon.svg` is a temporary favicon from the same mark.
 - `src/components/BaseHead.astro`: the one shared `<head>`: title, description, canonical URL,
-  robots, Open Graph and Twitter tags. Pages set them through `src/layouts/BaseLayout.astro`.
-- `src/pages/privacy.astro` imports `../../PRIVACY.md` (the repo root) as a Markdown module. That
+  robots, Open Graph and Twitter tags, the favicon and the font preloads. Pages set them through
+  `src/layouts/BaseLayout.astro`.
+- `src/pages/privacy.astro` imports `../../PRIVACY.md` (the repo root) as a Markdown module and
+  splits the rendered HTML at its first section heading (title band, then reading surface). That
   file stays the only source of the privacy policy; edit it there, not here.
-- Brand tokens come from `packages/brand/tokens.css` (`@futurecheck/brand`) and are mapped to
-  Tailwind utilities in `src/styles/global.css` (`@theme inline`). The designer fills them from
-  `design/site/DESIGN.md`.
+- `src/components/LegalPage.astro`: the shared Privacy/Terms shell (title band, reading surface,
+  contents list beside the prose on wide screens and before it otherwise, print styles).
+- Brand tokens come from `packages/brand/tokens.css` (`@futurecheck/brand`, copied from
+  `design/site/DESIGN.md`) and are mapped to Tailwind utilities in `src/styles/global.css`
+  (`@theme inline`, the DESIGN.md bridge). Components mostly use scoped styles on the same
+  `--fc-*` tokens, so they follow the light/dark values.
+- Fonts: Chakra Petch 600 and IBM Plex Sans 400, self-hosted latin WOFF2 subsets in
+  `public/fonts/` with their SIL Open Font License texts beside them. `font-display: swap`, both
+  preloaded (both render above the fold), no requests to Google Fonts.
+
+Avoid class names that are also Tailwind utilities (for example `contents`, `hidden`, `table`,
+`container`): Tailwind generates the utility when it finds the word anywhere in source, and its
+declarations (such as `display: contents`) then apply to your element.
 
 ## Base URL
 

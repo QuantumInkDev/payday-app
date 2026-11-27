@@ -1,0 +1,761 @@
+---
+/**
+ * Home section 3 (#privacy): "Your plan. Not our data." An illustration switch previews the
+ * on-device and own-drive states; it does not perform sync. The device contents stay mounted in
+ * both modes, and drive mode extends the same composition. Without JavaScript the on-device state
+ * shows and the switch is hidden. The privacy facts and the Notion exception are always visible.
+ */
+const routeText = {
+  local:
+    "With sync off, your plan stays on your device. Backups you make stay local, too. No analytics, tracking, or advertising in the app.",
+  drive:
+    "With optional sync, financial data is encrypted before it reaches your own drive. Your other devices unlock it with your recovery phrase. No FutureCheck account or central data server.",
+} as const;
+---
+
+<section class="privacy" id="privacy" aria-labelledby="privacy-title">
+  <div class="zone">
+    <div class="privacy-head">
+      <h2 id="privacy-title">Your plan.<br />Not our data.</h2>
+      <p>
+        Your financial data lives on your device. No FutureCheck account. No central FutureCheck
+        server collecting your bills. Use the app offline, too.
+      </p>
+    </div>
+
+    <div data-js-only>
+      <div class="route-switch" role="group" aria-label="Preview where your data stays">
+        <button
+          type="button"
+          data-route-mode="local"
+          aria-pressed="true"
+          aria-controls="data-route route-description">On your device</button
+        >
+        <button
+          type="button"
+          data-route-mode="drive"
+          aria-pressed="false"
+          aria-controls="data-route route-description">With your own drive</button
+        >
+      </div>
+      <p class="route-note">An illustration only. This doesn't turn real sync on or off.</p>
+    </div>
+
+    <div class="route" id="data-route" data-mode="local">
+      <div class="device-home">
+        <div class="device-heading">
+          <svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+            <rect
+              x="4"
+              y="5"
+              width="32"
+              height="24"
+              rx="4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"></rect>
+            <path
+              d="M14 35h12m-6-6v6m-8-18 5 5 11-11"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"></path>
+          </svg>
+          <div>
+            <h3>Your device</h3>
+            <p>Where your plan starts.</p>
+          </div>
+        </div>
+        <ul class="device-items" aria-label="What stays on your device">
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect
+                x="5"
+                y="3"
+                width="14"
+                height="18"
+                rx="3"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"></rect>
+              <path
+                d="M9 8h6m-6 4h6m-6 4h3"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"></path>
+            </svg>
+            <div><strong>Bills</strong><span>What you plan to pay.</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"
+              ></circle>
+              <path
+                d="m8 12 3 3 5-6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"></path>
+            </svg>
+            <div><strong>Payments</strong><span>What you've marked paid.</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M3 8V6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linejoin="round"></path>
+              <path d="M9 14h6m-3-3v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              ></path>
+            </svg>
+            <div><strong>Backup files</strong><span>Exports you choose to save.</span></div>
+          </li>
+        </ul>
+        <p class="device-footnote">Balances and settings live here, too.</p>
+      </div>
+
+      <div class="local-message" data-route-part="local">
+        <svg viewBox="0 0 90 44" aria-hidden="true" focusable="false">
+          <path
+            d="M3 30h25c20 0 15-17 35-17h21"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"></path>
+          <circle cx="81" cy="13" r="6" fill="var(--fc-accent)" stroke="currentColor" stroke-width="2"
+          ></circle>
+        </svg>
+        <h3>A home for your<br />everyday plan.</h3>
+        <p>
+          Work offline. Keep backup files you control. You don't need to connect a drive to get
+          started.
+        </p>
+        <span class="offline-label">Ready without a connection</span>
+      </div>
+
+      <div class="connector" data-route-part="drive" hidden>
+        <svg viewBox="0 0 130 80" aria-hidden="true" focusable="false">
+          <path
+            d="M2 56h32c34 0 28-32 62-32h32"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-linecap="round"></path>
+          <circle cx="65" cy="40" r="9" fill="var(--fc-accent)" stroke="currentColor" stroke-width="2"
+          ></circle>
+        </svg>
+        <span>Encrypted<br />before it leaves</span>
+      </div>
+
+      <div class="node" data-route-part="drive" hidden>
+        <h3>Your own drive</h3>
+        <p>Google Drive, or OneDrive where offered.</p>
+        <div class="drive-file">
+          <svg viewBox="0 0 20 24" aria-hidden="true" focusable="false">
+            <rect
+              x="3"
+              y="10"
+              width="14"
+              height="11"
+              rx="3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"></rect>
+            <path
+              d="M6 10V7a4 4 0 0 1 8 0v3m-4 5v2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"></path>
+          </svg>
+          Encrypted sync files
+        </div>
+        <p class="drive-note">
+          Your other devices can unlock them. Local backup files stay on your device.
+        </p>
+      </div>
+    </div>
+
+    <p
+      class="route-description"
+      id="route-description"
+      aria-live="polite"
+      data-local={routeText.local}
+      data-drive={routeText.drive}
+    >
+      {routeText.local}
+    </p>
+
+    <div class="sync-facts">
+      <div>
+        <h3>Your phrase. Your access.</h3>
+        <p>
+          Optional drive sync encrypts your financial data on your device, end to end. Your devices
+          and recovery phrase hold the key. Keep the phrase safe: if you lose every device and the
+          phrase, we can't recover your synced data.
+        </p>
+      </div>
+      <div>
+        <h3>What your provider can see.</h3>
+        <p>
+          Your cloud provider can see non-secret sync bookkeeping and the names and times of
+          encrypted files—not your readable financial data. Neither can we. You choose whether to
+          connect your own drive.
+        </p>
+      </div>
+    </div>
+
+    <div class="notion">
+      <h3>Notion is a separate, optional connection.</h3>
+      <p>
+        Bills, payments, and balance snapshots you choose to sync go to your Notion workspace. This
+        data is not encrypted by FutureCheck, because Notion needs to read it.
+      </p>
+    </div>
+
+    <p class="policy-link"><a href="/privacy">Read the privacy policy</a></p>
+  </div>
+</section>
+
+<script>
+  const route = document.getElementById("data-route");
+  const description = document.getElementById("route-description");
+  const buttons = document.querySelectorAll<HTMLButtonElement>("button[data-route-mode]");
+
+  if (route) {
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.routeMode === "drive" ? "drive" : "local";
+        buttons.forEach((item) => {
+          item.setAttribute("aria-pressed", String(item === button));
+        });
+        route.dataset.mode = mode;
+        route.querySelectorAll<HTMLElement>("[data-route-part]").forEach((part) => {
+          part.hidden = part.dataset.routePart !== mode;
+        });
+        if (description) {
+          description.textContent = description.dataset[mode] ?? description.textContent;
+        }
+      });
+    });
+  }
+</script>
+
+<style>
+  .privacy {
+    padding-block: 78px;
+    background: var(--fc-surface-muted);
+  }
+
+  .privacy-head {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(40px, 5vw, 82px);
+  }
+
+  .privacy-head p {
+    max-width: 42ch;
+    font-size: 19px;
+  }
+
+  .route-switch {
+    display: inline-flex;
+    gap: 5px;
+    margin-top: 35px;
+    padding: 5px;
+    border-radius: 12px;
+    background: var(--fc-surface);
+  }
+
+  .route-switch button {
+    min-height: 46px;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-size: 15px;
+    transition:
+      background-color var(--fc-duration-fast) var(--fc-ease-out),
+      color var(--fc-duration-fast) var(--fc-ease-out);
+  }
+
+  .route-switch button[aria-pressed="true"] {
+    background: var(--fc-selected);
+    color: var(--fc-on-selected);
+  }
+
+  .route-note {
+    margin-top: 10px;
+    color: var(--fc-text-muted);
+    font-size: 12px;
+  }
+
+  .route {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) 120px minmax(0, 0.85fr);
+    align-items: center;
+    max-width: 930px;
+    margin: 28px auto 24px;
+  }
+
+  .route[data-mode="local"] {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 40px;
+  }
+
+  .device-home {
+    min-width: 0;
+    padding: 26px;
+    border-radius: var(--fc-radius-panel);
+    background: var(--fc-device);
+  }
+
+  .device-heading {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 19px;
+  }
+
+  .device-heading > svg {
+    flex: none;
+    width: 38px;
+    height: 38px;
+  }
+
+  .device-heading h3 {
+    font-size: 27px;
+  }
+
+  .device-heading p {
+    margin-top: 3px;
+    color: var(--fc-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .device-items {
+    display: grid;
+    gap: 8px;
+  }
+
+  .device-items li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--fc-radius-row);
+    background: var(--fc-surface);
+  }
+
+  .device-items svg {
+    flex: none;
+    width: 22px;
+    height: 22px;
+  }
+
+  .device-items strong {
+    display: block;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  .device-items span {
+    display: block;
+    margin-top: 2px;
+    color: var(--fc-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .device-footnote {
+    margin-top: 14px;
+    color: var(--fc-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .local-message {
+    max-width: 29ch;
+    padding-block: 18px;
+  }
+
+  .local-message > svg {
+    display: block;
+    width: 90px;
+    height: 44px;
+    margin-bottom: 22px;
+  }
+
+  .local-message h3 {
+    font-size: 28px;
+    line-height: 1.25;
+  }
+
+  .local-message p {
+    margin-top: 15px;
+    color: var(--fc-text-muted);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  .offline-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+    font-size: 13px;
+  }
+
+  .offline-label::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+  }
+
+  .connector {
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .connector svg {
+    display: block;
+    width: 100%;
+    height: 100px;
+  }
+
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 22px;
+    border-radius: var(--fc-radius-panel);
+    background: var(--fc-drive);
+    text-align: center;
+  }
+
+  .node h3 {
+    font-size: 26px;
+  }
+
+  .node p {
+    max-width: 23ch;
+    margin-top: 10px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .drive-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+    padding: 13px 15px;
+    border-radius: var(--fc-radius-row);
+    background: var(--fc-surface);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .drive-file svg {
+    flex: none;
+    width: 19px;
+    height: 22px;
+  }
+
+  .node .drive-note {
+    margin-top: 14px;
+    color: var(--fc-text-muted);
+    font-size: 13px;
+  }
+
+  .route-description {
+    max-width: 72ch;
+    min-height: 54px;
+    margin-top: 12px;
+    font-size: 17px;
+  }
+
+  .sync-facts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 40px;
+    margin-top: 30px;
+    padding-top: 25px;
+    border-top: 1px solid var(--fc-border);
+  }
+
+  .sync-facts h3,
+  .notion h3 {
+    margin-bottom: 9px;
+    font-size: 20px;
+  }
+
+  .sync-facts p {
+    color: var(--fc-text-muted);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .notion {
+    margin-top: 27px;
+    padding: 21px 25px;
+    border-radius: var(--fc-radius-row);
+    background: var(--fc-surface);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .notion p {
+    max-width: 95ch;
+  }
+
+  .policy-link {
+    margin-top: 22px;
+    font-size: 16px;
+  }
+
+  .policy-link a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  @media (forced-colors: active) {
+    .route-switch button[aria-pressed="true"] {
+      border: 2px solid ButtonText;
+    }
+
+    .device-home,
+    .device-items li,
+    .node,
+    .drive-file {
+      border: 1px solid CanvasText;
+    }
+  }
+
+  @media (max-width: 71.875rem) and (min-width: 50.0625rem) {
+    .privacy-head {
+      gap: 30px;
+    }
+
+    .route {
+      grid-template-columns: minmax(0, 1fr) 90px minmax(0, 1fr);
+    }
+
+    .route[data-mode="local"] {
+      gap: 28px;
+    }
+
+    .device-home {
+      padding: 20px;
+    }
+
+    .device-heading {
+      gap: 9px;
+    }
+
+    .device-heading h3 {
+      font-size: 23px;
+    }
+
+    .device-heading > svg {
+      width: 30px;
+      height: 30px;
+    }
+
+    .device-items li {
+      gap: 9px;
+      padding: 10px;
+    }
+
+    .device-items strong {
+      font-size: 15px;
+    }
+
+    .device-items span {
+      font-size: 12px;
+    }
+
+    .local-message h3 {
+      font-size: 25px;
+    }
+
+    .local-message p {
+      font-size: 15px;
+    }
+
+    .node {
+      min-height: 210px;
+      padding: 25px;
+    }
+
+    .node h3 {
+      font-size: 23px;
+    }
+
+    .node p {
+      font-size: 14px;
+    }
+
+    .drive-file {
+      padding: 10px;
+    }
+  }
+
+  @media (max-width: 50rem) {
+    .privacy {
+      padding-block: 49px;
+    }
+
+    .privacy-head {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 22px;
+    }
+
+    .privacy-head p {
+      font-size: 16px;
+    }
+
+    .route-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-top: 26px;
+    }
+
+    .route-switch button {
+      min-height: 49px;
+      padding-inline: 9px;
+      font-size: 14px;
+    }
+
+    .route-note {
+      font-size: 12px;
+    }
+
+    .route,
+    .route[data-mode="local"] {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+      margin-block: 24px;
+    }
+
+    .device-home {
+      padding: 22px;
+      border-radius: 20px;
+    }
+
+    .device-heading h3 {
+      font-size: 25px;
+    }
+
+    .device-heading > svg {
+      width: 34px;
+      height: 34px;
+    }
+
+    .device-items li {
+      padding: 12px;
+    }
+
+    .local-message {
+      max-width: none;
+      padding: 24px 6px 0;
+    }
+
+    .local-message > svg {
+      display: none;
+    }
+
+    .local-message h3 {
+      font-size: 25px;
+    }
+
+    .local-message p {
+      margin-top: 10px;
+      font-size: 15px;
+    }
+
+    .offline-label {
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .connector {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 86px;
+    }
+
+    .connector svg {
+      width: 60px;
+      height: 60px;
+      transform: rotate(90deg);
+    }
+
+    .connector span {
+      position: absolute;
+      top: 28px;
+      left: calc(50% + 27px);
+      max-width: 12ch;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .node {
+      min-height: 0;
+      padding: 25px;
+      border-radius: 20px;
+    }
+
+    .node h3 {
+      font-size: 25px;
+    }
+
+    .node p {
+      max-width: 25ch;
+      margin-top: 5px;
+      font-size: 14px;
+    }
+
+    .drive-file {
+      margin-top: 18px;
+    }
+
+    .route-description {
+      min-height: 0;
+      margin-top: 22px;
+      font-size: 15px;
+    }
+
+    .sync-facts {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 22px;
+      margin-top: 24px;
+      padding-top: 23px;
+    }
+
+    .sync-facts p,
+    .notion p {
+      font-size: 14px;
+    }
+
+    .notion {
+      margin-top: 25px;
+      padding: 20px;
+    }
+  }
+</style>

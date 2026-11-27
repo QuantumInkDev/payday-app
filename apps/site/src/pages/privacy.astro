@@ -2,11 +2,23 @@
 // The privacy policy's single source of truth is PRIVACY.md at the repository root. Astro renders
 // it at build time; edit the policy there, not here. (apps/site/turbo.json lists it as a build
 // input, so a policy change rebuilds the site.)
-import { Content as PrivacyPolicy } from "../../../../PRIVACY.md";
-import Container from "../components/Container.astro";
-import Prose from "../components/Prose.astro";
+//
+// The rendered policy is split at its first section heading: the H1, effective date and
+// introduction go in the title band, and the sections go on the reading surface. The text itself
+// is never rewritten.
+import * as policy from "../../../../PRIVACY.md";
+import LegalPage from "../components/LegalPage.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { siteConfig } from "../site.config";
+
+const html = await policy.compiledContent();
+const firstSection = html.search(/<h2[\s>]/);
+const introHtml = firstSection === -1 ? html : html.slice(0, firstSection);
+const sectionsHtml = firstSection === -1 ? "" : html.slice(firstSection);
+const contents = policy
+  .getHeadings()
+  .filter((heading) => heading.depth === 2)
+  .map(({ slug, text }) => ({ slug, text }));
 ---
 
 <BaseLayout
@@ -14,11 +26,8 @@ import { siteConfig } from "../site.config";
   description={`How ${siteConfig.name} handles your data: stored on your device, optional end-to-end encrypted sync through your own cloud drive, and no analytics or tracking.`}
   canonicalPath="/privacy"
 >
-  <Container class="py-16 sm:py-24">
-    <article class="max-w-3xl">
-      <Prose>
-        <PrivacyPolicy />
-      </Prose>
-    </article>
-  </Container>
+  <LegalPage contents={contents}>
+    <Fragment slot="intro" set:html={introHtml} />
+    <Fragment set:html={sectionsHtml} />
+  </LegalPage>
 </BaseLayout>
