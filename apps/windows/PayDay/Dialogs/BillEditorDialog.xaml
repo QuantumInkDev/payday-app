@@ -38,12 +38,16 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <NumberBox
+                    KeyUp="AmountBox_KeyUp"
+                    PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="0"
                     Header="Payment"
                     Minimum="0"
                     SpinButtonPlacementMode="Compact"
                     Value="{x:Bind ViewModel.Payment, Mode=TwoWay}" />
                 <NumberBox
+                    KeyUp="AmountBox_KeyUp"
+                    PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="1"
                     Header="APR (%)"
                     Minimum="0"
@@ -58,18 +62,24 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <NumberBox
+                    KeyUp="AmountBox_KeyUp"
+                    PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="0"
                     Header="Remaining"
                     Minimum="0"
                     SpinButtonPlacementMode="Hidden"
                     Value="{x:Bind ViewModel.Remaining, Mode=TwoWay}" />
                 <NumberBox
+                    KeyUp="AmountBox_KeyUp"
+                    PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="1"
                     Header="Available"
                     Minimum="0"
                     SpinButtonPlacementMode="Hidden"
                     Value="{x:Bind ViewModel.Available, Mode=TwoWay}" />
                 <NumberBox
+                    KeyUp="AmountBox_KeyUp"
+                    PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="2"
                     Header="Limit"
                     Minimum="0"
@@ -83,6 +93,8 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <NumberBox
+                    KeyUp="AmountBox_KeyUp"
+                    PreviewKeyDown="AmountBox_PreviewKeyDown"
                     Grid.Column="0"
                     Header="Due Day (1–31)"
                     Maximum="31"
