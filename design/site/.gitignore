@@ -1,0 +1,7 @@
+# Process artifacts from the design bots (proof screenshots, check scripts and results)
+__pycache__/
+*-proofs/
+*-0411876b-*
+0411876b-*
+# Studio's logo work is committed separately once a direction is chosen
+logo/
