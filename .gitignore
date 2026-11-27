@@ -45,6 +45,8 @@ ehthumbs.db
 *.snupkg
 **/packages/*
 !**/packages/build/
+# The root packages/ folder holds the JavaScript workspace packages, not NuGet output.
+!/packages/*
 project.lock.json
 project.fragment.lock.json
 artifacts/

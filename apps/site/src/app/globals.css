@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@import "@futurecheck/brand/tokens.css";
+
+/*
+ * Map the brand tokens (packages/brand/tokens.css) to Tailwind utilities, for example bg-surface,
+ * text-muted, border-border, bg-accent, rounded-lg and max-w-content. "inline" keeps the var()
+ * references, so the dark-mode token values apply without extra utilities.
+ */
+@theme inline {
+  --color-bg: var(--fc-color-bg);
+  --color-surface: var(--fc-color-surface);
+  --color-fg: var(--fc-color-text);
+  --color-muted: var(--fc-color-muted);
+  --color-border: var(--fc-color-border);
+  --color-accent: var(--fc-color-accent);
+  --color-accent-contrast: var(--fc-color-accent-contrast);
+
+  --font-sans: var(--fc-font-sans);
+  --font-mono: var(--fc-font-mono);
+
+  --radius-sm: var(--fc-radius-sm);
+  --radius-md: var(--fc-radius-md);
+  --radius-lg: var(--fc-radius-lg);
+
+  --container-content: var(--fc-content-width);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  :target {
+    scroll-margin-top: 5rem;
+  }
+}

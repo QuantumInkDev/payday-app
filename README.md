@@ -10,10 +10,12 @@ Only folders marked "present" exist today; the rest are planned (design section 
 ```
 PayDayApp/
 ├── apps/
+│   ├── site/             # present: marketing website (Next.js); see apps/site/README.md
 │   ├── windows/          # present: PayDay/, PayDay.Core/, PayDay.Tests/
 │   ├── apple/            # planned: macOS + iOS, with PayDayKit Swift package
 │   ├── android/          # planned
 │   └── web/              # planned
+├── packages/             # present: brand/ (shared brand tokens for site and web)
 ├── spec/                 # planned: data model, sync protocol, conformance fixtures
 ├── design/               # planned: icon sources, palette, store screenshots
 ├── tools/                # present: PowerShell helpers, vm-build.sh

@@ -1,0 +1,12 @@
+{
+  "name": "@futurecheck/brand",
+  "version": "0.0.0",
+  "private": true,
+  "description": "FutureCheck brand tokens shared by the website and the web app.",
+  "exports": {
+    "./tokens.css": "./tokens.css"
+  },
+  "files": [
+    "tokens.css"
+  ]
+}

@@ -1,0 +1,44 @@
+/*
+ * FutureCheck brand tokens.
+ *
+ * PLACEHOLDER VALUES. The designer replaces them from design/site/DESIGN.md.
+ *
+ * These are plain CSS custom properties so any consumer can use them, with or without Tailwind.
+ * apps/site maps them to Tailwind utilities in src/app/globals.css (@theme inline), so renaming
+ * or adding a token here also needs a line there.
+ */
+
+:root {
+  /* Color */
+  --fc-color-bg: #ffffff;
+  --fc-color-surface: #f4f5f7;
+  --fc-color-text: #14161a;
+  --fc-color-muted: #5b616e;
+  --fc-color-border: #dde0e5;
+  --fc-color-accent: #2f6fed;
+  --fc-color-accent-contrast: #ffffff;
+
+  /* Type */
+  --fc-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fc-font-mono: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  /* Shape */
+  --fc-radius-sm: 0.375rem;
+  --fc-radius-md: 0.75rem;
+  --fc-radius-lg: 1.25rem;
+
+  /* Layout */
+  --fc-content-width: 72rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fc-color-bg: #0f1115;
+    --fc-color-surface: #181b21;
+    --fc-color-text: #eceef2;
+    --fc-color-muted: #9aa1ad;
+    --fc-color-border: #2a2f38;
+    --fc-color-accent: #6d9bff;
+    --fc-color-accent-contrast: #0f1115;
+  }
+}
