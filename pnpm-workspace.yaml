@@ -1,0 +1,6 @@
+# JavaScript workspaces. The native apps (apps/windows, apps/apple, later apps/android) keep their
+# own build tools; see planning/2026-11-27-site-and-monorepo.md for how they join Turborepo later.
+packages:
+  - apps/site
+  - apps/web
+  - packages/*

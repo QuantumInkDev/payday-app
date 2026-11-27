@@ -67,3 +67,12 @@ __pycache__/
 
 # Agent worktrees
 .claude/worktrees/
+
+# JavaScript workspaces (Turborepo + pnpm)
+node_modules/
+.turbo/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+.env*.local

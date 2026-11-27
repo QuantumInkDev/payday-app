@@ -143,8 +143,9 @@ PayDayApp/
 └── CLAUDE.md, SESSION_STATUS.md, README.md
 ```
 
-- No Turborepo/Nx: the apps share no package manager. Each app keeps its native build; a short
-  `README.md` lists the build command for each.
+- ~~No Turborepo/Nx~~ **Changed 2026-11-27:** Turborepo + pnpm now run the JavaScript workspaces
+  (`apps/site`, later `apps/web`, `packages/*`) in this one repo; the native apps keep their own
+  builds. See `planning/2026-11-27-site-and-monorepo.md`.
 - The move must keep `git log --follow` history and leave the Windows build at 0 warnings / 0
   errors and 194/194 tests (verified on the arm64 VM, since this Mac can't build WinUI).
 - The VM daily clone and the rig follow the ordered update steps in `SESSION_STATUS.md` (back up data first; don't just pull and delete).

@@ -1,0 +1,18 @@
+{
+  "name": "futurecheck",
+  "private": true,
+  "description": "FutureCheck monorepo: native apps, web surfaces and the shared spec. Turborepo runs the JavaScript workspaces.",
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:site": "turbo run dev --filter=@futurecheck/site",
+    "build:site": "turbo run build --filter=@futurecheck/site",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.13"
+  }
+}
