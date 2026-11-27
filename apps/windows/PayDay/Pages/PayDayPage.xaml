@@ -302,6 +302,8 @@
                                             Text="{x:Bind DueDateLabel}" />
                                     </StackPanel>
                                     <NumberBox
+                                        Loaded="AmountBox_Loaded"
+                                        PreviewKeyDown="AmountBox_PreviewKeyDown"
                                         Grid.Column="2"
                                         VerticalAlignment="Center"
                                         SmallChange="1"
