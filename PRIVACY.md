@@ -15,9 +15,11 @@ Backups you make are saved as files on your device.
 If you turn on sync, FutureCheck copies your data to your own cloud drive (Google Drive, or OneDrive
 where offered) so your other devices can read it.
 
-- **Encrypted before it leaves your device.** Your data is encrypted on your device with a key that
-  only your devices and your recovery phrase hold. Your cloud provider stores only encrypted files and cannot read them.
-  Neither can we.
+- **Encrypted before it leaves your device.** All of your financial data is encrypted on your device
+  with a key that only your devices (in the operating system's credential store) and your recovery
+  phrase hold. Your cloud provider cannot read it, and neither can we. The provider can see only a
+  small file of non-secret sync bookkeeping (an anonymous vault ID and key identifiers) and the names
+  and times of the encrypted files.
 - **Google Drive: app folder only.** FutureCheck asks Google for these permissions:
   - `drive.appdata`: a hidden folder in your Drive that only FutureCheck can use. FutureCheck cannot
     see or change any other file in your Drive.
@@ -51,7 +53,10 @@ including the Limited Use requirements.
   Delete hidden app data.
 - **Remove FutureCheck's access to Google** at
   [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
-- **Uninstall the app** to delete its local data from that device.
+- **Uninstall the app** to delete its local database from that device. Sign out and disconnect
+  Notion first, so the stored sign-in tokens are removed from Windows Credential Manager. The sync
+  key also stays there until you remove the `PayDay:` entries. Backup files you saved yourself stay
+  until you delete them.
 
 ## Changes and contact
 
