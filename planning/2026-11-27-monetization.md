@@ -1,7 +1,8 @@
 # FutureCheck monetization: free trial, then a one-time unlock
 
 **Date:** 2026-11-27 · **Status:** the model is the developer's direction. The mechanism is Claude's
-proposal. Prices and store rules wait on the research bot's report, which will be added here.
+proposal, updated with the research bot's report (Ray, 2026-11-27; summary and sources at the end).
+The price and trial length are recommendations awaiting the developer's OK.
 
 ## Direction (developer)
 
@@ -46,8 +47,8 @@ The vault gets one more synced record type, an **entitlement**:
 |---|---|
 | iOS / macOS App Store | Non-consumable in-app purchase (required by store rules). Restore purchases works across the user's Apple devices. |
 | Google Play | Play Billing one-time product (required by store rules). |
-| Microsoft Store | Durable add-on through Store commerce, or our own (research to confirm). |
-| Windows direct download, web app | A merchant of record such as Lemon Squeezy, Paddle or Polar sells a license key and handles sales tax and VAT. The app activates the key against the merchant's public license API directly, so there's no server of ours. |
+| Microsoft Store | Own commerce: Polar, with a 0% Microsoft commission for non-game apps. Store commerce would cost 15%. |
+| Windows direct download, web app | **Polar** as merchant of record (5% + $0.50, plus international and payout fees). It sells a license key and handles sales tax and VAT. The app activates the key against Polar's public activation and validation endpoints, which need no merchant secret, so there's no server of ours. |
 
 ### How strict to be
 
@@ -59,8 +60,9 @@ The vault gets one more synced record type, an **entitlement**:
 
 ### The trial
 
-- **Length:** full use for **2 pay periods, and at least 30 days**. The minimum keeps weekly-paid
-  users from getting only two weeks.
+- **Length: 30 days, full features, no card and no auto-billing** (recommended). Research found that
+  "two pay periods" is misleading once schedules vary: two weeks for a weekly-paid user, two months
+  for a monthly one. Thirty days is about two biweekly paychecks. YNAB uses 34 days.
 - **Tracking:** the trial start date is stored in the vault, so adding a device doesn't restart it.
   Reinstalling without sync does restart it, which is acceptable.
 - **After the trial, never hold data hostage.** Viewing, export and backups stay free, and sync
@@ -74,14 +76,65 @@ The vault gets one more synced record type, an **entitlement**:
 - The site's pricing element is tagged `data-roadmap="pricing"`.
 - Store listings have to match whatever each store's trial rules allow.
 
-## Open, pending research
+## Research findings (Ray, 2026-11-27)
 
-- **Launch and regular price:** is $10 → $20 reasonable, and should the launch price use "intro
-  price" framing?
-- **Store rules:** Apple 3.1.1 / 3.1.3(b) multiplatform services (honouring a vault entitlement
-  bought elsewhere), Google Play's equivalent, and whether Microsoft Store allows its own commerce.
-  Also each store's fees and small-business programs.
-- **Merchant-of-record choice** and its license-key API.
+### Price
+
+- **Recommendation: $9.99 launch price, then $19.99 regular.** Call it a "launch price" with a
+  genuine end date, and never show an invented crossed-out price.
+- **One-time apps:** Paycheck Planner $4.99, Money Manager $5.99, Buckets $64. Actual Budget is
+  free.
+- **Subscriptions:** YNAB $109 a year, Monarch $99.99 a year, Copilot $109–119 a year, PocketGuard
+  $74.99 a year or $149.99 lifetime, Goodbudget $80 a year.
+- **Not one-time:** MoneyWiz and Banktivity are subscriptions now.
+- **The economic risk** is maintaining and supporting five platforms, not hosting.
+
+### Trial
+
+- 30 days, full features.
+- Afterwards, read-only access and export are preserved indefinitely. Banktivity is a precedent;
+  users resent having editing taken away when it wasn't the promise.
+
+### Store rules (Apple guidelines of 2026-10-16)
+
+- **Apple 3.1.3(b):** features bought elsewhere may be unlocked if the same unlock is also sold as
+  in-app purchase.
+- **Apple 3.1.1** forbids unlocking with license keys inside the app. So App Store builds have no
+  key-entry screen.
+  - Before promising one unlock across platforms, explain to App Review that the unlock arrives
+    through the vault, and get it confirmed.
+  - Apple explicitly allows a separate free non-consumable "30-day trial" item, and a paid
+    non-consumable unlock. Include Restore Purchases.
+- **Google Play:** honouring purchases made elsewhere is fine. Selling in the app needs Play Billing,
+  except under regional programs.
+- **Fees:**
+  - Apple: 15% under the Small Business Program (≤ $1M), otherwise 30%.
+  - Play: 15% on the first $1M.
+  - Microsoft, non-game apps: 0% with own commerce, or 15% through Store commerce.
+
+### Selling outside the stores
+
+| Option | Verdict |
+|---|---|
+| **Polar** | **Pick.** 5% + $0.50, merchant of record, public license activate/validate endpoints. |
+| **Lemon Squeezy** | **Out.** Sign-ups closed 2026-11-16 and payments stop 2027-03-31. |
+| **Paddle** | No built-in license keys; would need a backend. |
+| **Gumroad** | 10% + $0.50 plus card fees. |
+| **Stripe** | Not a merchant of record, so we'd file sales taxes ourselves. Managed Payments costs another 3.5%. |
+
+### Engineering consequences
+
+- **The vault carries the evidence, not the verdict.** An entitlement keeps verifiable proof (the
+  Polar key, or the store transaction), never just `paid = true`.
+- **No merchant secret** is ever embedded in the app.
+- **Offline use:** cache the unlock so ownership doesn't depend on the vendor staying online
+  forever.
+- **Copying and refunds:** encryption doesn't stop someone copying a license, and without a backend
+  we accept weak anti-sharing and refund enforcement.
+- **Privacy policy:** it has to name the payment provider separately from financial-data sync.
+
+Sources: Ray's report in the T3 thread (store guidelines, pricing pages and merchant fee pages,
+all accessed 2026-11-27).
 
 ## Where it fits
 
