@@ -53,7 +53,11 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 ## 🔴 CONTINUE HERE
 
-**Waiting on the developer, then design step 5's exit test:**
+**Design step 5's exit test: core path passed 2026-11-28.** The rig signed in to Google Drive, created the vault, saved the recovery phrase and synced ("Up to date"); the VM joined with a pairing code and its data matches. Both run 0.7.0 (version, commit and build time are on the About page; PR #17).
+
+**Still to walk through on the two PCs** before closing step 5: an edit on each side reaching the other, lock/unlock, the Notion owner, offline then back online, and turning sync off. Then start item 1b (pay schedules).
+
+**History of this marker:**
 
 1. **Google OAuth client: done 2026-11-27.** The Cloud project exists and Google Drive API is enabled. The consent screen is External and **In production**: scopes `drive.appdata`, `openid`, `userinfo.email`; homepage = the repo, privacy policy = `PRIVACY.md`. A Desktop app client was created. Its ID and secret are **not** in the repo: they live on the Mac in `~/.config/futurecheck/google-oauth-desktop.env` (mode 600), and as user environment variables on the rig and the VM (`FUTURECHECK_GOOGLE_CLIENT_ID` / `FUTURECHECK_GOOGLE_CLIENT_SECRET`, set with `setx`). Sign out of Windows and back in (or restart) once on each PC so newly launched apps see them.
 
