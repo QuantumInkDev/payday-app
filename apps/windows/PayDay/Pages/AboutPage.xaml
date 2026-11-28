@@ -8,12 +8,117 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Padding="24,16,24,16" RowSpacing="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="About" />
-        <TextBlock Grid.Row="1" Text="This is the About page" />
-    </Grid>
+    <Page.Resources>
+        <Style x:Key="AboutLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="AboutValue" TargetType="TextBlock">
+            <Setter Property="IsTextSelectionEnabled" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="24,16,24,24" Spacing="20" MaxWidth="760" HorizontalAlignment="Left">
+
+            <!-- Title -->
+            <StackPanel Spacing="2">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="About" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="FutureCheck for Windows (code name PayDay)" />
+            </StackPanel>
+
+            <!-- This build -->
+            <Border
+                Padding="20"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Text="This build" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Include these details when you report a problem." />
+                    </StackPanel>
+                    <Grid ColumnSpacing="16" RowSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Style="{StaticResource AboutLabel}" Text="Version" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="VersionText" Style="{StaticResource AboutValue}" FontWeight="SemiBold" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource AboutLabel}" Text="Commit" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="CommitText" Style="{StaticResource AboutValue}" FontFamily="Consolas" />
+                        <TextBlock Grid.Row="2" Style="{StaticResource AboutLabel}" Text="Built" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="BuiltText" Style="{StaticResource AboutValue}" />
+                        <TextBlock Grid.Row="3" Style="{StaticResource AboutLabel}" Text="Architecture" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ArchitectureText" Style="{StaticResource AboutValue}" />
+                        <TextBlock Grid.Row="4" Style="{StaticResource AboutLabel}" Text="Windows" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" x:Name="WindowsText" Style="{StaticResource AboutValue}" />
+                        <TextBlock Grid.Row="5" Style="{StaticResource AboutLabel}" Text="Runtime" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" x:Name="RuntimeText" Style="{StaticResource AboutValue}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="CopyDetailsButton" Click="CopyDetails_Click" Content="Copy details" />
+                        <TextBlock
+                            x:Name="CopiedText"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Copied"
+                            Visibility="Collapsed" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Your data -->
+            <Border
+                Padding="20"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Text="Your data" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            TextWrapping="Wrap"
+                            Text="Your bills, payments and backups are stored on this PC. Sync, when it's on, uploads only encrypted copies." />
+                    </StackPanel>
+                    <TextBlock x:Name="DataFolderText" Style="{StaticResource AboutValue}" FontFamily="Consolas" FontSize="12" />
+                    <Button Click="OpenDataFolder_Click" Content="Open folder" />
+                </StackPanel>
+            </Border>
+
+            <!-- Links -->
+            <Border
+                Padding="20"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="10">
+                <StackPanel Spacing="4">
+                    <TextBlock FontWeight="SemiBold" Text="Links" Margin="0,0,0,4" />
+                    <HyperlinkButton Content="Privacy policy" NavigateUri="https://github.com/QuantumInkDev/payday-app/blob/main/PRIVACY.md" />
+                    <HyperlinkButton Content="Source code" NavigateUri="https://github.com/QuantumInkDev/payday-app" />
+                    <HyperlinkButton Content="Report a problem" NavigateUri="https://github.com/QuantumInkDev/payday-app/issues" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

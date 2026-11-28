@@ -2,7 +2,7 @@
 
 **Last Updated**: November 25, 2026
 **Project Phase**: Multi-platform step 5 (Windows sync) built with Google Drive (default) and OneDrive providers — waiting on a Google OAuth client for the two-PC exit test; PayDayKit (Swift) built on `feature/apple-app`
-**Current Version**: unknown — no version string is set in any `.csproj`, and `SESSION_STATUS.md` does not record one
+**Current Version**: 0.7.0 (`<Version>` in `apps/windows/PayDay/PayDay.csproj`, shown with the commit and build time on the About page; the MSIX package version stays 1.0.0.0)
 
 ## 🚀 What This App Does
 

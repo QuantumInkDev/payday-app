@@ -13,6 +13,11 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The app version shown on the About page. 0.x until Phase 8 (ship) makes it 1.0; bump the
+         minor for features and the patch for fixes. The SDK appends "+<commit id>" when it builds
+         inside a git checkout. This is not the MSIX package version in Package.appxmanifest, which
+         stays 1.0.0.0 so the dev install can be re-registered in place. -->
+    <Version>0.7.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
