@@ -45,7 +45,8 @@ public sealed record BuildInfo(string Version, string? Commit, DateTimeOffset? B
 
     /// <summary>
     /// Splits an informational version (<c>0.7.0+3f2a9c1…</c>) into the version and a short commit
-    /// id. Anything after the <c>+</c> that isn't a hex commit id is kept as written.
+    /// id. Anything after the <c>+</c> that isn't a full hex commit id (40 or 64 characters) is
+    /// kept as written.
     /// </summary>
     internal static BuildInfo Parse(string informationalVersion, DateTimeOffset? builtAt)
     {
@@ -55,17 +56,22 @@ public sealed record BuildInfo(string Version, string? Commit, DateTimeOffset? B
         var metadata = plus < 0 ? "" : text[(plus + 1)..].Trim();
 
         string? commit = metadata.Length == 0 ? null
-            : metadata.Length > ShortCommitLength && metadata.All(Uri.IsHexDigit) ? metadata[..ShortCommitLength].ToLowerInvariant()
+            : metadata.Length is 40 or 64 && metadata.All(Uri.IsHexDigit) ? metadata[..ShortCommitLength].ToLowerInvariant()
             : metadata;
 
         return new BuildInfo(version.Length == 0 ? "0.0.0" : version, commit, builtAt);
     }
 
-    /// <summary>The build time in the given time zone, or "unknown".</summary>
-    public string FormatBuiltAt(TimeZoneInfo zone, CultureInfo culture) =>
-        BuiltAt is { } at
-            ? TimeZoneInfo.ConvertTime(at, zone).ToString("MMM d, yyyy h:mm tt", culture)
-            : "unknown";
+    /// <summary>
+    /// The build time in the given time zone, or "unknown". The time uses the culture's own short
+    /// time pattern, so 24-hour locales don't get a 12-hour time without AM/PM.
+    /// </summary>
+    public string FormatBuiltAt(TimeZoneInfo zone, CultureInfo culture)
+    {
+        if (BuiltAt is not { } at) return "unknown";
+        var local = TimeZoneInfo.ConvertTime(at, zone);
+        return $"{local.ToString("MMM d, yyyy", culture)} {local.ToString(culture.DateTimeFormat.ShortTimePattern, culture)}";
+    }
 
     /// <summary>
     /// The plain-text details the About page's "Copy details" button puts on the clipboard, one

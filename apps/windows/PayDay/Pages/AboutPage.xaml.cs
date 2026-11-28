@@ -38,7 +38,17 @@ public sealed partial class AboutPage : Page
         var lines = _build.DetailLines(_architecture, _windows, _runtime, TimeZoneInfo.Local, CultureInfo.CurrentCulture);
         var package = new DataPackage();
         package.SetText(string.Join(Environment.NewLine, lines));
-        Clipboard.SetContent(package);
+        try
+        {
+            Clipboard.SetContent(package);
+            Clipboard.Flush(); // keep the text after the app closes
+            CopiedText.Text = "Copied";
+        }
+        catch (COMException)
+        {
+            // Another app has the clipboard open (CLIPBRD_E_CANT_OPEN); don't crash, say so.
+            CopiedText.Text = "Couldn't copy. Try again.";
+        }
         CopiedText.Visibility = Visibility.Visible;
     }
 

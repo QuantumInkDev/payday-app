@@ -28,6 +28,8 @@ public class BuildInfoTests
     [InlineData("0.7.0+", "0.7.0", null)]
     [InlineData(" 0.7.0+abc ", "0.7.0", "abc")]
     [InlineData("0.7.0+local.dev", "0.7.0", "local.dev")]
+    [InlineData("0.7.0+20261128", "0.7.0", "20261128")]
+    [InlineData("0.7.0+abcdef0123", "0.7.0", "abcdef0123")]
     [InlineData("", "0.0.0", null)]
     public void Parse_EdgeCases(string input, string version, string? commit)
     {
@@ -43,7 +45,17 @@ public class BuildInfoTests
         var info = new BuildInfo("0.7.0", "abc1234", new DateTimeOffset(2026, 11, 28, 1, 55, 0, TimeSpan.Zero));
         var zone = TimeZoneInfo.CreateCustomTimeZone("Test-5", TimeSpan.FromHours(-5), "Test-5", "Test-5");
 
-        Assert.Equal("Nov 27, 2026 8:55 PM", info.FormatBuiltAt(zone, CultureInfo.InvariantCulture));
+        Assert.Equal("Nov 27, 2026 20:55", info.FormatBuiltAt(zone, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void FormatBuiltAt_TwentyFourHourCulture_HasNoDanglingAmPm()
+    {
+        var info = new BuildInfo("0.7.0", null, new DateTimeOffset(2026, 11, 28, 13, 55, 0, TimeSpan.Zero));
+
+        var text = info.FormatBuiltAt(TimeZoneInfo.Utc, CultureInfo.GetCultureInfo("de-DE"));
+
+        Assert.EndsWith(" 13:55", text);
     }
 
     [Fact]
