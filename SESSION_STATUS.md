@@ -53,20 +53,22 @@ The package identity is unchanged, which is necessary but not enough on its own:
 
 ## 🔴 CONTINUE HERE
 
-**Waiting on the developer, then design step 5's exit test:**
+**Design step 5's exit test: core path passed 2026-11-28.** The rig signed in to Google Drive, created the vault, saved the recovery phrase and synced ("Up to date"); the VM joined with a pairing code and its data matches. Both run 0.7.0 (version, commit and build time are on the About page; PR #17).
 
-1. **Google OAuth client: done 2026-11-27.** The Cloud project exists and Google Drive API is enabled. The consent screen is External and **In production**: scopes `drive.appdata`, `openid`, `userinfo.email`; homepage = the repo, privacy policy = `PRIVACY.md`. A Desktop app client was created. Its ID and secret are **not** in the repo: they live on the Mac in `~/.config/futurecheck/google-oauth-desktop.env` (mode 600), and as user environment variables on the rig and the VM (`FUTURECHECK_GOOGLE_CLIENT_ID` / `FUTURECHECK_GOOGLE_CLIENT_SECRET`, set with `setx`). Sign out of Windows and back in (or restart) once on each PC so newly launched apps see them.
+**Still to walk through on the two PCs** before closing step 5: an edit on each side reaching the other, lock/unlock, the Notion owner, offline then back online, and turning sync off. Then start open item 1 (pay schedules).
 
-   Later platforms' clients (iOS, Android, web) must be created in the **same project**: the app-data folder belongs to the project.
+**Open items, in build order:**
 
-   **Next: the manual test.** Both clones now match `main` (the rig was reset 2026-11-27; its old `.gitignore` edit and a `payday.db` copy are in `Documents\FutureCheck-backup-2026-11-27`). On the rig the installed app is still the May build, running from the untracked old-layout `PayDay\bin\…\AppX` folder; never `git clean` that clone. Install the new build over it (same package identity, so LocalState is kept) only after closing PayDay and taking a fresh JSON backup. Then: Sync → Sync through "Google Drive" → Turn on sync (browser sign-in) → create the vault → save the phrase → Add a device; on the second PC join with the code; then edit on each side, lock/unlock, Notion owner, offline, turn off. Exit test: the VM and the rig syncing.
+1. **Flexible pay schedules (developer requirement, 2026-11-27):** weekly, every two weeks, twice a month (e.g. 1st & 15th) and monthly, not just 14-day periods. Decisions and the proposal are in `planning/2026-11-27-pay-schedules.md`. Spec + fixtures first, then Windows; before the Mac app.
+2. **Monetization (decided 2026-11-27):** 30-day full trial, then a one-time unlock: $9.99 launch price → $19.99. One unlock for every device in the vault (synced entitlement carrying purchase proof); store IAP on Apple/Play, Polar for Windows/web; no license-key UI in App Store builds (confirm the vault unlock with App Review). See `planning/2026-11-27-monetization.md`. Its record format goes into `spec/` with the pay-schedule change.
+3. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
 
-   OneDrive stays available for whoever has an Entra app ID (`FUTURECHECK_ONEDRIVE_CLIENT_ID`; registration details in `OneDriveConfig.cs`).
-1b. **Flexible pay schedules (developer requirement, 2026-11-27):** weekly, every two weeks, twice a month (e.g. 1st & 15th) and monthly, not just 14-day periods. Proposal and open questions in `planning/2026-11-27-pay-schedules.md`. Build after the sync exit test, before the Mac app (spec + fixtures first).
-1c. **Monetization (decided 2026-11-27):** 30-day full trial, then a one-time unlock: $9.99 launch price → $19.99. One unlock for every device in the vault (synced entitlement carrying purchase proof); store IAP on Apple/Play, Polar for Windows/web; no license-key UI in App Store builds (confirm the vault unlock with App Review). See `planning/2026-11-27-monetization.md`.
-2. **Link PayDayKit in Xcode** (no MCP tool can add a package dependency): File → Add Package Dependencies… → Add Local… → `apps/apple/PayDayKit` → add to the FutureCheck target. Then merge `feature/apple-app` and start the Mac app's screens (design step 7).
+**Sync setup reference:**
 
-**Before seeding the vault** (design §11): export JSON backups from both the VM and the rig and decide which holds the real data.
+- **Google OAuth client (done 2026-11-27):** Cloud project with the Drive API; consent screen External and **In production**, scopes `drive.appdata`, `openid`, `userinfo.email`; homepage = the repo, privacy policy = `PRIVACY.md`. A Desktop app client. Its ID and secret are **not** in the repo: Proton Pass on the Mac (`~/.config/futurecheck/google-oauth-desktop.env` holds only `pass://` references), and user environment variables on the rig and the VM (`FUTURECHECK_GOOGLE_CLIENT_ID` / `FUTURECHECK_GOOGLE_CLIENT_SECRET`, set with `setx`). Later platforms' clients (iOS, Android, web) must be created in the **same project**: the app-data folder belongs to the project.
+- **The vault was seeded from the rig** (it held the current data); the VM's older data was backed up and replaced when it joined.
+- **Installing a new build on the PCs:** the app is dev-registered from the untracked old-layout `PayDay\bin\…\AppX` folder in each clone; never `git clean` there, and never uninstall (that deletes LocalState). Stage build output + `Assets\` + the LiveCharts `.pri`, `robocopy /MIR` it over the install folder, then `Add-AppxPackage -Register … -ForceApplicationShutdown`. Pre-install backups are in `Documents\FutureCheck-backup-<date>-preinstall` on each PC.
+- OneDrive stays available for whoever has an Entra app ID (`FUTURECHECK_ONEDRIVE_CLIENT_ID`; registration details in `OneDriveConfig.cs`).
 
 **Still open from the core fixtures** (C# quirks recorded as-is; see `spec/conformance/core/README.md`): old backups lose snapshot totals on restore (data-loss bug, fix), `EarlyStart` is never read, due days overflow into the next month, rate/type matching is case-sensitive, any payment marks a bill paid.
 
